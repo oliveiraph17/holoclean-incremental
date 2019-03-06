@@ -29,7 +29,8 @@ def test_hospital_with_init():
             timeout=3 * 60000,
             feature_norm=False,
             weight_norm=False,
-            print_fw=True
+            print_fw=True,
+            featurization_batch_size=1000
         ).session
 
         # 2. Load training data and denial constraints.
@@ -93,7 +94,8 @@ def test_hospital_without_init():
             timeout=3 * 60000,
             feature_norm=False,
             weight_norm=False,
-            print_fw=True
+            print_fw=True,
+            featurization_batch_size=1000
         ).session
 
         # 2. Load training data and denial constraints.

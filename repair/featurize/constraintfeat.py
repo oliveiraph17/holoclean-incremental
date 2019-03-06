@@ -1,12 +1,11 @@
 from string import Template
-from functools import partial
 
 import torch
-import torch.nn.functional as F
 
 from .featurizer import Featurizer
 from dataset import AuxTables
 from dcparser.constraint import is_symmetric
+import torch.nn.functional as F
 
 # unary_template is used for constraints where the current predicate
 # used for detecting violations in pos_values have a reference to only
@@ -46,30 +45,70 @@ ex_binary_template = Template('SELECT _vid_, val_id, 1 violations '
                               '                AND  t3.rv_val $operation $rv_val)')
 
 
-def gen_feat_tensor(violations, total_vars, classes):
-    tensor = torch.zeros(total_vars,classes,1)
-    if violations:
-        for entry in violations:
-            vid = int(entry[0])
-            val_id = int(entry[1]) - 1
-            feat_val = float(entry[2])
-            tensor[vid][val_id][0] = feat_val
-    return tensor
-
-
 class ConstraintFeaturizer(Featurizer):
     def specific_setup(self):
         self.name = 'ConstraintFeaturizer'
         self.constraints = self.ds.constraints
         self.init_table_name = self.ds.raw_data.name
 
-    def create_tensor(self):
-        queries = self.generate_relaxed_sql()
-        results = self.ds.engine.execute_queries_w_backup(queries)
-        tensors = self._apply_func(partial(gen_feat_tensor, total_vars=self.total_vars, classes=self.classes), results)
-        combined = torch.cat(tensors,2)
-        combined = F.normalize(combined, p=2, dim=1)
+        # List[tuple(vid, attribute, num_violations)] storing the number of
+        # violations for each cell and the corresponding attribute.
+        self.featurization_query_results = self._get_featurization_query_results()
+
+        # List[Dict[str, Dict[str, int]]] where the key of the dict is the vid
+        # and the value is a dict where the key is the value_id and the value
+        # is the number of violations. Each element in the list corresponds
+        # to one denial constraint.
+        self.featurization_maps = self.build_featurization_maps(self.featurization_query_results)
+
+    def build_featurization_maps(self, queries):
+        """
+        Memoizes the feature values for each vid based on DC violations.
+
+        :param queries: A List[tuple(vid, attribute, num_violations)] storing
+            the number of violations for each cell and the corresponding
+            attribute.
+
+        :return: A List[Dict[str, Dict[str, int]]] where the key of the dict is
+            the vid and the value is a dict where the key is the value_id and
+            the value is the number of violations. Each element in the list
+            corresponds to one denial constraint.
+        """
+        featurization_maps = []
+        for query in queries:
+            featurization_map = {}
+            for result in query:
+                vid = int(result[0])
+                val_id = int(result[1]) - 1
+                feat_val = float(result[2])
+                if vid not in featurization_map:
+                    featurization_map[vid] = {}
+                featurization_map[vid][val_id] = feat_val
+            featurization_maps.append(featurization_map)
+        return featurization_maps
+
+    def gen_feat_tensor(self, vid):
+        tensors = []
+        # Iterate over each DC and check whether it was violated by the cell.
+        for featurization_map in self.featurization_maps:
+            tensor = torch.zeros(self.classes, 1)
+            if vid in featurization_map:
+                for val_id in featurization_map[vid]:
+                    violation_count = featurization_map[vid][val_id]
+                    tensor[val_id][0] = violation_count
+            tensors.append(tensor)
+        combined = F.normalize(torch.cat(tensors, dim=1), p=2, dim=0)
         return combined
+
+    def _get_featurization_query_results(self):
+        """
+        Queries the DB once for each DC to detect violations.
+
+        :returns: A List[tuple(vid, attribute, num_violations)] storing the
+            number of violations for each cell and the corresponding attribute.
+        """
+        queries = self.generate_relaxed_sql()
+        return self.ds.engine.execute_queries_w_backup(queries)
 
     def generate_relaxed_sql(self):
         query_list = []

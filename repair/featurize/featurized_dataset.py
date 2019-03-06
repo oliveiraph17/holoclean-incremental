@@ -6,11 +6,13 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+import os
 
 from dataset import AuxTables, CellStatus
 from utils import NULL_REPR
 
 FeatInfo = namedtuple('FeatInfo', ['name', 'size', 'learnable', 'init_weight', 'feature_names'])
+Example = namedtuple('Example', ['X', 'Y', 'var_mask'])
 
 
 class FeaturizedDataset:
@@ -21,41 +23,22 @@ class FeaturizedDataset:
         self.processes = self.env['threads']
         for f in featurizers:
             f.setup_featurizer(self.ds, self.processes, self.env['batch_size'])
-        logging.debug('featurizing training data...')
-        tensors = [f.create_tensor() for f in featurizers]
+        self.featurizers = featurizers
         self.featurizer_info = [FeatInfo(featurizer.name,
-                                         tensor.size()[2],
+                                         featurizer.num_features(),
                                          featurizer.learnable,
                                          featurizer.init_weight,
                                          featurizer.feature_names())
-                                for tensor, featurizer in zip(tensors, featurizers)]
-        tensor = torch.cat(tensors, 2)
-        self.tensor = tensor
-
-        logging.debug('DONE featurization.')
-
-        if self.env['debug_mode']:
-            weights_df = pd.DataFrame(self.tensor.reshape(-1, self.tensor.shape[-1]).numpy())
-            weights_df.columns = ["{}::{}".format(f.name, featname) for f in featurizers for featname in f.feature_names()]
-            weights_df.insert(0, 'vid', np.floor_divide(np.arange(weights_df.shape[0]), self.tensor.shape[1]) + 1)
-            weights_df.insert(1, 'val_idx', np.tile(np.arange(self.tensor.shape[1]), self.tensor.shape[0]))
-            weights_df.to_pickle('debug/{}_train_features.pkl'.format(self.ds.id))
+                                for featurizer in self.featurizers]
 
         # TODO: remove after we validate it is not needed.
-        self.in_features = self.tensor.shape[2]
+        self.in_features = sum(featurizer.size for featurizer in self.featurizer_info)
         logging.debug("generating weak labels...")
         self.weak_labels, self.is_clean = self.generate_weak_labels()
         logging.debug("DONE generating weak labels.")
         logging.debug("generating mask...")
         self.var_class_mask, self.var_to_domsize = self.generate_var_mask()
         logging.debug("DONE generating mask.")
-
-        if self.env['feature_norm']:
-            logging.debug("normalizing features...")
-            n_cells, n_classes, n_feats = self.tensor.shape
-            # normalize within each cell the features
-            self.tensor = F.normalize(self.tensor, p=2, dim=1)
-            logging.debug("DONE feature normalization.")
 
     def generate_weak_labels(self):
         """
@@ -116,32 +99,108 @@ class FeaturizedDataset:
             var_to_domsize[vid] = max_class
         return mask, var_to_domsize
 
-    def get_tensor(self):
-        return self.tensor
-
-    def get_training_data(self):
+    def get_training_dataset(self):
         """
-        get_training_data returns X_train, y_train, and mask_train
-        where each row of each tensor is a variable/VID and
-        y_train are weak labels for each variable i.e. they are
-        set as the initial values.
+        Constructs a TorchFeaturizedDataset for the training dataset.
 
-        This assumes that we have a larger proportion of correct initial values
-        and only a small amount of incorrect initial values which allow us
-        to train to convergence.
+        :return: An instance of TorchFeaturizedDataset for the training data.
         """
         train_idx = (self.weak_labels != -1).nonzero()[:,0]
-        X_train = self.tensor.index_select(0, train_idx)
-        Y_train = self.weak_labels.index_select(0, train_idx)
-        mask_train = self.var_class_mask.index_select(0, train_idx)
-        return X_train, Y_train, mask_train
+        return TorchFeaturizedDataset(
+            vids=train_idx,
+            featurizers=self.featurizers,
+            Y=self.weak_labels,
+            var_mask=self.var_class_mask,
+            batch_size=self.env['featurization_batch_size'],
+            feature_norm =self.env['feature_norm']
+        )
 
-    def get_infer_data(self):
+    def get_infer_dataset(self):
         """
-        Retrieves the samples to be inferred i.e. DK cells.
+        Constructs a TorchFeaturizedDataset for the inference dataset.
+
+        :return: An instance of TorchFeaturizedDataset for the inference data.
         """
-        # only infer on those that are DK cells
         infer_idx = (self.is_clean == 0).nonzero()[:, 0]
-        X_infer = self.tensor.index_select(0, infer_idx)
-        mask_infer = self.var_class_mask.index_select(0, infer_idx)
-        return X_infer, mask_infer, infer_idx
+        return TorchFeaturizedDataset(
+            vids=infer_idx,
+            featurizers=self.featurizers,
+            Y=self.weak_labels,
+            var_mask=self.var_class_mask,
+            batch_size=self.env['featurization_batch_size'],
+            feature_norm =self.env['feature_norm']
+        ), infer_idx
+
+
+"""
+Implements interface for torch.utils.data.Dataset.
+
+An instance of TorchFeaturizedDataset can be created for training and inference
+data. It can be used with Torch DataLoader to iterate over batches of the data.
+"""
+class TorchFeaturizedDataset(torch.utils.data.Dataset):
+
+    def __init__(self, vids, featurizers, Y, var_mask, batch_size, feature_norm):
+        """
+        Initializes a TorchFeaturizedDataset.
+
+        :param vids: List[str] with vids of the cells to include in the dataset.
+        :param featurizers: List[Featurizer] used to featurize the data.
+        :param Y: Torch.tensor(num_cells, 1) where tensor[i][0] contains the domain
+            index of the initial value for the cell with vid i.
+        :param var_mask: Torch.tensor(num_cells, max_domain) where tensor[i][j] = 0
+            iff the value corresponding to domain index j is valid for the cell with
+            vid i, otherwise tensor[i][j] = -10e6.
+        :param batch_size: An int storing the number of examples to include per batch.
+        :param feature_norm: A boolean indicating if features should be normalized.
+        """
+        self.vids = vids
+        self.featurizers = featurizers
+        self.Y = Y
+        self.var_mask = var_mask
+        self.batch_size = batch_size
+        self.feature_norm = feature_norm
+        self.num_examples = len(self.vids)
+
+        self.batch_number_to_file_path = []
+        self.cached_batch_number = None
+        self.cached_tensor = None
+
+    def __len__(self):
+        return self.num_examples
+
+    def _featurize_batch(self, batch_number):
+        start_idx, end_idx = self.batch_size * batch_number, min(self.num_examples, self.batch_size * (batch_number + 1))
+        featurized_examples = [torch.cat([featurizer.gen_feat_tensor(self.vids[idx].item()) for featurizer in self.featurizers], dim=1) for idx in range(start_idx, end_idx)]
+        featurized_tensor = torch.stack(featurized_examples)
+        if self.feature_norm:
+            featurized_tensor = F.normalize(featurized_tensor, p=2, dim=1)
+        return featurized_tensor
+
+
+    def __getitem__(self, idx):
+        """
+        Get the featurized tensor for a cell.
+
+        :param idx: An int storing the index of the cell to be featurized in
+            self.vids.
+        :return: A torch.Tensor(max_domain, num_features) holding the featurized
+            values of the cell.
+        """
+        batch_number = idx // self.batch_size
+
+        if batch_number >= len(self.batch_number_to_file_path):
+            assert(batch_number == len(self.batch_number_to_file_path))
+            cached_batch_file_path = "%s/cache/%dtensor_batch%d" %(os.environ['HOLOCLEANHOME'], id(self), batch_number)
+            self.batch_number_to_file_path.append(cached_batch_file_path)
+            cached_tensor = self._featurize_batch(batch_number)
+            torch.save(cached_tensor, cached_batch_file_path)
+
+        if batch_number != self.cached_batch_number:
+            self.cached_batch_number = batch_number
+            self.cached_tensor = torch.load(self.batch_number_to_file_path[batch_number])
+
+        X = self.cached_tensor[idx - batch_number * self.batch_size]
+        Y = self.Y[self.vids[idx]]
+        var_mask = self.var_mask[self.vids[idx]]
+        return Example(X, Y, var_mask)
