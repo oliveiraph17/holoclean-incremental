@@ -50,7 +50,7 @@ class TiedLinear(torch.nn.Module):
                 self.bias_list.append(feat_bias)
 
     def reset_parameters(self, tensor):
-        stdv = 1. / math.sqrt(tensor.size(0))
+        stdv = 1. / math.sqrt(tensor.size(0)) #KASTER: Why to use the square root of 1/size?
         tensor.data.uniform_(-stdv, stdv)
 
     def concat_weights(self):
@@ -91,6 +91,8 @@ class RepairModel:
         n_examples, n_classes, n_features = X_train.shape
 
         loss = torch.nn.CrossEntropyLoss()
+        #KASTER: https://pytorch.org/docs/stable/_modules/torch/nn/modules/loss.html#CrossEntropyLoss
+
         trainable_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         if self.env['optimizer'] == 'sgd':
             optimizer = optim.SGD(trainable_parameters, lr=self.env['learning_rate'], momentum=self.env['momentum'],
@@ -189,3 +191,10 @@ class RepairModel:
                 'size': feat_size
             }
         return report
+
+    def save_model(self): #KASTER
+        torch.save(self.model.state_dict(), '/tmp/mymodel.pt')
+
+    def load_model(self): #KASTER
+        self.model.load_state_dict(torch.load('/tmp/mymodel.pt'))
+        #self.model.eval()

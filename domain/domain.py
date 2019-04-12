@@ -99,7 +99,7 @@ class DomainEngine:
                 # If H(x|y) = 0, then y determines x, i.e., y -> x.
                 # Use the domain size of x as a log base for normalization.
                 y_vals = data_df[y]
-                x_y_entropy = drv.entropy_conditional(x_vals, y_vals, base=x_domain_size)
+                x_y_entropy = drv.entropy_conditional(x_vals, y_vals, base=x_domain_size) #KASTER: Why to use this base?
 
                 # The conditional entropy is 0 for strongly correlated attributes and 1 for
                 # completely independent attributes. We reverse this to reflect the correlation.
@@ -260,7 +260,7 @@ class DomainEngine:
                     # Not enough domain values, we need to get some random
                     # values (other than 'init_value') for training. However,
                     # this might still get us zero domain values.
-                    rand_dom_values = self.get_random_domain(attr, init_value)
+                    rand_dom_values = self.get_random_domain(attr, init_value) #KASTER: Does this make sense for len(dom) <= 1? Should not the if condition be >= threshold?
 
                     # rand_dom_values might still be empty. In this case,
                     # there are no other possible values for this cell. There

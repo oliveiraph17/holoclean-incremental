@@ -31,7 +31,7 @@ class InitAttrFeaturizer(Featurizer):
             # is multiplied by a tensor of ones for initialization.
             init_weight = torch.FloatTensor(init_weight)
 
-        Featurizer.__init__(self, learnable=False, init_weight=init_weight)
+        Featurizer.__init__(self, learnable=True, init_weight=init_weight) #KASTER: set to True to evaluate
 
     def specific_setup(self):
         self.name = 'InitAttrFeaturizer'
