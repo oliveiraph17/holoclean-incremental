@@ -72,8 +72,6 @@ class OccurAttrFeaturizer(Featurizer):
                 if rv_val in rv_domain_idx:
                     index = rv_attr_idx * self.attrs_number + attr_idx
                     tensor[0][rv_domain_idx[rv_val]][index] = prob
-                else:
-                    a = 10 #KASTER: Is this a dummy code? It has never called for the Hospital dataset...
         return tensor
 
     def feature_names(self):

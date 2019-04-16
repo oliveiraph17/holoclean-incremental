@@ -8,7 +8,7 @@ from repair.featurize import *
 # 1. Setup a HoloClean session.
 hc = holoclean.HoloClean(
     db_name='holo',
-    domain_thresh_1=0.5,
+    domain_thresh_1=0,
     domain_thresh_2=0,
     weak_label_thresh=0.99,
     max_domain=10000,
@@ -40,8 +40,8 @@ hc.setup_domain()
 featurizers = [
     InitAttrFeaturizer(),
     OccurAttrFeaturizer(),
-#    FreqFeaturizer(),
-#    ConstraintFeaturizer(),
+    FreqFeaturizer(),
+    ConstraintFeaturizer(),
 ]
 
 hc.repair_errors(featurizers)

@@ -39,11 +39,11 @@ class RepairEngine:
         toc = time.clock()
         status = "DONE training repair model."
         train_time = toc - tic
-        #self.repair_model.save_model() #KASTER
+        # self.repair_model.save_model() #KASTER
         return status, train_time
 
     def infer_repairs(self):
-        #self.repair_model.load_model() #KASTER
+        # self.repair_model.load_model() #KASTER
         tic = time.clock()
         X_pred, mask_pred, infer_idx = self.feat_dataset.get_infer_data()
         Y_pred = self.repair_model.infer_values(X_pred, mask_pred)

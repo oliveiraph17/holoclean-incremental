@@ -51,8 +51,7 @@ class NaiveBayes(Estimator):
                 val2_val1_count = 0.1
                 if val1 in self._cooccur_freq[attr][at]:
                     if val2 in self._cooccur_freq[attr][at][val1]:
-                        val2_val1_count = max(self._cooccur_freq[attr][at][val1][val2] - 1.0, 0.1) #KASTER: Why cooccur_freq - 1.0? Is it the single co-occurrence that happens in the current tuple?
-                                                                                                   #KASTER: Why 0.1? @see_val2_val1_count
+                        val2_val1_count = max(self._cooccur_freq[attr][at][val1][val2] - 1.0, 0.1)
                 p = float(val2_val1_count) / float(val1_count)
                 log_prob += math.log(p)
             nb_score.append((val1, log_prob))
@@ -60,7 +59,7 @@ class NaiveBayes(Estimator):
         denom = sum(map(math.exp, [log_prob for _, log_prob in nb_score]))
 
         for val, log_prob in nb_score:
-            yield (val, math.exp(log_prob) / denom) #KASTER: Does this code use logs to after invert through exponentiation to transform a product of probabilities into a summation?
+            yield (val, math.exp(log_prob) / denom)
 
     def predict_pp_batch(self):
         """
