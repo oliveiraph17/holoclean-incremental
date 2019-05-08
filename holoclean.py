@@ -267,7 +267,6 @@ class Session:
         self.repair_engine = RepairEngine(env, self.ds)
         self.eval_engine = EvalEngine(env, self.ds)
 
-
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
         load_data takes the filepath to a CSV file to load as the initial dataset.
@@ -288,6 +287,29 @@ class Session:
                                               na_values=na_values,
                                               entity_col=entity_col,
                                               src_col=src_col)
+        logging.info(status)
+        logging.debug('Time to load dataset: %.2f secs', load_time)
+
+    def load_new_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
+        """
+        load_new_data takes the path to a CSV file to load as the incoming data.
+
+        :param name: (str) name to initialize incoming data with.
+        :param fpath: (str) path to CSV file.
+        :param na_values: (str) value that identifies a NULL value.
+        :param entity_col: (str) column containing the unique identifier of an entity.
+            For fusion tasks, rows with the same ID will be fused together in the output.
+            If None, assumes every row is a unique entity.
+        :param src_col: (str) if not None, for fusion tasks,
+            specifies the column containing the source for each "mention" of an entity.
+        """
+
+        status, load_time = self.ds.load_new_data(name,
+                                                  fpath,
+                                                  na_values=na_values,
+                                                  entity_col=entity_col,
+                                                  src_col=src_col)
+
         logging.info(status)
         logging.debug('Time to load dataset: %.2f secs', load_time)
 

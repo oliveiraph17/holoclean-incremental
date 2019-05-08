@@ -33,6 +33,7 @@ class Dataset:
     def __init__(self, name, env):
         self.id = name
         self.raw_data = None
+        self.new_data = None
         self.repaired_data = None
         self.constraints = None
         self.aux_table = {}
@@ -123,6 +124,12 @@ class Dataset:
             raise
         toc = time.clock()
         load_time = toc - tic
+        return status, load_time
+
+    def load_new_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
+        status = 'DONE Loading {fname}'.format(fname=os.path.basename(fpath))
+        load_time = time.clock()
+
         return status, load_time
 
     def set_constraints(self, constraints):
