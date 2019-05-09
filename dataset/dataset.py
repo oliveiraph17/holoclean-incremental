@@ -127,9 +127,59 @@ class Dataset:
         return status, load_time
 
     def load_new_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
-        status = 'DONE Loading {fname}'.format(fname=os.path.basename(fpath))
-        load_time = time.clock()
+        """
+        load_new_data takes a CSV file of the incoming data and adds tuple IDs (_tid_) to each row.
+        It does not generates unique index numbers for each column, since this is previously done in load_data.
 
+        Creates a table with the user-supplied 'name' parameter (e.g. 'hospital_new').
+
+        :param name: (str) name to initialize incoming data with.
+        :param fpath: (str) path to CSV file.
+        :param na_values: (str) value that identifies a NULL value.
+        :param entity_col: (str) column containing the unique identifier of an entity.
+            For fusion tasks, rows with the same ID will be fused together in the output.
+            If None, assumes every row is a unique entity.
+        :param src_col: (str) if not None, for fusion tasks,
+            specifies the column containing the source for each "mention" of an entity.
+        """
+
+        tic = time.clock()
+
+        try:
+            exclude_attr_cols = ['_tid_']
+            if src_col is not None:
+                exclude_attr_cols.append(src_col)
+
+            self.new_data = Table(name,
+                                  Source.FILE,
+                                  na_values=na_values,
+                                  exclude_attr_cols=exclude_attr_cols,
+                                  fpath=fpath)
+
+            df = self.new_data.df
+
+            if entity_col is None:
+                df.insert(0, '_tid_', range(0, len(df)))
+            else:
+                df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
+
+            df.fillna(NULL_REPR, inplace=True)
+
+            logging.info("Loaded %d rows with %d cells",
+                         self.new_data.df.shape[0],
+                         self.new_data.df.shape[0] * self.new_data.df.shape[1])
+
+            self.new_data.store_to_db(self.engine.engine)
+            status = 'DONE Loading {fpath}'.format(fname=os.path.basename(fpath))
+
+            # for attr in self.new_data.get_attributes():
+            #     self.new_data.create_db_index(self.engine, [attr])
+        except Exception:
+            logging.error('Loading data for table %s', name)
+            raise
+
+        toc = time.clock()
+        load_time = toc - tic
         return status, load_time
 
     def set_constraints(self, constraints):
