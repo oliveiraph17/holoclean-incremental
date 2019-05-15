@@ -16,10 +16,11 @@ class ViolationDetector(Detector):
     def __init__(self, name='ViolationDetector'):
         super(ViolationDetector, self).__init__(name)
 
-    def setup(self, dataset, env):
+    def setup(self, dataset, env, df_specifier='raw'):
         self.ds = dataset
         self.env = env
         self.constraints = dataset.constraints
+        self.df_name = df_specifier
 
     def detect_noisy_cells(self):
         """
@@ -30,8 +31,12 @@ class ViolationDetector(Detector):
             _tid_: entity ID
             attribute: attribute violating any denial constraint.
         """
-        # Convert  Constraints to SQL queries
-        tbl = self.ds.raw_data.name
+        # Convert constraints to SQL queries
+        if self.df_name == 'raw':
+            tbl = self.ds.raw_data.name
+        else:
+            tbl = self.ds.new_data.name
+
         queries = []
         attrs = []
         for c in self.constraints:

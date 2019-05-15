@@ -12,10 +12,14 @@ class NullDetector(Detector):
     def __init__(self, name='NullDetector'):
         super(NullDetector, self).__init__(name)
 
-    def setup(self, dataset, env):
+    def setup(self, dataset, env, df_specifier='raw'):
         self.ds = dataset
         self.env = env
-        self.df = self.ds.get_raw_data()
+
+        if df_specifier == 'raw':
+            self.df = self.ds.get_raw_data()
+        else:
+            self.df = self.ds.get_new_data()
 
     def detect_noisy_cells(self):
         """

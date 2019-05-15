@@ -11,17 +11,18 @@ class DetectEngine:
         self.env = env
         self.ds = dataset
 
-    def detect_errors(self, detectors):
+    def detect_errors(self, detectors, df_specifier='raw'):
         """
         Detects errors using a list of detectors.
         :param detectors: (list) of ErrorDetector objects
+        :param df_specifier: string specifying whether 'raw' or 'new' data are being analyzed
         """
         errors = []
         tic_total = time.clock()
 
         # Initialize all error detectors.
         for detector in detectors:
-            detector.setup(self.ds, self.env)
+            detector.setup(self.ds, self.env, df_specifier)
 
         # Run detection using each detector.
         for detector in detectors:

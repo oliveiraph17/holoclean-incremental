@@ -172,8 +172,9 @@ class Dataset:
             self.new_data.store_to_db(self.engine.engine)
             status = 'DONE Loading {fpath}'.format(fname=os.path.basename(fpath))
 
-            # for attr in self.new_data.get_attributes():
-            #     self.new_data.create_db_index(self.engine, [attr])
+            # TODO: check the need for indexing in this case
+            for attr in self.new_data.get_attributes():
+                self.new_data.create_db_index(self.engine, [attr])
         except Exception:
             logging.error('Loading data for table %s', name)
             raise
@@ -234,6 +235,14 @@ class Dataset:
         if self.raw_data is None:
             raise Exception('ERROR No dataset loaded')
         return self.raw_data.df
+
+    def get_new_data(self):
+        """
+        get_new_data returns a pandas.DataFrame containing the incoming data as it was initially loaded.
+        """
+        if self.new_data is None:
+            raise Exception('ERROR No incoming data loaded')
+        return self.new_data.df
 
     def get_attributes(self):
         """
