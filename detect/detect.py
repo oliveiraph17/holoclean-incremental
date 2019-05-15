@@ -44,6 +44,8 @@ class DetectEngine:
         detect_time = toc_total - tic_total
         return status, detect_time
 
+    # TODO: append new errors to existing dk_cells table
+    #  and add a column to keep track of previously corrected cells
     def store_detected_errors(self, errors_df):
         if errors_df.empty:
             raise Exception("ERROR: Detected errors dataframe is empty.")
