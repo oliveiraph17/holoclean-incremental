@@ -82,8 +82,8 @@ class Dataset:
         """
         tic = time.clock()
         try:
-            # Do not include TID and source column as trainable attributes
-            exclude_attr_cols = ['_tid_']
+            # Do not include TID, batch number, and source column as trainable attributes
+            exclude_attr_cols = ['_tid_', '_batch_']
             if src_col is not None:
                 exclude_attr_cols.append(src_col)
 
@@ -103,6 +103,9 @@ class Dataset:
 
             # Use NULL_REPR to represent NULL values
             df.fillna(NULL_REPR, inplace=True)
+
+            # First batch of data, hence the values being 1
+            df['_batch_'] = [1] * len(df.index)
 
             logging.info("Loaded %d rows with %d cells", self.raw_data.df.shape[0], self.raw_data.df.shape[0] * self.raw_data.df.shape[1])
 
@@ -126,7 +129,7 @@ class Dataset:
         load_time = toc - tic
         return status, load_time
 
-    def load_new_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
+    def load_new_data(self, name, fpath, batch, na_values=None, entity_col=None, src_col=None):
         """
         load_new_data takes a CSV file of the incoming data and adds tuple IDs (_tid_) to each row.
         It does not generates unique index numbers for each column, since this is previously done in load_data.
@@ -135,6 +138,7 @@ class Dataset:
 
         :param name: (str) name to initialize incoming data with.
         :param fpath: (str) path to CSV file.
+        :param batch: (int) greater than 1, regarding the batch number of the current incoming data
         :param na_values: (str) value that identifies a NULL value.
         :param entity_col: (str) column containing the unique identifier of an entity.
             For fusion tasks, rows with the same ID will be fused together in the output.
@@ -144,9 +148,17 @@ class Dataset:
         """
 
         tic = time.clock()
-
         try:
-            exclude_attr_cols = ['_tid_']
+            # There is already a raw_data and a new_data.
+            # Therefore, we concatenate them so they become raw_data.
+            # Then, the current incoming data will become new_data.
+            if batch > 2:
+                self.raw_data = pd.concat([self.raw_data, self.new_data],
+                                          axis=0,
+                                          ignore_index=True).reset_index(drop=True)
+
+            # Do not include TID, batch number, and source column as trainable attributes.
+            exclude_attr_cols = ['_tid_', '_batch_']
             if src_col is not None:
                 exclude_attr_cols.append(src_col)
 
@@ -160,16 +172,18 @@ class Dataset:
 
             if entity_col is None:
                 # Generates _tid_'s starting from the number of elements previously loaded.
-                df.insert(0, '_tid_', range(self.raw_data.df.shape[0],
-                                            self.raw_data.df.shape[0] + len(df)))
+                df.insert(0, '_tid_', range(len(self.raw_data.df.index),
+                                            len(self.raw_data.df.index) + len(df)))
             else:
                 df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
 
             df.fillna(NULL_REPR, inplace=True)
 
+            df['_batch_'] = [batch] * len(df.index)
+
             logging.info("Loaded %d rows with %d cells",
-                         self.new_data.df.shape[0],
-                         self.new_data.df.shape[0] * self.new_data.df.shape[1])
+                         len(df.index),
+                         len(df.index) * self.new_data.df.shape[1])
 
             # The new data are appended to the existing data.
             # Therefore, we do not index the attributes afterwards.
@@ -179,7 +193,6 @@ class Dataset:
         except Exception:
             logging.error('Loading data for table %s', name)
             raise
-
         toc = time.clock()
         load_time = toc - tic
         return status, load_time

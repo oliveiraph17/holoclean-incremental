@@ -12,11 +12,11 @@ class NullDetector(Detector):
     def __init__(self, name='NullDetector'):
         super(NullDetector, self).__init__(name)
 
-    def setup(self, dataset, env, df_specifier='raw'):
+    def setup(self, dataset, env, batch=1):
         self.ds = dataset
         self.env = env
 
-        if df_specifier == 'raw':
+        if batch == 1:
             self.df = self.ds.get_raw_data()
         else:
             self.df = self.ds.get_new_data()

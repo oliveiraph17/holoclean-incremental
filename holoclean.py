@@ -290,12 +290,13 @@ class Session:
         logging.info(status)
         logging.debug('Time to load dataset: %.2f secs', load_time)
 
-    def load_new_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
+    def load_new_data(self, name, fpath, batch, na_values=None, entity_col=None, src_col=None):
         """
         load_new_data takes the path to a CSV file to load as the incoming data.
 
         :param name: (str) name to initialize incoming data with.
         :param fpath: (str) path to CSV file.
+        :param batch: (int) greater than 1, regarding the batch number of the current incoming data
         :param na_values: (str) value that identifies a NULL value.
         :param entity_col: (str) column containing the unique identifier of an entity.
             For fusion tasks, rows with the same ID will be fused together in the output.
@@ -306,6 +307,7 @@ class Session:
 
         status, load_time = self.ds.load_new_data(name,
                                                   fpath,
+                                                  batch,
                                                   na_values=na_values,
                                                   entity_col=entity_col,
                                                   src_col=src_col)
@@ -326,8 +328,8 @@ class Session:
     def get_dcs(self):
         return self.dc_parser.get_dcs()
 
-    def detect_errors(self, detect_list, df_specifier='raw'):
-        status, detect_time = self.detect_engine.detect_errors(detect_list, df_specifier=df_specifier)
+    def detect_errors(self, detect_list, batch=1):
+        status, detect_time = self.detect_engine.detect_errors(detect_list, batch)
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
 

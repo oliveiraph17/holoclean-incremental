@@ -19,7 +19,7 @@ class Detector:
         self.ds = None
 
     @abstractmethod
-    def setup(self, dataset, env, df_specifier='raw'):
+    def setup(self, dataset, env, batch=1):
         raise NotImplementedError
 
     @abstractmethod

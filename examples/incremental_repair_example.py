@@ -52,7 +52,9 @@ hc.repair_errors(featurizers)
 
 ############################################################
 
-# Load incoming data.
-hc.load_new_data('hospital', '../testdata/hospital_0010.csv')
+batch = 2
 
-hc.detect_errors(detectors, df_specifier='new')
+# Load incoming data.
+hc.load_new_data('hospital', '../testdata/hospital_0010.csv', batch)
+
+hc.detect_errors(detectors, batch)

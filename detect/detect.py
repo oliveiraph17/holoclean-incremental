@@ -11,18 +11,18 @@ class DetectEngine:
         self.env = env
         self.ds = dataset
 
-    def detect_errors(self, detectors, df_specifier='raw'):
+    def detect_errors(self, detectors, batch=1):
         """
         Detects errors using a list of detectors.
         :param detectors: (list of) ErrorDetector objects
-        :param df_specifier: string specifying whether 'raw' or 'new' data are being analyzed
+        :param batch: equal to 1 when handling initial data, greater than 1 when handling incoming data
         """
         errors = []
         tic_total = time.clock()
 
         # Initialize all error detectors.
         for detector in detectors:
-            detector.setup(self.ds, self.env, df_specifier)
+            detector.setup(self.ds, self.env, batch)
 
         # Run detection using each detector.
         for detector in detectors:
@@ -38,7 +38,7 @@ class DetectEngine:
         logging.info("detected %d potentially erroneous cells", errors_df.shape[0])
 
         # Store errors to db.
-        if df_specifier == 'raw':
+        if batch == 1:
             self.store_detected_errors(errors_df)
         else:
             self.store_detected_errors(errors_df, append=True)
