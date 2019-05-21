@@ -290,7 +290,6 @@ class Session:
         logging.info(status)
         logging.debug('Time to load dataset: %.2f secs', load_time)
 
-    # TODO: create _tid_'s incrementally, continuing from the ones in the existing data
     def load_new_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
         load_new_data takes the path to a CSV file to load as the incoming data.
@@ -327,8 +326,8 @@ class Session:
     def get_dcs(self):
         return self.dc_parser.get_dcs()
 
-    def detect_errors(self, detect_list):
-        status, detect_time = self.detect_engine.detect_errors(detect_list)
+    def detect_errors(self, detect_list, df_specifier='raw'):
+        status, detect_time = self.detect_engine.detect_errors(detect_list, df_specifier=df_specifier)
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
 

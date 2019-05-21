@@ -85,11 +85,9 @@ class ViolationDetector(Detector):
                 raise Exception("ERROR in violation detector. Cannot ground mult-tuple template.")
         cond1 = " AND ".join(cond1_preds)
         cond2 = " AND ".join(cond2_preds)
-        a = ','.join(c.components)
         a = []
         for b in c.components:
             a.append("'"+b+"'")
-        a = ','.join(a)
         if cond1 != '':
             query = multi_template.substitute(table=tbl, cond1=cond1, c='AND', cond2=cond2)
         else:

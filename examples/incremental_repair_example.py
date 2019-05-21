@@ -26,7 +26,7 @@ hc = holoclean.HoloClean(
 ).session
 
 # Load existing data and Denial Constraints.
-hc.load_data('hospital', '../testdata/hospital.csv')
+hc.load_data('hospital', '../testdata/hospital_0990.csv')
 hc.load_dcs('../testdata/hospital_constraints.txt')
 hc.ds.set_constraints(hc.get_dcs())
 
@@ -45,14 +45,14 @@ featurizers = [
 hc.repair_errors(featurizers)
 
 # Evaluate the correctness of the results.
-hc.evaluate(fpath='../testdata/hospital_clean.csv',
-            tid_col='tid',
-            attr_col='attribute',
-            val_col='correct_val')
+# hc.evaluate(fpath='../testdata/hospital_clean.csv',
+#             tid_col='tid',
+#             attr_col='attribute',
+#             val_col='correct_val')
 
 ############################################################
 
 # Load incoming data.
-hc.load_new_data('hospital_new', '../testdata/hospital_new.csv')
+hc.load_new_data('hospital', '../testdata/hospital_0010.csv')
 
-hc.detect_errors(detectors, 'new')
+hc.detect_errors(detectors, df_specifier='new')

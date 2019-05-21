@@ -14,7 +14,7 @@ class DetectEngine:
     def detect_errors(self, detectors, df_specifier='raw'):
         """
         Detects errors using a list of detectors.
-        :param detectors: (list) of ErrorDetector objects
+        :param detectors: (list of) ErrorDetector objects
         :param df_specifier: string specifying whether 'raw' or 'new' data are being analyzed
         """
         errors = []
@@ -38,17 +38,22 @@ class DetectEngine:
         logging.info("detected %d potentially erroneous cells", errors_df.shape[0])
 
         # Store errors to db.
-        self.store_detected_errors(errors_df)
+        if df_specifier == 'raw':
+            self.store_detected_errors(errors_df)
+        else:
+            self.store_detected_errors(errors_df, append=True)
+
         status = "DONE with error detection."
         toc_total = time.clock()
         detect_time = toc_total - tic_total
         return status, detect_time
 
-    # TODO: append new errors to existing dk_cells table
-    #  and add a column to keep track of previously corrected cells
-    def store_detected_errors(self, errors_df):
+    def store_detected_errors(self, errors_df, append=False):
         if errors_df.empty:
-            raise Exception("ERROR: Detected errors dataframe is empty.")
-        self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
-        self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])
+            raise Exception("ERROR: Detected errors DataFrame is empty.")
 
+        if append:
+            self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, append=True)
+        else:
+            self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
+            self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])

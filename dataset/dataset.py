@@ -159,7 +159,9 @@ class Dataset:
             df = self.new_data.df
 
             if entity_col is None:
-                df.insert(0, '_tid_', range(0, len(df)))
+                # Generates _tid_'s starting from the number of elements previously loaded.
+                df.insert(0, '_tid_', range(self.raw_data.df.shape[0],
+                                            self.raw_data.df.shape[0] + len(df)))
             else:
                 df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
 
@@ -169,12 +171,11 @@ class Dataset:
                          self.new_data.df.shape[0],
                          self.new_data.df.shape[0] * self.new_data.df.shape[1])
 
-            self.new_data.store_to_db(self.engine.engine)
-            status = 'DONE Loading {fpath}'.format(fname=os.path.basename(fpath))
-
-            # TODO: check the need for indexing in this case
-            for attr in self.new_data.get_attributes():
-                self.new_data.create_db_index(self.engine, [attr])
+            # The new data are appended to the existing data.
+            # Therefore, we do not index the attributes afterwards.
+            # They have already been indexed previously, and the indexes are updated automatically by the DBMS.
+            self.new_data.store_to_db(self.engine.engine, if_exists='append')
+            status = 'DONE Loading {fname}'.format(fname=os.path.basename(fpath))
         except Exception:
             logging.error('Loading data for table %s', name)
             raise
@@ -186,30 +187,33 @@ class Dataset:
     def set_constraints(self, constraints):
         self.constraints = constraints
 
-    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False):
+    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False, append=False):
         """
-        generate_aux_table writes/overwrites the auxiliary table specified by
-        'aux_table'.
+        generate_aux_table writes/overwrites/appends to the auxiliary table specified by 'aux_table'.
 
-        It does:
+        It does the following:
           1. stores/replaces the specified aux_table into Postgres (store=True), AND/OR
           2. sets an index on the aux_table's internal Pandas DataFrame (index_attrs=[<columns>]), AND/OR
-          3. creates Postgres indexes for aux_table (store=True and index_attrs=[<columns>])
+          3. creates Postgres indexes for aux_table (store=True and index_attrs=[<columns>]), OR
+          4. appends the specified aux_table to Postgres table
 
-        :param aux_table: (AuxTable) auxiliary table to generate
-        :param df: (DataFrame) dataframe to memoize/store for this auxiliary table
-        :param store: (bool) if true, creates/replaces Postgres table for this auxiliary table
-        :param index_attrs: (list[str]) list of attributes to create indexes on. If store is true,
-        also creates indexes on Postgres table.
+        :param aux_table: (AuxTable) auxiliary table to generate.
+        :param df: (DataFrame) dataframe to memoize/store for this auxiliary table.
+        :param store: (bool) if true, creates/replaces Postgres table for this auxiliary table.
+        :param index_attrs: (list[str]) list of attributes to create indexes on.
+        :param append: (bool) if true, appends this auxiliary table to Postgres table.
         """
         try:
             self.aux_table[aux_table] = Table(aux_table.name, Source.DF, df=df)
+
             if store:
                 self.aux_table[aux_table].store_to_db(self.engine.engine)
             if index_attrs:
                 self.aux_table[aux_table].create_df_index(index_attrs)
             if store and index_attrs:
                 self.aux_table[aux_table].create_db_index(self.engine, index_attrs)
+            if append:
+                self.aux_table[aux_table].store_to_db(self.engine.engine, if_exists='append')
         except Exception:
             logging.error('generating aux_table %s', aux_table.name)
             raise
