@@ -157,9 +157,9 @@ class Dataset:
             # Therefore, we concatenate them so they become raw_data.
             # Then, the current incoming data will become new_data.
             if batch > 2:
-                self.raw_data = pd.concat([self.raw_data, self.new_data],
-                                          axis=0,
-                                          ignore_index=True).reset_index(drop=True)
+                self.raw_data.df = pd.concat([self.raw_data.df, self.new_data.df],
+                                             axis=0,
+                                             ignore_index=True).reset_index(drop=True)
 
             # Do not include TID, batch number, and source column as trainable attributes.
             exclude_attr_cols = ['_tid_', '_batch_']
