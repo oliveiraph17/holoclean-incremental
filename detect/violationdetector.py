@@ -32,7 +32,7 @@ class ViolationDetector(Detector):
         self.env = env
         self.constraints = dataset.constraints
         self.batch_number = batch
-        self.batch_cond = '_batch_ = ' + batch + ' AND '
+        self.batch_cond = '_batch_ = ' + str(batch) + ' AND '
 
     def detect_noisy_cells(self):
         """
@@ -115,7 +115,7 @@ class ViolationDetector(Detector):
                                                       cond1=cond1,
                                                       c='AND',
                                                       cond2=cond2,
-                                                      repaired=tbl.append('_repaired'))
+                                                      repaired=tbl + '_repaired')
         else:
             if self.batch_number == 1:
                 query = multi_template.substitute(table=tbl,
@@ -128,7 +128,7 @@ class ViolationDetector(Detector):
                                                       cond1=cond1,
                                                       c='',
                                                       cond2=cond2,
-                                                      repaired=tbl.append('_repaired'))
+                                                      repaired=tbl + '_repaired')
 
         return query
 
