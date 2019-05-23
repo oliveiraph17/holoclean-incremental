@@ -5,34 +5,44 @@ import pandas as pd
 from .detector import Detector
 
 unary_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $batch $cond')
-multi_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $batch $cond1 $c EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2)')
+
+multi_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
+                          'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2)')
+
+multi_template_inc = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $batch $cond1 $c ' +
+                              'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $batch $cond2) ' +
+                              'UNION ' +
+                              'SELECT t1._tid_ FROM "$table" as t1 WHERE $batch $cond1 $c ' +
+                              'EXISTS (SELECT t2._tid_ FROM "$repaired" as t2 WHERE $cond2)')
 
 
 class ViolationDetector(Detector):
     """
-    Detector to detect violations of integrity constraints (mainly denial constraints).
+    Error detector that spots violations of integrity constraints (mainly Denial Constraints).
     """
 
     def __init__(self, name='ViolationDetector'):
         super(ViolationDetector, self).__init__(name)
+        self.constraints = None
+        self.batch_number = None
+        self.batch_cond = None
 
     def setup(self, dataset, env, batch=1):
         self.ds = dataset
         self.env = env
         self.constraints = dataset.constraints
+        self.batch_number = batch
         self.batch_cond = '_batch_ = ' + batch + ' AND '
 
     def detect_noisy_cells(self):
         """
-        Returns a pandas.DataFrame containing all cells that
-         violate denial constraints contained in self.dataset.
+        Returns a pandas.DataFrame containing all cells that violate Denial Constraints in the data previously loaded.
 
         :return: pandas.DataFrame with columns:
             _tid_: entity ID
-            attribute: attribute violating any denial constraint.
+            attribute: attribute violating any Denial Constraint
         """
 
-        # raw_data.name is used because both raw and new data are stored in the same table
         tbl = self.ds.raw_data.name
         queries = []
         attrs = []
@@ -42,10 +52,8 @@ class ViolationDetector(Detector):
             queries.append(q)
             attrs.append(c.components)
 
-        # Execute Queries over the DBEngine of Dataset
         results = self.ds.engine.execute_queries(queries)
 
-        # Generate final output
         errors = []
         for i in range(len(attrs)):
             res = results[i]
@@ -53,25 +61,30 @@ class ViolationDetector(Detector):
             tmp_df = self.gen_tid_attr_output(res, attr_list)
             errors.append(tmp_df)
         errors_df = pd.concat(errors, ignore_index=True).drop_duplicates().reset_index(drop=True)
+
         return errors_df
 
     def to_sql(self, tbl, c):
-        # Check tuples in constraint
         unary = len(c.tuple_names) == 1
+
         if unary:
             query = self.gen_unary_query(tbl, c)
         else:
-            query = self.gen_mult_query(tbl, c)
+            query = self.gen_multi_query(tbl, c)
+
         return query
 
     def gen_unary_query(self, tbl, c):
-        query = unary_template.substitute(table=tbl, batch=self.batch_cond, cond=c.cnf_form)
+        query = unary_template.substitute(table=tbl,
+                                          batch=self.batch_cond,
+                                          cond=c.cnf_form)
+
         return query
 
-    def gen_mult_query(self, tbl, c):
-        # Iterate over constraint predicates to identify cond1 and cond2
+    def gen_multi_query(self, tbl, c):
         cond1_preds = []
         cond2_preds = []
+
         for pred in c.predicates:
             if 't1' in pred.cnf_form:
                 if 't2' in pred.cnf_form:
@@ -81,23 +94,53 @@ class ViolationDetector(Detector):
             elif 't2' in pred.cnf_form:
                 cond2_preds.append(pred.cnf_form)
             else:
-                raise Exception("ERROR in violation detector. Cannot ground multi-tuple template.")
+                raise Exception("ERROR in Violation Detector. Cannot ground multi-tuple template.")
+
         cond1 = " AND ".join(cond1_preds)
         cond2 = " AND ".join(cond2_preds)
+
         a = []
         for b in c.components:
             a.append("'" + b + "'")
+
         if cond1 != '':
-            query = multi_template.substitute(table=tbl, batch=self.batch_cond, cond1=cond1, c='AND', cond2=cond2)
+            if self.batch_number == 1:
+                query = multi_template.substitute(table=tbl,
+                                                  cond1=cond1,
+                                                  c='AND',
+                                                  cond2=cond2)
+            else:
+                query = multi_template_inc.substitute(table=tbl,
+                                                      batch=self.batch_cond,
+                                                      cond1=cond1,
+                                                      c='AND',
+                                                      cond2=cond2,
+                                                      repaired=tbl.append('_repaired'))
         else:
-            query = multi_template.substitute(table=tbl, batch=self.batch_cond, cond1=cond1, c='', cond2=cond2)
+            if self.batch_number == 1:
+                query = multi_template.substitute(table=tbl,
+                                                  cond1=cond1,
+                                                  c='',
+                                                  cond2=cond2)
+            else:
+                query = multi_template_inc.substitute(table=tbl,
+                                                      batch=self.batch_cond,
+                                                      cond1=cond1,
+                                                      c='',
+                                                      cond2=cond2,
+                                                      repaired=tbl.append('_repaired'))
+
         return query
 
     def gen_tid_attr_output(self, res, attr_list):
         errors = []
-        for tup in res:
-            tid = int(tup[0])
+
+        for t in res:
+            tid = int(t[0])
+
             for attr in attr_list:
                 errors.append({'_tid_': tid, 'attribute': attr})
+
         error_df = pd.DataFrame(data=errors)
+
         return error_df

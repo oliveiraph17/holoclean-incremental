@@ -116,7 +116,11 @@ class Dataset:
             # Generate indexes on attribute columns for faster queries
             for attr in self.raw_data.get_attributes():
                 # Generate index on attribute
-                self.raw_data.create_db_index(self.engine,[attr])
+                self.raw_data.create_db_index(self.engine, [attr])
+
+            # Create index on _batch_ even though it is not trainable.
+            # This is useful for the violation detector's queries.
+            self.raw_data.create_db_index(self.engine, ['_batch_'])
 
             # Create attr_to_idx dictionary (assign unique index for each attribute)
             # and attr_count (total # of attributes)
@@ -173,7 +177,7 @@ class Dataset:
             if entity_col is None:
                 # Generates _tid_'s starting from the number of elements previously loaded.
                 df.insert(0, '_tid_', range(len(self.raw_data.df.index),
-                                            len(self.raw_data.df.index) + len(df)))
+                                            len(self.raw_data.df.index) + len(df.index)))
             else:
                 df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
 

@@ -17,6 +17,7 @@ class Detector:
         """
         self.name = name
         self.ds = None
+        self.env = None
 
     @abstractmethod
     def setup(self, dataset, env, batch=1):

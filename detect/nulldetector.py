@@ -6,11 +6,12 @@ from utils import NULL_REPR
 
 class NullDetector(Detector):
     """
-    An error detector that treats null values as errors.
+    Error detector that treats NULL values as errors.
     """
 
     def __init__(self, name='NullDetector'):
         super(NullDetector, self).__init__(name)
+        self.df = None
 
     def setup(self, dataset, env, batch=1):
         self.ds = dataset
@@ -23,8 +24,7 @@ class NullDetector(Detector):
 
     def detect_noisy_cells(self):
         """
-        detect_noisy_cells returns a pandas.DataFrame containing all cells with
-        NULL values.
+        detect_noisy_cells returns a pandas.DataFrame containing all cells with NULL values.
 
         :return: pandas.DataFrame with columns:
             _tid_: entity ID
@@ -38,4 +38,3 @@ class NullDetector(Detector):
             errors.append(tmp_df)
         errors_df = pd.concat(errors, ignore_index=True)
         return errors_df
-
