@@ -53,22 +53,21 @@ class DomainEngine:
 
     def compute_correlations(self):
         """
-        compute_correlations memoizes to self.correlations; a data structure
-        that contains pairwise correlations between attributes (values are treated as
-        discrete categories).
+        compute_correlations memoizes to self.correlations a data structure
+        that contains pairwise correlations between attributes
+        (values are treated as discrete categories).
         """
         self.correlations = self._compute_norm_cond_entropy_corr()
 
     def _compute_norm_cond_entropy_corr(self):
         """
-        Computes the correlations between attributes by calculating
-        the normalized conditional entropy between them. The conditional
-        entropy is asymmetric, therefore we need pairwise computation.
+        Computes the correlations between attributes by calculating the normalized conditional entropy between them.
+        The conditional entropy is asymmetric, therefore we need pairwise computations.
 
         The computed correlations are stored in a dictionary in the format:
         {
           attr_a: { cond_attr_i: corr_strength_a_i,
-                    cond_attr_j: corr_strength_a_j, ... },
+                    cond_attr_j: corr_strength_a_j, ...},
           attr_b: { cond_attr_i: corr_strength_b_i, ...}
         }
 
@@ -77,12 +76,13 @@ class DomainEngine:
         data_df = self.ds.get_raw_data()
         attrs = self.ds.get_attributes()
 
+        # Compute pairwise conditional entropy.
         corr = {}
-        # Compute pair-wise conditional entropy.
         for x in attrs:
             corr[x] = {}
             x_vals = data_df[x]
             x_domain_size = x_vals.nunique()
+
             for y in attrs:
                 # Set correlation to 0.0 if entropy of x is 1 (only one possible value).
                 if x_domain_size == 1:
@@ -96,13 +96,14 @@ class DomainEngine:
 
                 # Compute the conditional entropy H(x|y) = H(x,y) - H(y).
                 # H(x,y) denotes H(x U y).
-                # If H(x|y) = 0, then y determines x, i.e., y -> x.
-                # Use the domain size of x as a log base for normalization.
+                # If H(x|y) = 0, then y determines x, i.e. y -> x.
+                # Use the domain size of x as the log base for normalization.
                 y_vals = data_df[y]
                 x_y_entropy = drv.entropy_conditional(x_vals, y_vals, base=x_domain_size)
 
-                # The conditional entropy is 0 for strongly correlated attributes and 1 for
-                # completely independent attributes. We reverse this to reflect the correlation.
+                # The conditional entropy is 0 for strongly correlated attributes
+                # and 1 for completely independent attributes.
+                # We reverse this to reflect the correlation.
                 corr[x][y] = 1.0 - x_y_entropy
         return corr
 
@@ -116,7 +117,6 @@ class DomainEngine:
             _tid_: entity/tuple ID
             _cid_: cell ID
             _vid_: random variable ID (all cells with more than 1 domain value)
-            _
 
         """
         if domain.empty:
@@ -131,12 +131,15 @@ class DomainEngine:
     def setup_attributes(self):
         self.active_attributes = self.get_active_attributes()
         total, single_stats, pair_stats = self.ds.get_statistics()
+
         self.total = total
         self.single_stats = single_stats
-        logging.debug("preparing pruned co-occurring statistics...")
+
+        logging.debug("Preparing pruned co-occurring statistics...")
         tic = time.clock()
         self.pair_stats = self._pruned_pair_stats(pair_stats)
         logging.debug("DONE with pruned co-occurring statistics in %.2f secs", time.clock() - tic)
+
         self.setup_complete = True
 
     def _pruned_pair_stats(self, pair_stats):
@@ -176,9 +179,11 @@ class DomainEngine:
         """
         query = 'SELECT DISTINCT attribute as attribute FROM {}'.format(AuxTables.dk_cells.name)
         result = self.ds.engine.execute_query(query)
+
         if not result:
             raise Exception("No attribute contains erroneous cells.")
-        # Sort the active attributes to maintain the order of the ids of random variable.
+
+        # Sort the active attributes to maintain the order of the random variable IDs.
         return sorted(itertools.chain(*result))
 
     def get_corr_attributes(self, attr, thres):

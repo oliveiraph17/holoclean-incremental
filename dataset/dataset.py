@@ -286,31 +286,31 @@ class Dataset:
     def get_statistics(self):
         """
         get_statistics returns:
-            1. self.total_tuples (total # of tuples)
-            2. self.single_attr_stats ({ attribute -> { value -> count } })
-              the frequency (# of entities) of a given attribute-value
-            3. self.pair_attr_stats ({ attr1 -> { attr2 -> {val1 -> {val2 -> count } } } })
-              the statistics for each pair of attributes, attr1 and attr2, where:
-                <attr1>: first attribute
-                <attr2>: second attribute
-                <val1>: all values of <attr1>
-                <val2>: values of <attr2> that appear at least once with <val1>.
-                <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
+          1. self.total_tuples (total # of tuples)
+          2. self.single_attr_stats ({ attribute -> { value -> count } })
+            the frequency (# of entities) of a given attribute-value
+          3. self.pair_attr_stats ({ attr1 -> { attr2 -> {val1 -> {val2 -> count } } } })
+            the statistics for each pair of attributes, attr1 and attr2, where:
+              <attr1>: first attribute
+              <attr2>: second attribute
+              <val1>: value of <attr1>
+              <val2>: value of <attr2> that appears at least once with <val1>
+              <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
 
-        NB: neither single_attr_stats nor pair_attr_stats contain frequencies
-            for values that are NULL (NULL_REPR). One would need to explicitly
-            check if the value is NULL before lookup.
+        NB: neither single_attr_stats nor pair_attr_stats contain frequencies for values that are NULL (NULL_REPR).
+        One would need to explicitly check if the value is NULL before lookup.
 
-            Also, values that only co-occur with NULLs will NOT be in pair_attr_stats.
+        Also, values that only co-occur with NULLs will NOT be in pair_attr_stats.
         """
         if not self.stats_ready:
-            logging.debug('computing frequency and co-occurrence statistics from raw data...')
+            logging.debug('Computing frequency and co-occurrence statistics from raw data...')
             tic = time.clock()
             self.collect_stats()
             logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
 
         stats = (self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
         self.stats_ready = True
+
         return stats
 
     def collect_stats(self):
@@ -321,41 +321,53 @@ class Dataset:
           2. self.pair_attr_stats ({ attr1 -> { attr2 -> {val1 -> {val2 -> count } } } })
             where DataFrame contains 3 columns:
               <attr1>: all possible values for attr1 ('val1')
-              <attr2>: all values for attr2 that appeared at least once with <val1> ('val2')
-              <count>: frequency (# of entities) where attr1: val1 AND attr2: val2
+              <attr2>: all values of attr2 that appeared at least once with <val1> ('val2')
+              <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
             Also known as co-occurrence count.
         """
-        logging.debug("Collecting single/pair-wise statistics...")
+        logging.debug("Collecting single/pairwise statistics...")
+
         self.total_tuples = self.get_raw_data().shape[0]
-        # Single attribute-value frequency.
+
+        # Single statistics.
         for attr in self.get_attributes():
             self.single_attr_stats[attr] = self.get_stats_single(attr)
-        # Compute co-occurrence frequencies.
+
+        # Pairwise statistics.
         for cond_attr in self.get_attributes():
             self.pair_attr_stats[cond_attr] = {}
+
             for trg_attr in self.get_attributes():
-                if trg_attr != cond_attr:
+                if cond_attr != trg_attr:
                     self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr, trg_attr)
 
-    def get_stats_single(self, attr):
+    def get_stats_single(self, attr, batch=1):
         """
-        Returns a dictionary where the keys are domain values for :param attr: and
-        the values contain the frequency count of that value for this attribute.
+        Returns a dictionary where each key is a domain value for :param attr:
+        and each value contains the frequency count of the respective value of :param attr:.
         """
-        # need to decode values into unicode strings since we do lookups via
-        # unicode strings from Postgres
-        data_df = self.get_raw_data()
+        if batch == 1:
+            data_df = self.get_raw_data()
+        else:
+            data_df = self.get_new_data()
+
+        # We need to decode values into unicode strings
+        # since we do lookups via unicode strings from PostgreSQL.
         return data_df[[attr]].loc[data_df[attr] != NULL_REPR].groupby([attr]).size().to_dict()
 
-    def get_stats_pair(self, first_attr, second_attr):
+    def get_stats_pair(self, first_attr, second_attr, batch=1):
         """
-        Returns a dictionary {first_val -> {second_val -> count } } where:
-            <first_val>: all possible values for first_attr
-            <second_val>: all values for second_attr that appear at least once with <first_val>
+        Returns a dictionary { first_val -> { second_val -> count } } where:
+            <first_val>: each value of first_attr
+            <second_val>: each value of second_attr that appears at least once with <first_val>
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
-        Filters out NULL values so no entries in the dictionary would have NULLs.
+        Filters out NULL values so that no entries in the dictionary have NULLs.
         """
-        data_df = self.get_raw_data()
+        if batch == 1:
+            data_df = self.get_raw_data()
+        else:
+            data_df = self.get_new_data()
+
         tmp_df = data_df[[first_attr, second_attr]]\
             .loc[(data_df[first_attr] != NULL_REPR) & (data_df[second_attr] != NULL_REPR)]\
             .groupby([first_attr, second_attr])\
