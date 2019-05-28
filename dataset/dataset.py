@@ -379,7 +379,7 @@ class Dataset:
         """
         Returns (number of random variables, count of distinct values across all attributes).
         """
-        query = 'SELECT count(_vid_), max(domain_size) FROM %s'%AuxTables.cell_domain.name
+        query = 'SELECT count(_vid_), max(domain_size) FROM %s' % AuxTables.cell_domain.name
         res = self.engine.execute_query(query)
         total_vars = int(res[0][0])
         classes = int(res[0][1])

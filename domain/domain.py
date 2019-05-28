@@ -39,8 +39,7 @@ class DomainEngine:
 
     def setup(self):
         """
-        setup initializes the in-memory and Postgres auxiliary tables (e.g.
-        'cell_domain', 'pos_values').
+        Initializes the in-memory and PostgreSQL auxiliary tables (e.g. 'cell_domain', 'pos_values').
         """
         tic = time.time()
         self.compute_correlations()
@@ -53,9 +52,8 @@ class DomainEngine:
 
     def compute_correlations(self):
         """
-        compute_correlations memoizes to self.correlations a data structure
-        that contains pairwise correlations between attributes
-        (values are treated as discrete categories).
+        Memoizes to self.correlations a data structure containing pairwise correlations between attributes.
+        Values are treated as discrete categories.
         """
         self.correlations = self._compute_norm_cond_entropy_corr()
 
@@ -109,15 +107,31 @@ class DomainEngine:
 
     def store_domains(self, domain):
         """
-        store_domains stores the 'domain' DataFrame as the 'cell_domain'
-        auxiliary table as well as generates the 'pos_values' auxiliary table,
-        a long-format of the domain values, in Postgres.
+        Generates the domain DataFrame as the 'cell_domain' auxiliary table,
+        as well as generates the 'pos_values' auxiliary table,
+        and stores them in PostgreSQL.
 
-        pos_values schema:
+        Schema for cell_domain:
+            _cid_: cell ID
+            _tid_: entity/tuple ID
+            _vid_: random variable ID (all cells with more than 1 domain value)
+            attribute: column name
+            domain: top co-occurring values (within correlation threshold) of 'attribute'.
+            domain_size: number of values in 'domain'
+            fixed: 1 if a random sample was taken in the absence of correlated attributes or top co-occurring values,
+                   0 otherwise
+            init_index: domain index of 'init_value'
+            init_value: initial value for this cell
+            weak_label: value assigned as ground-truth to this cell
+            weak_label_idx: domain index of 'weak_label'
+
+        Schema for pos_values:
+            _vid_: random variable ID (all cells with more than 1 domain value)
             _tid_: entity/tuple ID
             _cid_: cell ID
-            _vid_: random variable ID (all cells with more than 1 domain value)
-
+            attribute: column name
+            rv_val: a value from the domain of the current random variable
+            val_id: a numeric identifier for rv_val starting from 1
         """
         if domain.empty:
             raise Exception("ERROR: Generated domain is empty.")
@@ -125,7 +139,11 @@ class DomainEngine:
             self.ds.generate_aux_table(AuxTables.cell_domain, domain, store=True, index_attrs=['_vid_'])
             self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_tid_'])
             self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_cid_'])
-            query = "SELECT _vid_, _cid_, _tid_, attribute, a.rv_val, a.val_id from %s , unnest(string_to_array(regexp_replace(domain,\'[{\"\"}]\',\'\',\'gi\'),\'|||\')) WITH ORDINALITY a(rv_val,val_id)" % AuxTables.cell_domain.name
+
+            query = "SELECT _vid_, _cid_, _tid_, attribute, a.rv_val, a.val_id FROM %s" % AuxTables.cell_domain.name
+            query += ", unnest(string_to_array(regexp_replace(domain, \'[{\"\"}]\', \'\', \'gi\'), \'|||\'))"
+            query += "WITH ORDINALITY a(rv_val, val_id)"
+
             self.ds.generate_aux_table_sql(AuxTables.pos_values, query, index_attrs=['_tid_', 'attribute'])
 
     def setup_attributes(self):
