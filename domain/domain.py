@@ -42,8 +42,8 @@ class DomainEngine:
         Initializes the in-memory and PostgreSQL auxiliary tables (e.g. 'cell_domain', 'pos_values').
         """
         tic = time.time()
-        self.compute_correlations()
         self.setup_attributes()
+        self.compute_correlations()
         domain = self.generate_domain()
         self.store_domains(domain)
         status = "DONE with domain preparation."
@@ -192,8 +192,7 @@ class DomainEngine:
     def get_active_attributes(self):
         """
         get_active_attributes returns the attributes to be modeled.
-        These attributes correspond only to attributes that contain at least
-        one potentially erroneous cell.
+        These attributes correspond only to attributes that contain at least one potentially erroneous cell.
         """
         query = 'SELECT DISTINCT attribute as attribute FROM {}'.format(AuxTables.dk_cells.name)
         result = self.ds.engine.execute_query(query)

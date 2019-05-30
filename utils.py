@@ -1,6 +1,6 @@
 # Some constants.
 
-# How we represent nulls in holoclean.
+# How we represent NULLs in HoloClean.
 NULL_REPR = '_nan_'
 
 # A feature value to represent co-occurrence with NULLs, which is not applicable.
@@ -11,8 +11,8 @@ def dictify_df(frame):
     """
     dictify_df converts a frame with columns
 
-      col1    | col2    | .... | coln   | value
-      ...
+      col1    | col2    | ... | coln  | value
+
     to a dictionary that maps values valX from colX
 
     { val1 -> { val2 -> { ... { valn -> value } } } }

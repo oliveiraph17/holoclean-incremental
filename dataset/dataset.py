@@ -28,7 +28,7 @@ class CellStatus(Enum):
 
 class Dataset:
     """
-    This class keeps all dataframes and tables for a HC session.
+    This class keeps all DataFrames and tables for a HoloClean session.
     """
     def __init__(self, name, env):
         self.id = name
@@ -39,7 +39,7 @@ class Dataset:
         self.aux_table = {}
         for tab in AuxTables:
             self.aux_table[tab] = None
-        # start dbengine
+        # Start DBengine.
         self.engine = DBengine(
             env['db_user'],
             env['db_pwd'],
@@ -48,17 +48,19 @@ class Dataset:
             pool_size=env['threads'],
             timeout=env['timeout']
         )
-        # members to convert (tuple_id, attribute) to cell_id
+        # Members to convert (tuple_id, attribute) to cell_id.
         self.attr_to_idx = {}
         self.attr_count = 0
-        # dataset statistics
+        # Statistics for dataset.
         self.stats_ready = False
-        # Total tuples
+        # Total tuples.
         self.total_tuples = 0
-        # Domain stats for single attributes
+        # Domain statistics for single attributes.
         self.single_attr_stats = {}
-        # Domain stats for attribute pairs
+        # Domain statistics for attribute pairs (excluding NULLs).
         self.pair_attr_stats = {}
+        # Conditional entropy statistics for attribute pairs (including NULLs).
+        self.pair_attr_stats_nulls = {}
 
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
@@ -289,7 +291,7 @@ class Dataset:
           1. self.total_tuples (total # of tuples)
           2. self.single_attr_stats ({ attribute -> { value -> count } })
             the frequency (# of entities) of a given attribute-value
-          3. self.pair_attr_stats ({ attr1 -> { attr2 -> {val1 -> {val2 -> count } } } })
+          3. self.pair_attr_stats ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
             the statistics for each pair of attributes, attr1 and attr2, where:
               <attr1>: first attribute
               <attr2>: second attribute
