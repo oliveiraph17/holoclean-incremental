@@ -76,12 +76,10 @@ class Table:
 
     def get_attributes(self):
         """
-        get_attributes returns the columns that are trainable/learnable attributes
-        (i.e. exclude meta-columns like _tid_).
+        get_attributes returns the trainable/learnable attributes (i.e. excluding meta-columns such as '_tid_').
         """
         if self.df.empty:
-            raise Exception("Empty Dataframe associated with table {name}. Cannot return attributes.".format(
-                name=self.name))
+            raise Exception("Empty DataFrame for table {name}. Cannot return attributes.".format(name=self.name))
         return list(col for col in self.df.columns if col not in self.exclude_attr_cols)
 
     def create_df_index(self, attr_list):

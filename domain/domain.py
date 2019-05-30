@@ -148,7 +148,7 @@ class DomainEngine:
 
     def setup_attributes(self):
         self.active_attributes = self.get_active_attributes()
-        total, single_stats, pair_stats = self.ds.get_statistics()
+        total, single_stats, pair_stats, pair_stats_w_nulls = self.ds.get_statistics()
 
         self.total = total
         self.single_stats = single_stats
@@ -156,7 +156,8 @@ class DomainEngine:
         logging.debug("Preparing pruned co-occurring statistics...")
         tic = time.clock()
         self.pair_stats = self._pruned_pair_stats(pair_stats)
-        logging.debug("DONE with pruned co-occurring statistics in %.2f secs", time.clock() - tic)
+        toc = time.clock()
+        logging.debug("DONE with pruned co-occurring statistics in %.2f secs", toc - tic)
 
         self.setup_complete = True
 
