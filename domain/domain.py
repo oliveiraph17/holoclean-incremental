@@ -50,14 +50,14 @@ class DomainEngine:
         toc = time.time()
         return status, toc - tic
 
-    def compute_correlations(self):
+    def compute_correlations(self, batch=1):
         """
         Memoizes to self.correlations a data structure containing pairwise correlations between attributes.
         Values are treated as discrete categories.
         """
-        self.correlations = self._compute_norm_cond_entropy_corr()
+        self.correlations = self._compute_norm_cond_entropy_corr(batch)
 
-    def _compute_norm_cond_entropy_corr(self):
+    def _compute_norm_cond_entropy_corr(self, batch=1):
         """
         Computes the correlations between attributes by calculating the normalized conditional entropy between them.
         The conditional entropy is asymmetric, therefore we need pairwise computations.
@@ -71,7 +71,11 @@ class DomainEngine:
 
         :return a dictionary of correlations
         """
-        data_df = self.ds.get_raw_data()
+        if batch == 1:
+            data_df = self.ds.get_raw_data()
+        else:
+            data_df = self.ds.get_new_data()
+
         attrs = self.ds.get_attributes()
 
         # Compute pairwise conditional entropy.
@@ -99,8 +103,7 @@ class DomainEngine:
                 y_vals = data_df[y]
                 x_y_entropy = drv.entropy_conditional(x_vals, y_vals, base=x_domain_size)
 
-                # The conditional entropy is 0 for strongly correlated attributes
-                # and 1 for completely independent attributes.
+                # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
                 # We reverse this to reflect the correlation.
                 corr[x][y] = 1.0 - x_y_entropy
         return corr
@@ -109,7 +112,7 @@ class DomainEngine:
         """
         Generates the domain DataFrame as the 'cell_domain' auxiliary table,
         as well as generates the 'pos_values' auxiliary table,
-        and stores them in PostgreSQL.
+        and stores them in Postgres.
 
         Schema for cell_domain:
             _cid_: cell ID
