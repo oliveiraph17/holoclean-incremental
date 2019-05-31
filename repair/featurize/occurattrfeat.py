@@ -24,7 +24,7 @@ class OccurAttrFeaturizer(Featurizer):
 
     def setup_stats(self):
         self.raw_data_dict = self.ds.raw_data.df.set_index('_tid_').to_dict('index')
-        total, single_stats, pair_stats = self.ds.get_statistics()
+        total, single_stats, pair_stats, _ = self.ds.get_statistics()
         self.total = float(total)
         self.single_stats = single_stats
         self.pair_stats = pair_stats

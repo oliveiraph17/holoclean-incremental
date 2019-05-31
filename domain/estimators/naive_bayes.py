@@ -17,7 +17,7 @@ class NaiveBayes(Estimator):
     def __init__(self, env, dataset, domain_df, correlations):
         Estimator.__init__(self, env, dataset)
 
-        self._n_tuples, self._freq, self._cooccur_freq = self.ds.get_statistics()
+        self._n_tuples, self._freq, self._cooccur_freq, _ = self.ds.get_statistics()
         self.domain_df = domain_df
         self._correlations = correlations
         self._cor_strength = self.env['nb_cor_strength']

@@ -290,7 +290,7 @@ class Dataset:
         vid = tuple_id * self.attr_count + self.attr_to_idx[attr_name]
         return vid
 
-    def get_statistics(self):
+    def get_statistics(self, batch=1):
         """
         get_statistics returns:
           1. self.total_tuples (total # of tuples)
@@ -312,7 +312,7 @@ class Dataset:
         """
         logging.debug('Computing frequency and co-occurrence statistics from raw data...')
         tic = time.clock()
-        self.collect_stats()
+        self.collect_stats(batch)
         logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
 
         stats = (self.total_tuples,
@@ -340,6 +340,7 @@ class Dataset:
             # Pairwise statistics.
             for cond_attr in self.get_attributes():
                 self.pair_attr_stats[cond_attr] = {}
+                self.pair_attr_stats_w_nulls[cond_attr] = {}
 
                 for trg_attr in self.get_attributes():
                     if cond_attr != trg_attr:
@@ -360,7 +361,12 @@ class Dataset:
             # Update single statistics.
             for attr in self.get_attributes():
                 for val, count in self.get_stats_single(attr, data_df).items():
-                    self.single_attr_stats[attr][val] += count
+                    if val in self.single_attr_stats[attr]:
+                        # The key 'val' already exists, so we just update the count.
+                        self.single_attr_stats[attr][val] += count
+                    else:
+                        # The key 'val' is new, so we insert a new dictionary for 'attr'.
+                        self.single_attr_stats[attr].update({val: count})
 
             # Update pairwise statistics.
             for cond_attr in self.get_attributes():
@@ -369,12 +375,26 @@ class Dataset:
                         # Statistics excluding NULLs, which will be used in the domain generation.
                         for cond_val, nested_dict in self.get_stats_pair(cond_attr, trg_attr, data_df).items():
                             for trg_val, count in nested_dict.items():
-                                self.pair_attr_stats[cond_attr][trg_attr][cond_val][trg_val] += count
+                                if cond_val in self.pair_attr_stats[cond_attr][trg_attr]:
+                                    if trg_val in self.pair_attr_stats[cond_attr][trg_attr][cond_val]:
+                                        self.pair_attr_stats[cond_attr][trg_attr][cond_val][trg_val] += count
+                                    else:
+                                        self.pair_attr_stats[cond_attr][trg_attr][cond_val].update({trg_val: count})
+                                else:
+                                    self.pair_attr_stats[cond_attr][trg_attr].update({cond_val: {trg_val: count}})
 
                         # Statistics including NULLs, which will be used in the conditional entropy computation.
                         for cond_val, nested_dict in self.get_stats_pair_w_nulls(cond_attr, trg_attr, data_df).items():
                             for trg_val, count in nested_dict.items():
-                                self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val][trg_val] += count
+                                if cond_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr]:
+                                    if trg_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val]:
+                                        self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val][trg_val] += count
+                                    else:
+                                        new_dict = {trg_val: count}
+                                        self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val].update(new_dict)
+                                else:
+                                    new_dict = {cond_val: {trg_val: count}}
+                                    self.pair_attr_stats_w_nulls[cond_attr][trg_attr].update(new_dict)
 
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr, data_df):
@@ -412,7 +432,7 @@ class Dataset:
     def get_inferred_values(self):
         tic = time.clock()
 
-        # Index into domain with inferred_val_idx + 1 since SQL arrays begin at index 1.
+        # Index of 'domain' equals inferred_val_idx + 1 because SQL arrays begin at index 1.
         query = "SELECT t1._tid_, t1.attribute, domain[inferred_val_idx + 1] as rv_value " \
                 "FROM " \
                 "(SELECT _tid_, attribute, _vid_, init_value, " \

@@ -37,12 +37,12 @@ class DomainEngine:
         self.pair_stats = {}
         self.all_attrs = {}
 
-    def setup(self):
+    def setup(self, batch=1):
         """
         Initializes the in-memory and PostgreSQL auxiliary tables (e.g. 'cell_domain', 'pos_values').
         """
         tic = time.time()
-        self.setup_attributes()
+        self.setup_attributes(batch)
         self.compute_correlations()
         domain = self.generate_domain()
         self.store_domains(domain)
@@ -146,9 +146,9 @@ class DomainEngine:
 
             self.ds.generate_aux_table_sql(AuxTables.pos_values, query, index_attrs=['_tid_', 'attribute'])
 
-    def setup_attributes(self):
+    def setup_attributes(self, batch=1):
         self.active_attributes = self.get_active_attributes()
-        total, single_stats, pair_stats, pair_stats_w_nulls = self.ds.get_statistics()
+        total, single_stats, pair_stats, pair_stats_w_nulls = self.ds.get_statistics(batch)
 
         self.total = total
         self.single_stats = single_stats

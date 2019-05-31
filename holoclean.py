@@ -333,8 +333,8 @@ class Session:
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
 
-    def setup_domain(self):
-        status, domain_time = self.domain_engine.setup()
+    def setup_domain(self, batch=1):
+        status, domain_time = self.domain_engine.setup(batch)
         logging.info(status)
         logging.debug('Time to setup the domain: %.2f secs', domain_time)
 

@@ -59,6 +59,8 @@ hc.load_new_data('hospital', '../testdata/hospital_0050_1.csv', batch)
 
 hc.detect_errors(detectors, batch)
 
+hc.setup_domain(batch)
+
 ############################################################
 
 batch = 3

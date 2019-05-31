@@ -243,7 +243,7 @@ class CooccurAttrFeaturizer(Featurizer):
         return len(self.attrs) * len(self.attrs)
 
     def setup(self):
-        _, self.freq, self.cooccur_freq = self.ds.get_statistics()
+        _, self.freq, self.cooccur_freq, _ = self.ds.get_statistics()
 
     def create_tensor(self, row, attr, values):
         """
