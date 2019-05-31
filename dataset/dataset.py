@@ -310,7 +310,11 @@ class Dataset:
         One would need to explicitly check if the value is NULL before lookup.
         Also, values that only co-occur with NULLs will NOT be in 'pair_attr_stats'.
         """
-        logging.debug('Computing frequency and co-occurrence statistics from raw data...')
+        if batch == 1:
+            logging.debug('Computing frequency and co-occurrence statistics from raw data...')
+        else:
+            logging.debug('Computing frequency and co-occurrence statistics from new data, batch %d...', batch)
+
         tic = time.clock()
         self.collect_stats(batch)
         logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)

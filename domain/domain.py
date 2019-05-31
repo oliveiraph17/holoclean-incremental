@@ -39,7 +39,7 @@ class DomainEngine:
 
     def setup(self, batch=1):
         """
-        Initializes the in-memory and PostgreSQL auxiliary tables (e.g. 'cell_domain', 'pos_values').
+        Initializes the in-memory and Postgres auxiliary tables (e.g. 'cell_domain', 'pos_values').
         """
         tic = time.time()
         self.setup_attributes(batch)
@@ -163,16 +163,15 @@ class DomainEngine:
 
     def _pruned_pair_stats(self, pair_stats):
         """
-        _pruned_pair_stats converts 'pair_stats' which is a dictionary mapping
-            { attr1 -> { attr2 -> {val1 -> {val2 -> count } } } } where
-              <val1>: all possible values for attr1
-              <val2>: all values for attr2 that appeared at least once with <val1>
-              <count>: frequency (# of entities) where attr1: <val1> AND attr2: <val2>
+        _pruned_pair_stats converts 'pair_stats', which is a dictionary mapping
+            { attr1 -> { attr2 -> { val1 -> { val2 -> count } } } }, where
+              <val1>: all possible values for attr1,
+              <val2>: all values for attr2 that appear at least once with <val1>, and
+              <count>: frequency (# of entities) where attr1=<val1> AND attr2=<val2>,
+        to a flattened 4-level dictionary mapping
+            { attr1 -> { attr2 -> { val1 -> [pruned list of val2] } } }.
 
-        to a flattened 4-level dictionary { attr1 -> { attr2 -> { val1 -> [pruned list of val2] } } }
-        i.e. maps to the co-occurring values for attr2 that exceed
-        the self.domain_thresh_1 co-occurrence probability for a given
-        attr1-val1 pair.
+        It keeps only the co-occurring values of attr2 that exceed 'self.domain_thresh_1'.
         """
 
         out = {}
@@ -182,10 +181,11 @@ class DomainEngine:
                 out[attr1][attr2] = {}
                 for val1 in pair_stats[attr1][attr2].keys():
                     denominator = self.single_stats[attr1][val1]
-                    # tau becomes a threshhold on co-occurrence frequency
-                    # based on the co-occurrence probability threshold
-                    # domain_thresh_1.
-                    tau = float(self.domain_thresh_1*denominator)
+
+                    # 'tau' becomes a threshold on co-occurrence frequency
+                    # based on the co-occurrence probability threshold 'self.domain_thresh_1'.
+                    tau = float(self.domain_thresh_1 * denominator)
+
                     top_cands = [val2 for (val2, count) in pair_stats[attr1][attr2][val1].items() if count > tau]
                     out[attr1][attr2][val1] = top_cands
         return out
