@@ -53,8 +53,10 @@ class Dataset:
         self.attr_count = 0
         # Total tuples.
         self.total_tuples = 0
-        # Domain statistics for single attributes.
+        # Domain statistics for single attributes (excluding NULLs).
         self.single_attr_stats = {}
+        # Conditional entropy statistics for single attributes (including NULLs).
+        self.single_attr_stats_w_nulls = {}
         # Domain statistics for attribute pairs (excluding NULLs).
         self.pair_attr_stats = {}
         # Conditional entropy statistics for attribute pairs (including NULLs).
@@ -296,14 +298,16 @@ class Dataset:
           1. self.total_tuples (total # of tuples)
           2. self.single_attr_stats ({ attribute -> { value -> count } })
             the frequency (# of entities) of a given attribute-value
-          3. self.pair_attr_stats ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
+          3. self.single_attr_stats_w_nulls ({ attribute -> { value -> count } })
+            same as 'single_attr_stats', but including counts for NULLs
+          4. self.pair_attr_stats ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
             the statistics for each pair of attributes, attr1 and attr2, where:
               <attr1>: first attribute
               <attr2>: second attribute
               <val1>: value of <attr1>
               <val2>: value of <attr2> that appears at least once with <val1>
               <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
-          4. self.pair_attr_stats_w_nulls ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
+          5. self.pair_attr_stats_w_nulls ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
             same as 'pair_attr_stats', but including counts for NULLs
 
         Neither 'single_attr_stats' nor 'pair_attr_stats' contain frequencies NULL values (NULL_REPR).
@@ -321,6 +325,7 @@ class Dataset:
 
         stats = (self.total_tuples,
                  self.single_attr_stats,
+                 self.single_attr_stats_w_nulls,
                  self.pair_attr_stats,
                  self.pair_attr_stats_w_nulls)
 
@@ -340,6 +345,7 @@ class Dataset:
             # Single statistics.
             for attr in self.get_attributes():
                 self.single_attr_stats[attr] = self.get_stats_single(attr, data_df)
+                self.single_attr_stats_w_nulls[attr] = self.get_stats_single_w_nulls(attr, data_df)
 
             # Pairwise statistics.
             for cond_attr in self.get_attributes():
@@ -372,6 +378,14 @@ class Dataset:
                         # The key 'val' is new, so we insert a new dictionary for 'attr'.
                         self.single_attr_stats[attr].update({val: count})
 
+                for val, count in self.get_stats_single_w_nulls(attr, data_df).items():
+                    if val in self.single_attr_stats_w_nulls[attr]:
+                        # The key 'val' already exists, so we just update the count.
+                        self.single_attr_stats_w_nulls[attr][val] += count
+                    else:
+                        # The key 'val' is new, so we insert a new dictionary for 'attr'.
+                        self.single_attr_stats_w_nulls[attr].update({val: count})
+
             # Update pairwise statistics.
             for cond_attr in self.get_attributes():
                 for trg_attr in self.get_attributes():
@@ -403,6 +417,10 @@ class Dataset:
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr, data_df):
         return data_df[[attr]].loc[data_df[attr] != NULL_REPR].groupby([attr]).size().to_dict()
+
+    # noinspection PyMethodMayBeStatic
+    def get_stats_single_w_nulls(self, attr, data_df):
+        return data_df[[attr]].groupby([attr]).size().to_dict()
 
     # noinspection PyMethodMayBeStatic
     def get_stats_pair(self, first_attr, second_attr, data_df):

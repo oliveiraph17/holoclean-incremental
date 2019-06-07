@@ -3,6 +3,7 @@ import pandas as pd
 import time
 
 import itertools
+import math
 import numpy as np
 from pyitlib import discrete_random_variable as drv
 from tqdm import tqdm
@@ -34,7 +35,9 @@ class DomainEngine:
         self.cor_strength = env["cor_strength"]
         self.max_sample = max_sample
         self.single_stats = {}
+        self.single_stats_w_nulls = {}
         self.pair_stats = {}
+        self.pair_stats_w_nulls = {}
         self.all_attrs = {}
 
     def setup(self, batch=1):
@@ -69,7 +72,7 @@ class DomainEngine:
           attr_b: { cond_attr_i: corr_strength_b_i, ...}
         }
 
-        :return a dictionary of correlations
+        :return a dictionary of correlations.
         """
         if batch == 1:
             data_df = self.ds.get_raw_data()
@@ -103,10 +106,34 @@ class DomainEngine:
                 y_vals = data_df[y]
                 x_y_entropy = drv.entropy_conditional(x_vals, y_vals, base=x_domain_size)
 
+                # x_y_entropy = drv.entropy_conditional(x_vals, y_vals)
+                # testing = self.conditional_entropy(x, y, list(set(x_vals)), list(set(y_vals)))
+
                 # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
                 # We reverse this to reflect the correlation.
                 corr[x][y] = 1.0 - x_y_entropy
         return corr
+
+    def conditional_entropy(self, x_attr, y_attr, x_vals_set, y_vals_set, batch=1):
+        """
+        Computes the conditional entropy considering the log base 2.
+
+        :return: the conditional entropy of attributes X and Y using the log base 2.
+        """
+        x_y_entropy = 0.0
+        p_y = {}
+
+        if batch == 1:
+            for y in y_vals_set:
+                p_y[y] = self.single_stats_w_nulls[y_attr][y] / self.total
+
+            for x in x_vals_set:
+                for y in self.pair_stats_w_nulls[x_attr][y_attr][x].keys():
+                    p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x][y] / self.total
+
+                    x_y_entropy = x_y_entropy - (p_xy * math.log(p_xy / p_y[y]))
+
+        return x_y_entropy
 
     def store_domains(self, domain):
         """
@@ -151,16 +178,19 @@ class DomainEngine:
 
     def setup_attributes(self, batch=1):
         self.active_attributes = self.get_active_attributes()
-        total, single_stats, pair_stats, pair_stats_w_nulls = self.ds.get_statistics(batch)
+        total, single_stats, single_stats_w_nulls, pair_stats, pair_stats_w_nulls = self.ds.get_statistics(batch)
 
         self.total = total
         self.single_stats = single_stats
+        self.single_stats_w_nulls = single_stats_w_nulls
 
         logging.debug("Preparing pruned co-occurring statistics...")
         tic = time.clock()
         self.pair_stats = self._pruned_pair_stats(pair_stats)
         toc = time.clock()
         logging.debug("DONE with pruned co-occurring statistics in %.2f secs", toc - tic)
+
+        self.pair_stats_w_nulls = pair_stats_w_nulls
 
         self.setup_complete = True
 
