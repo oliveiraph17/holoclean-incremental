@@ -3,9 +3,7 @@ import pandas as pd
 import time
 
 import itertools
-import math
 import numpy as np
-from pyitlib import discrete_random_variable as drv
 from tqdm import tqdm
 
 from dataset import AuxTables, CellStatus
@@ -99,15 +97,13 @@ class DomainEngine:
                     corr[x][y] = 1.0
                     continue
 
-                # Compute the conditional entropy H(x|y) = H(x,y) - H(y).
-                # H(x,y) denotes H(x U y).
+                y_vals = data_df[y]
+
+                # Compute the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
                 # Use the domain size of x as the log base for normalization.
-                y_vals = data_df[y]
-                x_y_entropy = drv.entropy_conditional(x_vals, y_vals, base=x_domain_size)
-
-                # x_y_entropy = drv.entropy_conditional(x_vals, y_vals)
-                # testing = self.conditional_entropy(x, y, list(set(x_vals)), list(set(y_vals)))
+                x_y_entropy = self.conditional_entropy(x, y, list(set(x_vals)), list(set(y_vals)))
+                x_y_entropy = x_y_entropy / np.log2(x_domain_size)
 
                 # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
                 # We reverse this to reflect the correlation.
@@ -125,13 +121,13 @@ class DomainEngine:
 
         if batch == 1:
             for y in y_vals_set:
-                p_y[y] = self.single_stats_w_nulls[y_attr][y] / self.total
+                p_y[y] = self.single_stats_w_nulls[y_attr][y] / float(self.total)
 
             for x in x_vals_set:
                 for y in self.pair_stats_w_nulls[x_attr][y_attr][x].keys():
-                    p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x][y] / self.total
+                    p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x][y] / float(self.total)
 
-                    x_y_entropy = x_y_entropy - (p_xy * math.log(p_xy / p_y[y]))
+                    x_y_entropy = x_y_entropy - (p_xy * np.log2(p_xy / p_y[y]))
 
         return x_y_entropy
 
