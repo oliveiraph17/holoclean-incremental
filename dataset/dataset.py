@@ -61,6 +61,10 @@ class Dataset:
         self.pair_attr_stats = {}
         # Conditional entropy statistics for attribute pairs (including NULLs).
         self.pair_attr_stats_w_nulls = {}
+        # Conditional entropy incremental statistics for single attributes (including NULLs).
+        self.inc_single_attr_stats_w_nulls = {}
+        # Conditional entropy incremental statistics for attribute pairs (including NULLs).
+        self.inc_pair_attr_stats_w_nulls = {}
 
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
@@ -378,13 +382,7 @@ class Dataset:
                         # The key 'val' is new, so we insert a new dictionary for 'attr'.
                         self.single_attr_stats[attr].update({val: count})
 
-                for val, count in self.get_stats_single_w_nulls(attr, data_df).items():
-                    if val in self.single_attr_stats_w_nulls[attr]:
-                        # The key 'val' already exists, so we just update the count.
-                        self.single_attr_stats_w_nulls[attr][val] += count
-                    else:
-                        # The key 'val' is new, so we insert a new dictionary for 'attr'.
-                        self.single_attr_stats_w_nulls[attr].update({val: count})
+                self.inc_single_attr_stats_w_nulls = self.get_stats_single_w_nulls(attr, data_df)
 
             # Update pairwise statistics.
             for cond_attr in self.get_attributes():
@@ -402,17 +400,7 @@ class Dataset:
                                     self.pair_attr_stats[cond_attr][trg_attr].update({cond_val: {trg_val: count}})
 
                         # Statistics including NULLs, which will be used in the conditional entropy computation.
-                        for cond_val, nested_dict in self.get_stats_pair_w_nulls(cond_attr, trg_attr, data_df).items():
-                            for trg_val, count in nested_dict.items():
-                                if cond_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr]:
-                                    if trg_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val]:
-                                        self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val][trg_val] += count
-                                    else:
-                                        new_dict = {trg_val: count}
-                                        self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val].update(new_dict)
-                                else:
-                                    new_dict = {cond_val: {trg_val: count}}
-                                    self.pair_attr_stats_w_nulls[cond_attr][trg_attr].update(new_dict)
+                        self.inc_pair_attr_stats_w_nulls = self.get_stats_pair_w_nulls(cond_attr, trg_attr, data_df)
 
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr, data_df):
@@ -440,6 +428,37 @@ class Dataset:
             .reset_index(name="count")
 
         return dictify_df(tmp_df)
+
+    def add_frequency_increments_to_stats(self):
+        attrs = self.get_attributes()
+
+        for attr in attrs:
+            for val, count in self.inc_single_attr_stats_w_nulls.items():
+                if val in self.single_attr_stats_w_nulls[attr]:
+                    # The key 'val' already exists, so we just update the count.
+                    self.single_attr_stats_w_nulls[attr][val] += count
+                else:
+                    # The key 'val' is new, so we insert a new dictionary for 'attr'.
+                    self.single_attr_stats_w_nulls[attr].update({val: count})
+
+        for cond_attr in attrs:
+            for trg_attr in attrs:
+                if cond_attr != trg_attr:
+                    for cond_val, nested_dict in self.inc_pair_attr_stats_w_nulls.items():
+                        for trg_val, count in nested_dict.items():
+                            if cond_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr]:
+                                if trg_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val]:
+                                    self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val][trg_val] += count
+                                else:
+                                    new_dict = {trg_val: count}
+                                    self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val].update(new_dict)
+                            else:
+                                new_dict = {cond_val: {trg_val: count}}
+                                self.pair_attr_stats_w_nulls[cond_attr][trg_attr].update(new_dict)
+
+        stats = (self.single_attr_stats_w_nulls, self.pair_attr_stats_w_nulls)
+
+        return stats
 
     def get_domain_info(self):
         """

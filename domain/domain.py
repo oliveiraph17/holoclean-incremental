@@ -36,6 +36,8 @@ class DomainEngine:
         self.single_stats_w_nulls = {}
         self.pair_stats = {}
         self.pair_stats_w_nulls = {}
+        self.inc_single_stats_w_nulls = {}
+        self.inc_pair_stats_w_nulls = {}
         self.all_attrs = {}
 
     def setup(self, batch=1):
@@ -44,7 +46,9 @@ class DomainEngine:
         """
         tic = time.time()
         self.setup_attributes(batch)
-        self.compute_correlations()
+        self.compute_correlations(batch)
+        if batch > 1:
+            self.add_frequency_increments_to_stats()
         domain = self.generate_domain()
         self.store_domains(domain)
         status = "DONE with domain preparation."
@@ -114,6 +118,12 @@ class DomainEngine:
         """
         Computes the conditional entropy considering the log base 2.
 
+        :param x_attr: (string) name of attribute X.
+        :param y_attr: (string) name of attribute Y.
+        :param x_vals_set: (list) set of values in attribute X, without repetition.
+        :param y_vals_set: (list) set of values in attribute Y, without repetition.
+        :param batch: (int) identifier of batch. For batch > 1, the conditional entropy is updated incrementally.
+
         :return: the conditional entropy of attributes X and Y using the log base 2.
         """
         x_y_entropy = 0.0
@@ -130,6 +140,12 @@ class DomainEngine:
                     x_y_entropy = x_y_entropy - (p_xy * np.log2(p_xy / p_y[y]))
 
         return x_y_entropy
+
+    def add_frequency_increments_to_stats(self):
+        single_stats, pair_stats = self.ds.add_frequency_increments_to_stats()
+
+        self.inc_single_stats_w_nulls = single_stats
+        self.inc_pair_stats_w_nulls = pair_stats
 
     def store_domains(self, domain):
         """
