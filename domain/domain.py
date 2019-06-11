@@ -29,6 +29,7 @@ class DomainEngine:
         self.domain = None
         self.total = None
         self.correlations = None
+        self.cond_entropies_base_2 = {}
         self._corr_attrs = {}
         self.cor_strength = env["cor_strength"]
         self.max_sample = max_sample
@@ -87,6 +88,10 @@ class DomainEngine:
         corr = {}
         for x in attrs:
             corr[x] = {}
+
+            if x not in self.cond_entropies_base_2.keys():
+                self.cond_entropies_base_2[x] = {}
+
             x_vals = data_df[x]
             x_domain_size = x_vals.nunique()
 
@@ -105,13 +110,12 @@ class DomainEngine:
 
                 # Compute the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
-                # Use the domain size of x as the log base for normalization.
-                x_y_entropy = self.conditional_entropy(x, y, list(set(x_vals)), list(set(y_vals)))
-                x_y_entropy = x_y_entropy / np.log2(x_domain_size)
+                self.cond_entropies_base_2[x][y] = self.conditional_entropy(x, y, list(set(x_vals)), list(set(y_vals)))
 
+                # Use the domain size of x as the log base for normalizing the conditional entropy.
                 # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
                 # We reverse this to reflect the correlation.
-                corr[x][y] = 1.0 - x_y_entropy
+                corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
         return corr
 
     def conditional_entropy(self, x_attr, y_attr, x_vals_set, y_vals_set, batch=1):
