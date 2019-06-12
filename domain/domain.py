@@ -86,7 +86,6 @@ class DomainEngine:
 
         attrs = self.ds.get_attributes()
 
-        # Compute pairwise conditional entropy.
         corr = {}
         for x in attrs:
             corr[x] = {}
@@ -94,8 +93,7 @@ class DomainEngine:
             if x not in self.cond_entropies_base_2.keys():
                 self.cond_entropies_base_2[x] = {}
 
-            x_vals = data_df[x]
-            x_domain_size = x_vals.nunique()
+            x_domain_size = data_df[x].nunique()
 
             for y in attrs:
                 # Set correlation to 0.0 if entropy of x is 1 (only one possible value).
@@ -107,8 +105,6 @@ class DomainEngine:
                 if x == y:
                     corr[x][y] = 1.0
                     continue
-
-                y_vals = data_df[y]
 
                 # Compute the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
