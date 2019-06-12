@@ -130,33 +130,43 @@ class DomainEngine:
 
         :return: the conditional entropy of attributes X and Y using the log base 2.
         """
-        x_y_entropy = 0.0
+        xy_entropy = 0.0
         p_y = {}
 
         if batch == 1:
-            for y in self.single_stats_w_nulls[y_attr].keys():
-                p_y[y] = self.single_stats_w_nulls[y_attr][y] / float(self.raw_total)
+            for value, frequency in self.single_stats_w_nulls[y_attr].items():
+                p_y[value] = frequency / float(self.raw_total)
 
-            for x in self.single_stats_w_nulls[x_attr].keys():
-                for y in self.pair_stats_w_nulls[x_attr][y_attr][x].keys():
-                    p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x][y] / float(self.raw_total)
+            for x_value in self.single_stats_w_nulls[x_attr].keys():
+                for y_value, xy_frequency in self.pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+                    p_xy = xy_frequency / float(self.raw_total)
 
-                    x_y_entropy = x_y_entropy - (p_xy * np.log2(p_xy / p_y[y]))
+                    xy_entropy = xy_entropy - (p_xy * np.log2(p_xy / p_y[y_value]))
         else:
             total = self.raw_total + self.new_total
-            x_y_entropy = (self.raw_total / total) * self.cond_entropies_base_2[x_attr][y_attr]
+            xy_entropy = (self.raw_total / float(total)) * self.cond_entropies_base_2[x_attr][y_attr]
 
-            x_existing_values = self.single_stats_w_nulls[x_attr].keys()
-            y_existing_values = self.single_stats_w_nulls[y_attr].keys()
+            for x_value in self.inc_single_stats_w_nulls[x_attr].keys():
+                for y_value, xy_count in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+                    if y_value in self.pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
+                        # x_value and y_value already co-occur, but their frequencies increased.
+                        new_p_xy = (self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] + xy_count) / float(total)
+                        new_p_y = (self.single_stats_w_nulls[y_attr][y_value] +
+                                   self.inc_single_stats_w_nulls[y_attr][y_value]) / float(total)
 
-            for x_value, x_count in self.inc_single_stats_w_nulls[x_attr].items():
-                for y_value, y_count in self.inc_single_stats_w_nulls[y_attr].items():
-                    # Calculation regarding the new term.
+                        old_p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] / float(total)
+                        old_p_y = self.single_stats_w_nulls[y_attr][y_value] / float(total)
 
-                    # Then, check if values exist.
-                    # If they do, remove the respective old term.
+                        xy_entropy = xy_entropy - ((new_p_xy * np.log2(new_p_xy / new_p_y)) -
+                                                   (old_p_xy * np.log2(old_p_xy / old_p_y)))
+                    else:
+                        # This is a new combination of attribute values.
+                        p_xy = xy_count / float(total)
+                        p_y = self.inc_single_stats_w_nulls[y_attr][y_value] / float(total)
 
-        return x_y_entropy
+                        xy_entropy = xy_entropy - (p_xy * np.log2(p_xy / p_y))
+
+        return xy_entropy
 
     def add_frequency_increments_to_stats(self):
         single_stats, pair_stats = self.ds.add_frequency_increments_to_stats()
