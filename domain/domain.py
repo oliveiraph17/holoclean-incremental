@@ -5,6 +5,7 @@ import time
 import itertools
 import numpy as np
 from tqdm import tqdm
+from typing import Dict, Any
 
 from dataset import AuxTables, CellStatus
 from .estimators import NaiveBayes
@@ -27,7 +28,8 @@ class DomainEngine:
         self.setup_complete = False
         self.active_attributes = None
         self.domain = None
-        self.total = None
+        self.raw_total = 0
+        self.new_total = 0
         self.correlations = None
         self.cond_entropies_base_2 = {}
         self._corr_attrs = {}
@@ -110,7 +112,7 @@ class DomainEngine:
 
                 # Compute the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
-                self.cond_entropies_base_2[x][y] = self.conditional_entropy(x, y, list(set(x_vals)), list(set(y_vals)))
+                self.cond_entropies_base_2[x][y] = self.conditional_entropy(x, y, batch)
 
                 # Use the domain size of x as the log base for normalizing the conditional entropy.
                 # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
@@ -118,14 +120,12 @@ class DomainEngine:
                 corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
         return corr
 
-    def conditional_entropy(self, x_attr, y_attr, x_vals_set, y_vals_set, batch=1):
+    def conditional_entropy(self, x_attr, y_attr, batch=1):
         """
         Computes the conditional entropy considering the log base 2.
 
         :param x_attr: (string) name of attribute X.
         :param y_attr: (string) name of attribute Y.
-        :param x_vals_set: (list) set of values in attribute X, without repetition.
-        :param y_vals_set: (list) set of values in attribute Y, without repetition.
         :param batch: (int) identifier of batch. For batch > 1, the conditional entropy is updated incrementally.
 
         :return: the conditional entropy of attributes X and Y using the log base 2.
@@ -134,22 +134,35 @@ class DomainEngine:
         p_y = {}
 
         if batch == 1:
-            for y in y_vals_set:
-                p_y[y] = self.single_stats_w_nulls[y_attr][y] / float(self.total)
+            for y in self.single_stats_w_nulls[y_attr].keys():
+                p_y[y] = self.single_stats_w_nulls[y_attr][y] / float(self.raw_total)
 
-            for x in x_vals_set:
+            for x in self.single_stats_w_nulls[x_attr].keys():
                 for y in self.pair_stats_w_nulls[x_attr][y_attr][x].keys():
-                    p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x][y] / float(self.total)
+                    p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x][y] / float(self.raw_total)
 
                     x_y_entropy = x_y_entropy - (p_xy * np.log2(p_xy / p_y[y]))
+        else:
+            total = self.raw_total + self.new_total
+            x_y_entropy = (self.raw_total / total) * self.cond_entropies_base_2[x_attr][y_attr]
+
+            x_existing_values = self.single_stats_w_nulls[x_attr].keys()
+            y_existing_values = self.single_stats_w_nulls[y_attr].keys()
+
+            for x_value, x_count in self.inc_single_stats_w_nulls[x_attr].items():
+                for y_value, y_count in self.inc_single_stats_w_nulls[y_attr].items():
+                    # Calculation regarding the new term.
+
+                    # Then, check if values exist.
+                    # If they do, remove the respective old term.
 
         return x_y_entropy
 
     def add_frequency_increments_to_stats(self):
         single_stats, pair_stats = self.ds.add_frequency_increments_to_stats()
 
-        self.inc_single_stats_w_nulls = single_stats
-        self.inc_pair_stats_w_nulls = pair_stats
+        self.single_stats_w_nulls = single_stats
+        self.pair_stats_w_nulls = pair_stats
 
     def store_domains(self, domain):
         """
@@ -194,9 +207,15 @@ class DomainEngine:
 
     def setup_attributes(self, batch=1):
         self.active_attributes = self.get_active_attributes()
-        total, single_stats, single_stats_w_nulls, pair_stats, pair_stats_w_nulls = self.ds.get_statistics(batch)
 
-        self.total = total
+        raw_total, new_total, \
+            single_stats, single_stats_w_nulls, \
+            pair_stats, pair_stats_w_nulls, \
+            inc_single_stats_w_nulls, inc_pair_stats_w_nulls = self.ds.get_statistics(batch)
+
+        self.raw_total = raw_total
+        self.new_total = new_total
+
         self.single_stats = single_stats
         self.single_stats_w_nulls = single_stats_w_nulls
 
@@ -207,6 +226,9 @@ class DomainEngine:
         logging.debug("DONE with pruned co-occurring statistics in %.2f secs", toc - tic)
 
         self.pair_stats_w_nulls = pair_stats_w_nulls
+
+        self.inc_single_stats_w_nulls = inc_single_stats_w_nulls
+        self.inc_pair_stats_w_nulls = inc_pair_stats_w_nulls
 
         self.setup_complete = True
 

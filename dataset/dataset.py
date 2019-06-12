@@ -51,8 +51,9 @@ class Dataset:
         # Members to convert (tuple_id, attribute) to cell_id.
         self.attr_to_idx = {}
         self.attr_count = 0
-        # Total tuples.
-        self.total_tuples = 0
+        # Number of tuples.
+        self.raw_total = 0
+        self.new_total = 0;
         # Domain statistics for single attributes (excluding NULLs).
         self.single_attr_stats = {}
         # Conditional entropy statistics for single attributes (including NULLs).
@@ -299,19 +300,20 @@ class Dataset:
     def get_statistics(self, batch=1):
         """
         get_statistics returns:
-          1. self.total_tuples (total # of tuples)
-          2. self.single_attr_stats ({ attribute -> { value -> count } })
+          1. self.raw_total (total # of tuples in the first batch of data)
+          2. self.new_total (total # of tuples in the incoming data)
+          3. self.single_attr_stats ({ attribute -> { value -> count } })
             the frequency (# of entities) of a given attribute-value
-          3. self.single_attr_stats_w_nulls ({ attribute -> { value -> count } })
+          4. self.single_attr_stats_w_nulls ({ attribute -> { value -> count } })
             same as 'single_attr_stats', but including counts for NULLs
-          4. self.pair_attr_stats ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
+          5. self.pair_attr_stats ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
             the statistics for each pair of attributes, attr1 and attr2, where:
               <attr1>: first attribute
               <attr2>: second attribute
               <val1>: value of <attr1>
               <val2>: value of <attr2> that appears at least once with <val1>
               <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
-          5. self.pair_attr_stats_w_nulls ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
+          6. self.pair_attr_stats_w_nulls ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
             same as 'pair_attr_stats', but including counts for NULLs
 
         Neither 'single_attr_stats' nor 'pair_attr_stats' contain frequencies NULL values (NULL_REPR).
@@ -327,11 +329,14 @@ class Dataset:
         self.collect_stats(batch)
         logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
 
-        stats = (self.total_tuples,
+        stats = (self.raw_total,
+                 self.new_total,
                  self.single_attr_stats,
                  self.single_attr_stats_w_nulls,
                  self.pair_attr_stats,
-                 self.pair_attr_stats_w_nulls)
+                 self.pair_attr_stats_w_nulls,
+                 self.inc_single_attr_stats_w_nulls,
+                 self.inc_pair_attr_stats_w_nulls)
 
         return stats
 
@@ -344,7 +349,7 @@ class Dataset:
             data_df = self.get_raw_data()
 
             # Total number of tuples.
-            self.total_tuples = data_df.shape[0]
+            self.raw_total = data_df.shape[0]
 
             # Single statistics.
             for attr in self.get_attributes():
@@ -369,8 +374,8 @@ class Dataset:
             # We get the statistics from the incoming data, adding them to the existing statistics.
             data_df = self.get_new_data()
 
-            # Update total number of tuples.
-            self.total_tuples += data_df.shape[0]
+            # Total number of incoming tuples.
+            self.new_total = data_df.shape[0]
 
             # Update single statistics.
             for attr in self.get_attributes():
