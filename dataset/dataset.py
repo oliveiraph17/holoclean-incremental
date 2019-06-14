@@ -387,10 +387,12 @@ class Dataset:
                         # The key 'val' is new, so we insert a new dictionary for 'attr'.
                         self.single_attr_stats[attr].update({val: count})
 
-                self.inc_single_attr_stats_w_nulls = self.get_stats_single_w_nulls(attr, data_df)
+                self.inc_single_attr_stats_w_nulls[attr] = self.get_stats_single_w_nulls(attr, data_df)
 
             # Update pairwise statistics.
             for cond_attr in self.get_attributes():
+                self.inc_pair_attr_stats_w_nulls[cond_attr] = {}
+
                 for trg_attr in self.get_attributes():
                     if cond_attr != trg_attr:
                         # Statistics excluding NULLs, which will be used in the domain generation.
@@ -405,7 +407,9 @@ class Dataset:
                                     self.pair_attr_stats[cond_attr][trg_attr].update({cond_val: {trg_val: count}})
 
                         # Statistics including NULLs, which will be used in the conditional entropy computation.
-                        self.inc_pair_attr_stats_w_nulls = self.get_stats_pair_w_nulls(cond_attr, trg_attr, data_df)
+                        self.inc_pair_attr_stats_w_nulls[cond_attr][trg_attr] = self.get_stats_pair_w_nulls(cond_attr,
+                                                                                                            trg_attr,
+                                                                                                            data_df)
 
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr, data_df):

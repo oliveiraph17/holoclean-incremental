@@ -9,7 +9,7 @@ class FreqFeaturizer(Featurizer):
         self.name = 'FreqFeaturizer'
         self.all_attrs = self.ds.get_attributes()
         self.attrs_number = len(self.ds.attr_to_idx)
-        total, single_stats, _, _ = self.ds.get_statistics()
+        total, _, single_stats, _, _, _, _, _ = self.ds.get_statistics()
         self.total = total
         self.single_stats = single_stats
 

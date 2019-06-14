@@ -36,13 +36,13 @@ hc.detect_errors(detectors)
 
 # Repair errors based on the defined features.
 hc.setup_domain()
-featurizers = [
-    InitAttrFeaturizer(),
-    OccurAttrFeaturizer(),
-    FreqFeaturizer(),
-    ConstraintFeaturizer(),
-]
-hc.repair_errors(featurizers)
+# featurizers = [
+#     InitAttrFeaturizer(),
+#     OccurAttrFeaturizer(),
+#     FreqFeaturizer(),
+#     ConstraintFeaturizer(),
+# ]
+# hc.repair_errors(featurizers)
 
 # Evaluate the correctness of the results.
 # hc.evaluate(fpath='../testdata/hospital_clean.csv',
@@ -55,7 +55,7 @@ hc.repair_errors(featurizers)
 batch = 2
 
 # Load incoming data.
-hc.load_new_data('hospital', '../testdata/hospital_0050_1.csv', batch)
+hc.load_new_data('hospital', '../testdata/hospital_0100.csv', batch)
 
 hc.detect_errors(detectors, batch)
 
@@ -66,6 +66,6 @@ hc.setup_domain(batch)
 batch = 3
 
 # Load incoming data.
-hc.load_new_data('hospital', '../testdata/hospital_0050_2.csv', batch)
+# hc.load_new_data('hospital', '../testdata/hospital_0050_2.csv', batch)
 
-hc.detect_errors(detectors, batch)
+# hc.detect_errors(detectors, batch)

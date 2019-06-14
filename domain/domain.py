@@ -127,9 +127,10 @@ class DomainEngine:
         :return: the conditional entropy of attributes X and Y using the log base 2.
         """
         xy_entropy = 0.0
-        p_y = {}
 
         if batch == 1:
+            p_y = {}
+
             for value, frequency in self.single_stats_w_nulls[y_attr].items():
                 p_y[value] = frequency / float(self.raw_total)
 
@@ -143,22 +144,43 @@ class DomainEngine:
             xy_entropy = (self.raw_total / float(total)) * self.cond_entropies_base_2[x_attr][y_attr]
 
             for x_value in self.inc_single_stats_w_nulls[x_attr].keys():
-                for y_value, xy_count in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
-                    if y_value in self.pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
-                        # x_value and y_value already co-occur, but their frequencies increased.
-                        new_p_xy = (self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] + xy_count) / float(total)
-                        new_p_y = (self.single_stats_w_nulls[y_attr][y_value] +
-                                   self.inc_single_stats_w_nulls[y_attr][y_value]) / float(total)
+                if x_value in self.single_stats_w_nulls[x_attr].keys():
+                    x_value_already_exists = True
+                else:
+                    x_value_already_exists = False
 
-                        old_p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] / float(total)
-                        old_p_y = self.single_stats_w_nulls[y_attr][y_value] / float(total)
+                if x_value_already_exists:
+                    for y_value, xy_frequency in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+                        if y_value in self.pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
+                            # x_value and y_value already co-occur, but their frequencies increased.
+                            new_p_xy = (self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] +
+                                        xy_frequency) / float(total)
+                            new_p_y = (self.single_stats_w_nulls[y_attr][y_value] +
+                                       self.inc_single_stats_w_nulls[y_attr][y_value]) / float(total)
 
-                        xy_entropy = xy_entropy - ((new_p_xy * np.log2(new_p_xy / new_p_y)) -
-                                                   (old_p_xy * np.log2(old_p_xy / old_p_y)))
-                    else:
-                        # This is a new combination of attribute values.
-                        p_xy = xy_count / float(total)
-                        p_y = self.inc_single_stats_w_nulls[y_attr][y_value] / float(total)
+                            old_p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] / float(total)
+                            old_p_y = self.single_stats_w_nulls[y_attr][y_value] / float(total)
+
+                            xy_entropy = xy_entropy - ((new_p_xy * np.log2(new_p_xy / new_p_y)) -
+                                                       (old_p_xy * np.log2(old_p_xy / old_p_y)))
+                        else:
+                            # y_value is a new value of y_attr.
+                            # Therefore, this is a new combination of attribute values.
+                            p_xy = xy_frequency / float(total)
+                            p_y = self.inc_single_stats_w_nulls[y_attr][y_value] / float(total)
+
+                            xy_entropy = xy_entropy - (p_xy * np.log2(p_xy / p_y))
+                else:
+                    # x_value is a new value of x_attr.
+                    # Therefore, this is a new combination of attribute values.
+                    for y_value, xy_frequency in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+                        p_xy = xy_frequency / float(total)
+
+                        if y_value in self.single_stats_w_nulls[y_attr].keys():
+                            p_y = (self.inc_single_stats_w_nulls[y_attr][y_value] +
+                                   self.single_stats_w_nulls[y_attr][y_value]) / float(total)
+                        else:
+                            p_y = self.inc_single_stats_w_nulls[y_attr][y_value] / float(total)
 
                         xy_entropy = xy_entropy - (p_xy * np.log2(p_xy / p_y))
 
