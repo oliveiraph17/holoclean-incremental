@@ -380,7 +380,7 @@ class Dataset:
             # Update single statistics.
             for attr in self.get_attributes():
                 for val, count in self.get_stats_single(attr, data_df).items():
-                    if val in self.single_attr_stats[attr]:
+                    if val in self.single_attr_stats[attr].keys():
                         # The key 'val' already exists, so we just update the count.
                         self.single_attr_stats[attr][val] += count
                     else:
@@ -398,8 +398,8 @@ class Dataset:
                         # Statistics excluding NULLs, which will be used in the domain generation.
                         for cond_val, nested_dict in self.get_stats_pair(cond_attr, trg_attr, data_df).items():
                             for trg_val, count in nested_dict.items():
-                                if cond_val in self.pair_attr_stats[cond_attr][trg_attr]:
-                                    if trg_val in self.pair_attr_stats[cond_attr][trg_attr][cond_val]:
+                                if cond_val in self.pair_attr_stats[cond_attr][trg_attr].keys():
+                                    if trg_val in self.pair_attr_stats[cond_attr][trg_attr][cond_val].keys():
                                         self.pair_attr_stats[cond_attr][trg_attr][cond_val][trg_val] += count
                                     else:
                                         self.pair_attr_stats[cond_attr][trg_attr][cond_val].update({trg_val: count})
@@ -442,8 +442,8 @@ class Dataset:
         attrs = self.get_attributes()
 
         for attr in attrs:
-            for val, count in self.inc_single_attr_stats_w_nulls.items():
-                if val in self.single_attr_stats_w_nulls[attr]:
+            for val, count in self.inc_single_attr_stats_w_nulls[attr].items():
+                if val in self.single_attr_stats_w_nulls[attr].keys():
                     # The key 'val' already exists, so we just update the count.
                     self.single_attr_stats_w_nulls[attr][val] += count
                 else:
@@ -453,10 +453,10 @@ class Dataset:
         for cond_attr in attrs:
             for trg_attr in attrs:
                 if cond_attr != trg_attr:
-                    for cond_val, nested_dict in self.inc_pair_attr_stats_w_nulls.items():
+                    for cond_val, nested_dict in self.inc_pair_attr_stats_w_nulls[cond_attr][trg_attr].items():
                         for trg_val, count in nested_dict.items():
-                            if cond_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr]:
-                                if trg_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val]:
+                            if cond_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr].keys():
+                                if trg_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val].keys():
                                     self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val][trg_val] += count
                                 else:
                                     new_dict = {trg_val: count}

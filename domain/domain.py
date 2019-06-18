@@ -129,60 +129,61 @@ class DomainEngine:
         xy_entropy = 0.0
 
         if batch == 1:
-            p_y = {}
+            y_freq = {}
 
-            for value, frequency in self.single_stats_w_nulls[y_attr].items():
-                p_y[value] = frequency / float(self.raw_total)
+            for value, count in self.single_stats_w_nulls[y_attr].items():
+                y_freq[value] = count
 
             for x_value in self.single_stats_w_nulls[x_attr].keys():
-                for y_value, xy_frequency in self.pair_stats_w_nulls[x_attr][y_attr][x_value].items():
-                    p_xy = xy_frequency / float(self.raw_total)
+                for y_value, xy_freq in self.pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+                    p_xy = xy_freq / float(self.raw_total)
 
-                    xy_entropy = xy_entropy - (p_xy * np.log2(p_xy / p_y[y_value]))
+                    xy_entropy = xy_entropy - (p_xy * np.log2(xy_freq / float(y_freq[y_value])))
         else:
             total = self.raw_total + self.new_total
             xy_entropy = (self.raw_total / float(total)) * self.cond_entropies_base_2[x_attr][y_attr]
 
-            for x_value in self.inc_single_stats_w_nulls[x_attr].keys():
-                if x_value in self.single_stats_w_nulls[x_attr].keys():
-                    x_value_already_exists = True
+            # Builds the dictionary for existing frequencies of Y including 0's for new values.
+            y_old_freq = {}
+            for y_value in self.inc_single_stats_w_nulls[y_attr].keys():
+                if y_value in self.single_stats_w_nulls[y_attr].keys():
+                    y_old_freq[y_value] = self.single_stats_w_nulls[y_attr][y_value]
                 else:
-                    x_value_already_exists = False
+                    y_old_freq[y_value] = 0
 
-                if x_value_already_exists:
-                    for y_value, xy_frequency in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+            # Builds the dictionary for existing co-occurrences of X and Y including 0's for new values.
+            xy_old_freq = {}
+            for x_value in self.inc_pair_stats_w_nulls[x_attr][y_attr].keys():
+                xy_old_freq[x_value] = {}
+                if x_value in self.pair_stats_w_nulls[x_attr][y_attr].keys():
+                    for y_value in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
                         if y_value in self.pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
-                            # x_value and y_value already co-occur, but their frequencies increased.
-                            new_p_xy = (self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] +
-                                        xy_frequency) / float(total)
-                            new_p_y = (self.single_stats_w_nulls[y_attr][y_value] +
-                                       self.inc_single_stats_w_nulls[y_attr][y_value]) / float(total)
-
-                            old_p_xy = self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value] / float(total)
-                            old_p_y = self.single_stats_w_nulls[y_attr][y_value] / float(total)
-
-                            xy_entropy = xy_entropy - ((new_p_xy * np.log2(new_p_xy / new_p_y)) -
-                                                       (old_p_xy * np.log2(old_p_xy / old_p_y)))
+                            xy_old_freq[x_value][y_value] = self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value]
                         else:
-                            # y_value is a new value of y_attr.
-                            # Therefore, this is a new combination of attribute values.
-                            p_xy = xy_frequency / float(total)
-                            p_y = self.inc_single_stats_w_nulls[y_attr][y_value] / float(total)
-
-                            xy_entropy = xy_entropy - (p_xy * np.log2(p_xy / p_y))
+                            xy_old_freq[x_value][y_value] = 0
                 else:
-                    # x_value is a new value of x_attr.
-                    # Therefore, this is a new combination of attribute values.
-                    for y_value, xy_frequency in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
-                        p_xy = xy_frequency / float(total)
+                    for y_value in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
+                        xy_old_freq[x_value][y_value] = 0
 
-                        if y_value in self.single_stats_w_nulls[y_attr].keys():
-                            p_y = (self.inc_single_stats_w_nulls[y_attr][y_value] +
-                                   self.single_stats_w_nulls[y_attr][y_value]) / float(total)
-                        else:
-                            p_y = self.inc_single_stats_w_nulls[y_attr][y_value] / float(total)
+            # Updates the entropy regarding the new terms.
+            for x_value in self.inc_pair_stats_w_nulls[x_attr][y_attr].keys():
+                for y_value, xy_freq in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+                    new_term = xy_freq / float(total)
+                    log_term_num = xy_old_freq[x_value][y_value] + xy_freq
+                    log_term_den = y_old_freq[y_value] + self.inc_single_stats_w_nulls[y_attr][y_value]
 
-                        xy_entropy = xy_entropy - (p_xy * np.log2(p_xy / p_y))
+                    xy_entropy = xy_entropy - (new_term * np.log2(log_term_num / float(log_term_den)))
+
+            # Updates the entropy regarding old terms which might need to be removed.
+            for x_value in self.inc_pair_stats_w_nulls[x_attr][y_attr].keys():
+                for y_value, xy_freq in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+                    if xy_old_freq[x_value][y_value] != 0:
+                        old_term = xy_old_freq[x_value][y_value] / float(total)
+                        log_term_num = 1.0 + (xy_freq / float(xy_old_freq[x_value][y_value]))
+                        log_term_den = 1.0 + (self.inc_single_stats_w_nulls[y_attr][y_value] /
+                                              float(y_old_freq[y_value]))
+
+                        xy_entropy = xy_entropy - (old_term * np.log2(log_term_num / log_term_den))
 
         return xy_entropy
 
