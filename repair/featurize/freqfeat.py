@@ -14,7 +14,6 @@ class FreqFeaturizer(Featurizer):
         self.single_stats = single_stats
 
     def gen_feat_tensor(self, input, classes):
-        vid = int(input[0])
         attribute = input[1]
         domain = input[2].split('|||')
         attr_idx = self.ds.attr_to_idx[attribute]
@@ -24,6 +23,7 @@ class FreqFeaturizer(Featurizer):
             tensor[0][idx][attr_idx] = prob
         return tensor
 
+    # noinspection PyMethodMayBeStatic
     def create_tensor(self):
         query = 'SELECT _vid_, attribute, domain FROM %s ORDER BY _vid_' % AuxTables.cell_domain.name
         results = self.ds.engine.execute_query(query)
@@ -31,5 +31,6 @@ class FreqFeaturizer(Featurizer):
         combined = torch.cat(tensors)
         return combined
 
+    # noinspection PyMethodMayBeStatic
     def feature_names(self):
         return self.all_attrs

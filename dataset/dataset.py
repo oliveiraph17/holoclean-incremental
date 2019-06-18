@@ -37,8 +37,6 @@ class Dataset:
         self.repaired_data = None
         self.constraints = None
         self.aux_table = {}
-        for tab in AuxTables:
-            self.aux_table[tab] = None
         # Start DBengine.
         self.engine = DBengine(
             env['db_user'],
@@ -53,21 +51,16 @@ class Dataset:
         self.attr_count = 0
         # Number of tuples.
         self.raw_total = 0
-        self.new_total = 0;
-        # Domain statistics for single attributes (excluding NULLs).
+        self.new_total = 0
+        # Statistics for single attributes.
         self.single_attr_stats = {}
-        # Conditional entropy statistics for single attributes (including NULLs).
-        self.single_attr_stats_w_nulls = {}
-        # Domain statistics for attribute pairs (excluding NULLs).
+        # Statistics for attribute pairs.
         self.pair_attr_stats = {}
-        # Conditional entropy statistics for attribute pairs (including NULLs).
-        self.pair_attr_stats_w_nulls = {}
-        # Conditional entropy incremental statistics for single attributes (including NULLs).
-        self.inc_single_attr_stats_w_nulls = {}
-        # Conditional entropy incremental statistics for attribute pairs (including NULLs).
-        self.inc_pair_attr_stats_w_nulls = {}
+        # Incremental statistics for single attributes.
+        self.inc_single_attr_stats = {}
+        # Incremental statistics for attribute pairs.
+        self.inc_pair_attr_stats = {}
 
-    # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
         load_data takes a CSV file of the initial data, adds tuple IDs (_tid_) to each row,
@@ -245,11 +238,11 @@ class Dataset:
             logging.error('Generating aux_table %s', aux_table.name)
             raise
 
-    def generate_aux_table_sql(self, aux_table, query, index_attrs=False):
+    def generate_aux_table_sql(self, aux_table, query, index_attrs=None):
         """
         :param aux_table: (AuxTable) auxiliary table to generate.
         :param query: (str) SQL query whose result is used for generating the auxiliary table.
-        :param index_attrs: (bool) if true, indexes attributes in the DataFrame and in the table.
+        :param index_attrs: (list[str]) list of attributes/columns to create index on.
         """
         try:
             self.aux_table[aux_table] = Table(aux_table.name,
@@ -257,7 +250,7 @@ class Dataset:
                                               table_query=query,
                                               db_engine=self.engine)
 
-            if index_attrs:
+            if index_attrs is not None:
                 self.aux_table[aux_table].create_df_index(index_attrs)
                 self.aux_table[aux_table].create_db_index(self.engine, index_attrs)
         except Exception:
@@ -304,17 +297,13 @@ class Dataset:
           2. self.new_total (total # of tuples in the incoming data)
           3. self.single_attr_stats ({ attribute -> { value -> count } })
             the frequency (# of entities) of a given attribute-value
-          4. self.single_attr_stats_w_nulls ({ attribute -> { value -> count } })
-            same as 'single_attr_stats', but including counts for NULLs
-          5. self.pair_attr_stats ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
+          4. self.pair_attr_stats ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
             the statistics for each pair of attributes, attr1 and attr2, where:
               <attr1>: first attribute
               <attr2>: second attribute
               <val1>: value of <attr1>
               <val2>: value of <attr2> that appears at least once with <val1>
               <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
-          6. self.pair_attr_stats_w_nulls ({ attr1 -> { attr2 -> { val1 -> { val2 -> count } } } })
-            same as 'pair_attr_stats', but including counts for NULLs
 
         Neither 'single_attr_stats' nor 'pair_attr_stats' contain frequencies NULL values (NULL_REPR).
         One would need to explicitly check if the value is NULL before lookup.
@@ -332,16 +321,14 @@ class Dataset:
         stats = (self.raw_total,
                  self.new_total,
                  self.single_attr_stats,
-                 self.single_attr_stats_w_nulls,
                  self.pair_attr_stats,
-                 self.pair_attr_stats_w_nulls,
-                 self.inc_single_attr_stats_w_nulls,
-                 self.inc_pair_attr_stats_w_nulls)
+                 self.inc_single_attr_stats,
+                 self.inc_pair_attr_stats)
 
         return stats
 
     def collect_stats(self, batch=1):
-        logging.debug("Collecting single/pairwise statistics...")
+        logging.debug('Collecting single/pairwise statistics, batch %d...', batch)
 
         if batch == 1:
             # First batch of data.
@@ -354,24 +341,19 @@ class Dataset:
             # Single statistics.
             for attr in self.get_attributes():
                 self.single_attr_stats[attr] = self.get_stats_single(attr, data_df)
-                self.single_attr_stats_w_nulls[attr] = self.get_stats_single_w_nulls(attr, data_df)
 
             # Pairwise statistics.
             for cond_attr in self.get_attributes():
                 self.pair_attr_stats[cond_attr] = {}
-                self.pair_attr_stats_w_nulls[cond_attr] = {}
 
                 for trg_attr in self.get_attributes():
                     if cond_attr != trg_attr:
                         self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr,
                                                                                         trg_attr,
                                                                                         data_df)
-                        self.pair_attr_stats_w_nulls[cond_attr][trg_attr] = self.get_stats_pair_w_nulls(cond_attr,
-                                                                                                        trg_attr,
-                                                                                                        data_df)
         else:
             # New batch of data.
-            # We get the statistics from the incoming data, adding them to the existing statistics.
+            # We get the statistics from the incoming data.
             data_df = self.get_new_data()
 
             # Total number of incoming tuples.
@@ -379,58 +361,24 @@ class Dataset:
 
             # Update single statistics.
             for attr in self.get_attributes():
-                for val, count in self.get_stats_single(attr, data_df).items():
-                    if val in self.single_attr_stats[attr].keys():
-                        # The key 'val' already exists, so we just update the count.
-                        self.single_attr_stats[attr][val] += count
-                    else:
-                        # The key 'val' is new, so we insert a new dictionary for 'attr'.
-                        self.single_attr_stats[attr].update({val: count})
-
-                self.inc_single_attr_stats_w_nulls[attr] = self.get_stats_single_w_nulls(attr, data_df)
+                self.inc_single_attr_stats[attr] = self.get_stats_single(attr, data_df)
 
             # Update pairwise statistics.
             for cond_attr in self.get_attributes():
-                self.inc_pair_attr_stats_w_nulls[cond_attr] = {}
+                self.inc_pair_attr_stats[cond_attr] = {}
 
                 for trg_attr in self.get_attributes():
                     if cond_attr != trg_attr:
-                        # Statistics excluding NULLs, which will be used in the domain generation.
-                        for cond_val, nested_dict in self.get_stats_pair(cond_attr, trg_attr, data_df).items():
-                            for trg_val, count in nested_dict.items():
-                                if cond_val in self.pair_attr_stats[cond_attr][trg_attr].keys():
-                                    if trg_val in self.pair_attr_stats[cond_attr][trg_attr][cond_val].keys():
-                                        self.pair_attr_stats[cond_attr][trg_attr][cond_val][trg_val] += count
-                                    else:
-                                        self.pair_attr_stats[cond_attr][trg_attr][cond_val].update({trg_val: count})
-                                else:
-                                    self.pair_attr_stats[cond_attr][trg_attr].update({cond_val: {trg_val: count}})
-
-                        # Statistics including NULLs, which will be used in the conditional entropy computation.
-                        self.inc_pair_attr_stats_w_nulls[cond_attr][trg_attr] = self.get_stats_pair_w_nulls(cond_attr,
-                                                                                                            trg_attr,
-                                                                                                            data_df)
+                        self.inc_pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr,
+                                                                                            trg_attr,
+                                                                                            data_df)
 
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr, data_df):
-        return data_df[[attr]].loc[data_df[attr] != NULL_REPR].groupby([attr]).size().to_dict()
-
-    # noinspection PyMethodMayBeStatic
-    def get_stats_single_w_nulls(self, attr, data_df):
         return data_df[[attr]].groupby([attr]).size().to_dict()
 
     # noinspection PyMethodMayBeStatic
     def get_stats_pair(self, first_attr, second_attr, data_df):
-        tmp_df = data_df[[first_attr, second_attr]]\
-            .loc[(data_df[first_attr] != NULL_REPR) & (data_df[second_attr] != NULL_REPR)]\
-            .groupby([first_attr, second_attr])\
-            .size()\
-            .reset_index(name="count")
-
-        return dictify_df(tmp_df)
-
-    # noinspection PyMethodMayBeStatic
-    def get_stats_pair_w_nulls(self, first_attr, second_attr, data_df):
         tmp_df = data_df[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
             .size()\
@@ -442,30 +390,30 @@ class Dataset:
         attrs = self.get_attributes()
 
         for attr in attrs:
-            for val, count in self.inc_single_attr_stats_w_nulls[attr].items():
-                if val in self.single_attr_stats_w_nulls[attr].keys():
+            for val, count in self.inc_single_attr_stats[attr].items():
+                if val in self.single_attr_stats[attr].keys():
                     # The key 'val' already exists, so we just update the count.
-                    self.single_attr_stats_w_nulls[attr][val] += count
+                    self.single_attr_stats[attr][val] += count
                 else:
                     # The key 'val' is new, so we insert a new dictionary for 'attr'.
-                    self.single_attr_stats_w_nulls[attr].update({val: count})
+                    self.single_attr_stats[attr].update({val: count})
 
         for cond_attr in attrs:
             for trg_attr in attrs:
                 if cond_attr != trg_attr:
-                    for cond_val, nested_dict in self.inc_pair_attr_stats_w_nulls[cond_attr][trg_attr].items():
-                        for trg_val, count in nested_dict.items():
-                            if cond_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr].keys():
-                                if trg_val in self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val].keys():
-                                    self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val][trg_val] += count
+                    for cond_val in self.inc_pair_attr_stats[cond_attr][trg_attr].keys():
+                        for trg_val, count in self.inc_pair_attr_stats[cond_attr][trg_attr][cond_val].items():
+                            if cond_val in self.pair_attr_stats[cond_attr][trg_attr].keys():
+                                if trg_val in self.pair_attr_stats[cond_attr][trg_attr][cond_val].keys():
+                                    self.pair_attr_stats[cond_attr][trg_attr][cond_val][trg_val] += count
                                 else:
                                     new_dict = {trg_val: count}
-                                    self.pair_attr_stats_w_nulls[cond_attr][trg_attr][cond_val].update(new_dict)
+                                    self.pair_attr_stats[cond_attr][trg_attr][cond_val].update(new_dict)
                             else:
                                 new_dict = {cond_val: {trg_val: count}}
-                                self.pair_attr_stats_w_nulls[cond_attr][trg_attr].update(new_dict)
+                                self.pair_attr_stats[cond_attr][trg_attr].update(new_dict)
 
-        stats = (self.single_attr_stats_w_nulls, self.pair_attr_stats_w_nulls)
+        stats = (self.single_attr_stats, self.pair_attr_stats)
 
         return stats
 

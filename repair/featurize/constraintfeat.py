@@ -83,7 +83,7 @@ class ConstraintFeaturizer(Featurizer):
             query_list.extend(queries)
         return query_list
 
-    def execute_queries(self,queries):
+    def execute_queries(self, queries):
         return self.ds.engine.execute_queries_w_backup(queries)
 
     def relax_unary_predicate(self, predicate):
@@ -193,6 +193,7 @@ class ConstraintFeaturizer(Featurizer):
                     queries.append((query, ex_query))
         return queries
 
+    # noinspection PyMethodMayBeStatic
     def _orig_cnf(self, predicates, idx):
         """
         _orig_cnf returns the CNF form of the predicates that does not include
@@ -204,6 +205,7 @@ class ConstraintFeaturizer(Featurizer):
         orig_cnf = " AND ".join([pred.cnf_form for pred in orig_preds])
         return orig_cnf
 
+    # noinspection PyMethodMayBeStatic
     def feature_names(self):
         return ["fixed pred: {}, violation pred: {}".format(self._orig_cnf(constraint.predicates, idx),
                                                             constraint.predicates[idx].cnf_form)

@@ -11,6 +11,12 @@ class Featurizer:
         self.learnable = learnable
         self.init_weight = init_weight
 
+        self.ds = None
+        self.total_vars = None
+        self.classes = None
+        self._pool = None
+        self._batch_size = None
+
     def setup_featurizer(self, dataset, processes=20, batch_size=32):
         self.ds = dataset
         self.total_vars, self.classes = self.ds.get_domain_info()
@@ -46,4 +52,3 @@ class Featurizer:
         if self._pool is None:
             return list(map(func, collection))
         return self._pool.map(func, collection, min(self._batch_size, len(collection)))
-

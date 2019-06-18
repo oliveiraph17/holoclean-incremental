@@ -296,7 +296,7 @@ class Session:
 
         :param name: (str) name to initialize incoming data with.
         :param fpath: (str) path to CSV file.
-        :param batch: (int) greater than 1, regarding the batch number of the current incoming data
+        :param batch: (int) greater than 1, regarding the batch number of the current incoming data.
         :param na_values: (str) value that identifies a NULL value.
         :param entity_col: (str) column containing the unique identifier of an entity.
             For fusion tasks, rows with the same ID will be fused together in the output.
@@ -333,8 +333,8 @@ class Session:
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
 
-    def setup_domain(self, batch=1):
-        status, domain_time = self.domain_engine.setup(batch)
+    def setup_domain(self, batch=1, incremental_entropy=False):
+        status, domain_time = self.domain_engine.setup(batch, incremental_entropy)
         logging.info(status)
         logging.debug('Time to setup the domain: %.2f secs', domain_time)
 

@@ -1,8 +1,8 @@
 import sys
-sys.path.append('../')
 import holoclean
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
+sys.path.append('../')
 
 # Setup a HoloClean session.
 hc = holoclean.HoloClean(

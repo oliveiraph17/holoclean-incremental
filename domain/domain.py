@@ -5,7 +5,6 @@ import time
 import itertools
 import numpy as np
 from tqdm import tqdm
-from typing import Dict, Any
 
 from dataset import AuxTables, CellStatus
 from .estimators import NaiveBayes
@@ -36,36 +35,32 @@ class DomainEngine:
         self.cor_strength = env["cor_strength"]
         self.max_sample = max_sample
         self.single_stats = {}
-        self.single_stats_w_nulls = {}
         self.pair_stats = {}
-        self.pair_stats_w_nulls = {}
-        self.inc_single_stats_w_nulls = {}
-        self.inc_pair_stats_w_nulls = {}
+        self.inc_single_stats = {}
+        self.inc_pair_stats = {}
         self.all_attrs = {}
 
-    def setup(self, batch=1):
+    def setup(self, batch=1, incremental_entropy=False):
         """
         Initializes the in-memory and Postgres auxiliary tables (e.g. 'cell_domain', 'pos_values').
         """
         tic = time.time()
         self.setup_attributes(batch)
-        self.compute_correlations(batch)
-        if batch > 1:
-            self.add_frequency_increments_to_stats()
+        self.compute_correlations(batch, incremental_entropy)
         domain = self.generate_domain()
         self.store_domains(domain)
         status = "DONE with domain preparation."
         toc = time.time()
         return status, toc - tic
 
-    def compute_correlations(self, batch=1):
+    def compute_correlations(self, batch=1, incremental_entropy=False):
         """
         Memoizes to self.correlations a data structure containing pairwise correlations between attributes.
         Values are treated as discrete categories.
         """
-        self.correlations = self._compute_norm_cond_entropy_corr(batch)
+        self.correlations = self._compute_norm_cond_entropy_corr(batch, incremental_entropy)
 
-    def _compute_norm_cond_entropy_corr(self, batch=1):
+    def _compute_norm_cond_entropy_corr(self, batch=1, incremental_entropy=False):
         """
         Computes the correlations between attributes by calculating the normalized conditional entropy between them.
         The conditional entropy is asymmetric, therefore we need pairwise computations.
@@ -108,7 +103,7 @@ class DomainEngine:
 
                 # Compute the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
-                self.cond_entropies_base_2[x][y] = self.conditional_entropy(x, y, batch)
+                self.cond_entropies_base_2[x][y] = self.conditional_entropy(x, y, batch, incremental_entropy)
 
                 # Use the domain size of x as the log base for normalizing the conditional entropy.
                 # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
@@ -116,26 +111,30 @@ class DomainEngine:
                 corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
         return corr
 
-    def conditional_entropy(self, x_attr, y_attr, batch=1):
+    def conditional_entropy(self, x_attr, y_attr, batch=1, incremental_entropy=False):
         """
         Computes the conditional entropy considering the log base 2.
 
         :param x_attr: (string) name of attribute X.
         :param y_attr: (string) name of attribute Y.
-        :param batch: (int) identifier of batch. For batch > 1, the conditional entropy is updated incrementally.
+        :param batch: (int) identifier of batch.
+        :param incremental_entropy: (bool) determines whether to do it incrementally or not.
 
         :return: the conditional entropy of attributes X and Y using the log base 2.
         """
         xy_entropy = 0.0
 
-        if batch == 1:
+        if batch == 1 or incremental_entropy is False:
+            if batch > 1:
+                self.add_frequency_increments_to_stats()
+
             y_freq = {}
 
-            for value, count in self.single_stats_w_nulls[y_attr].items():
+            for value, count in self.single_stats[y_attr].items():
                 y_freq[value] = count
 
-            for x_value in self.single_stats_w_nulls[x_attr].keys():
-                for y_value, xy_freq in self.pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+            for x_value in self.single_stats[x_attr].keys():
+                for y_value, xy_freq in self.pair_stats[x_attr][y_attr][x_value].items():
                     p_xy = xy_freq / float(self.raw_total)
 
                     xy_entropy = xy_entropy - (p_xy * np.log2(xy_freq / float(y_freq[y_value])))
@@ -145,53 +144,56 @@ class DomainEngine:
 
             # Builds the dictionary for existing frequencies of Y including 0's for new values.
             y_old_freq = {}
-            for y_value in self.inc_single_stats_w_nulls[y_attr].keys():
-                if y_value in self.single_stats_w_nulls[y_attr].keys():
-                    y_old_freq[y_value] = self.single_stats_w_nulls[y_attr][y_value]
+            for y_value in self.inc_single_stats[y_attr].keys():
+                if y_value in self.single_stats[y_attr].keys():
+                    y_old_freq[y_value] = self.single_stats[y_attr][y_value]
                 else:
                     y_old_freq[y_value] = 0
 
             # Builds the dictionary for existing co-occurrences of X and Y including 0's for new values.
             xy_old_freq = {}
-            for x_value in self.inc_pair_stats_w_nulls[x_attr][y_attr].keys():
+            for x_value in self.inc_pair_stats[x_attr][y_attr].keys():
                 xy_old_freq[x_value] = {}
-                if x_value in self.pair_stats_w_nulls[x_attr][y_attr].keys():
-                    for y_value in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
-                        if y_value in self.pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
-                            xy_old_freq[x_value][y_value] = self.pair_stats_w_nulls[x_attr][y_attr][x_value][y_value]
+                if x_value in self.pair_stats[x_attr][y_attr].keys():
+                    for y_value in self.inc_pair_stats[x_attr][y_attr][x_value].keys():
+                        if y_value in self.pair_stats[x_attr][y_attr][x_value].keys():
+                            xy_old_freq[x_value][y_value] = self.pair_stats[x_attr][y_attr][x_value][y_value]
                         else:
                             xy_old_freq[x_value][y_value] = 0
                 else:
-                    for y_value in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].keys():
+                    for y_value in self.inc_pair_stats[x_attr][y_attr][x_value].keys():
                         xy_old_freq[x_value][y_value] = 0
 
             # Updates the entropy regarding the new terms.
-            for x_value in self.inc_pair_stats_w_nulls[x_attr][y_attr].keys():
-                for y_value, xy_freq in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+            for x_value in self.inc_pair_stats[x_attr][y_attr].keys():
+                for y_value, xy_freq in self.inc_pair_stats[x_attr][y_attr][x_value].items():
                     new_term = xy_freq / float(total)
                     log_term_num = xy_old_freq[x_value][y_value] + xy_freq
-                    log_term_den = y_old_freq[y_value] + self.inc_single_stats_w_nulls[y_attr][y_value]
+                    log_term_den = y_old_freq[y_value] + self.inc_single_stats[y_attr][y_value]
 
                     xy_entropy = xy_entropy - (new_term * np.log2(log_term_num / float(log_term_den)))
 
             # Updates the entropy regarding old terms which might need to be removed.
-            for x_value in self.inc_pair_stats_w_nulls[x_attr][y_attr].keys():
-                for y_value, xy_freq in self.inc_pair_stats_w_nulls[x_attr][y_attr][x_value].items():
+            for x_value in self.inc_pair_stats[x_attr][y_attr].keys():
+                for y_value, xy_freq in self.inc_pair_stats[x_attr][y_attr][x_value].items():
                     if xy_old_freq[x_value][y_value] != 0:
                         old_term = xy_old_freq[x_value][y_value] / float(total)
                         log_term_num = 1.0 + (xy_freq / float(xy_old_freq[x_value][y_value]))
-                        log_term_den = 1.0 + (self.inc_single_stats_w_nulls[y_attr][y_value] /
+                        log_term_den = 1.0 + (self.inc_single_stats[y_attr][y_value] /
                                               float(y_old_freq[y_value]))
 
                         xy_entropy = xy_entropy - (old_term * np.log2(log_term_num / log_term_den))
+
+            if batch > 1:
+                self.add_frequency_increments_to_stats()
 
         return xy_entropy
 
     def add_frequency_increments_to_stats(self):
         single_stats, pair_stats = self.ds.add_frequency_increments_to_stats()
 
-        self.single_stats_w_nulls = single_stats
-        self.pair_stats_w_nulls = pair_stats
+        self.single_stats = single_stats
+        self.pair_stats = pair_stats
 
     def store_domains(self, domain):
         """
@@ -237,16 +239,12 @@ class DomainEngine:
     def setup_attributes(self, batch=1):
         self.active_attributes = self.get_active_attributes()
 
-        raw_total, new_total, \
-            single_stats, single_stats_w_nulls, \
-            pair_stats, pair_stats_w_nulls, \
-            inc_single_stats_w_nulls, inc_pair_stats_w_nulls = self.ds.get_statistics(batch)
+        raw_total, new_total, single_stats, pair_stats, inc_single_stats, inc_pair_stats = self.ds.get_statistics(batch)
 
         self.raw_total = raw_total
         self.new_total = new_total
 
         self.single_stats = single_stats
-        self.single_stats_w_nulls = single_stats_w_nulls
 
         logging.debug("Preparing pruned co-occurring statistics...")
         tic = time.clock()
@@ -254,10 +252,8 @@ class DomainEngine:
         toc = time.clock()
         logging.debug("DONE with pruned co-occurring statistics in %.2f secs", toc - tic)
 
-        self.pair_stats_w_nulls = pair_stats_w_nulls
-
-        self.inc_single_stats_w_nulls = inc_single_stats_w_nulls
-        self.inc_pair_stats_w_nulls = inc_pair_stats_w_nulls
+        self.inc_single_stats = inc_single_stats
+        self.inc_pair_stats = inc_pair_stats
 
         self.setup_complete = True
 
@@ -320,8 +316,8 @@ class DomainEngine:
             if attr in self.correlations:
                 attr_correlations = self.correlations[attr]
                 self._corr_attrs[(attr, thres)] = sorted([corr_attr
-                                                   for corr_attr, corr_strength in attr_correlations.items()
-                                                   if corr_attr != attr and corr_strength > thres])
+                                                          for corr_attr, corr_strength in attr_correlations.items()
+                                                          if corr_attr != attr and corr_strength > thres])
 
         return self._corr_attrs[(attr, thres)]
 
@@ -452,7 +448,9 @@ class DomainEngine:
             preds = [[val, proba] for val, proba in preds if proba >= self.domain_thresh_2] or preds
 
             # cap the maximum # of domain values to self.max_domain based on probabilities.
-            domain_values = [val for val, proba in sorted(preds, key=lambda pred: pred[1], reverse=True)[:self.max_domain]]
+            domain_values = [val for val, proba in sorted(preds,
+                                                          key=lambda pred: pred[1],
+                                                          reverse=True)[:self.max_domain]]
 
             # ensure the initial value is included even if its probability is low.
             if row['init_value'] not in domain_values and row['init_value'] != NULL_REPR:
@@ -483,7 +481,9 @@ class DomainEngine:
             updated_domain_df.append(row)
 
         # update our cell domain df with our new updated domain
-        domain_df = pd.DataFrame.from_records(updated_domain_df, columns=updated_domain_df[0].dtype.names).drop('index', axis=1).sort_values('_vid_')
+        domain_df = pd.DataFrame.from_records(updated_domain_df, columns=updated_domain_df[0].dtype.names)\
+            .drop('index', axis=1)\
+            .sort_values('_vid_')
         logging.debug('DONE assembling cell domain table in %.2fs', time.clock() - tic)
 
         logging.info('number of (additional) weak labels assigned from posterior model: %d', num_weak_labels)
@@ -523,7 +523,7 @@ class DomainEngine:
             if cond_attr == attr or cond_attr == '_tid_':
                 continue
             if not self.pair_stats[cond_attr][attr]:
-                logging.warning("domain generation could not find pair_statistics between attributes: {}, {}".format(cond_attr, attr))
+                logging.warning("There were no pair_statistics between attributes: {}, {}".format(cond_attr, attr))
                 continue
             cond_val = row[cond_attr]
             # Ignore co-occurrence with a NULL cond init value since we do not
@@ -564,9 +564,9 @@ class DomainEngine:
         'self.max_sample' of domain values for 'attr' that is NOT 'cur_value'.
         """
         domain_pool = set(self.single_stats[attr].keys())
-        # We should not have any NULLs since we do not keep track of their
-        # counts.
+
         assert NULL_REPR not in domain_pool
+
         domain_pool.discard(cur_value)
         domain_pool = sorted(list(domain_pool))
         size = len(domain_pool)

@@ -36,7 +36,8 @@ class DBengine:
         """
         logging.debug('Preparing to execute %d queries.', len(queries))
         tic = time.clock()
-        results = self._apply_func(partial(_execute_query, conn_args=self.conn_args), [(idx, q) for idx, q in enumerate(queries)])
+        results = self._apply_func(partial(_execute_query, conn_args=self.conn_args),
+                                   [(idx, q) for idx, q in enumerate(queries)])
         toc = time.clock()
         logging.debug('Time to execute %d queries: %.2f secs', len(queries), toc-tic)
         return results
@@ -132,16 +133,17 @@ def _execute_query_w_backup(args, conn_args, timeout):
     tic = time.clock()
     con = psycopg2.connect(conn_args)
     cur = con.cursor()
-    cur.execute("SET statement_timeout to %d;"%timeout)
+    cur.execute("SET statement_timeout to %d;" % timeout)
+    # noinspection PyUnresolvedReferences
     try:
         cur.execute(query)
         res = cur.fetchall()
-    except psycopg2.extensions.QueryCanceledError as e:
+    except psycopg2.extensions.QueryCanceledError:
         logging.debug("Failed to execute query %s with id %s. Timeout reached.", query, query_id)
 
         # No backup query, simply return empty result
         if not query_backup:
-            logging.warn("no backup query to execute, returning empty query results")
+            logging.warning("no backup query to execute, returning empty query results")
             return []
 
         logging.debug("Starting to execute backup query %s with id %s", query_backup, query_id)

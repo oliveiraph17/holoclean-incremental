@@ -1,12 +1,9 @@
-import logging
-
-import pandas as pd
 import torch
 from tqdm import tqdm
 
 from .featurizer import Featurizer
 from dataset import AuxTables
-from utils import NULL_REPR, NA_COOCCUR_FV
+from utils import NULL_REPR
 
 
 class OccurAttrFeaturizer(Featurizer):
