@@ -417,6 +417,7 @@ class Dataset:
 
         return stats
 
+    # noinspection PyUnresolvedReferences
     def get_domain_info(self):
         """
         get_domain_info returns (number of random variables, count of distinct values across all attributes).
@@ -427,6 +428,7 @@ class Dataset:
         classes = int(res[0][1])
         return total_vars, classes
 
+    # noinspection PyUnresolvedReferences,PyTypeChecker
     def get_inferred_values(self):
         tic = time.clock()
 
