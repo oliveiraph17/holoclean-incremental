@@ -78,6 +78,8 @@ class DomainEngine:
             data_df = self.ds.get_raw_data()
         else:
             data_df = self.ds.get_new_data()
+            if incremental_entropy is False:
+                self.add_frequency_increments_to_stats()
 
         attrs = self.ds.get_attributes()
 
@@ -109,6 +111,10 @@ class DomainEngine:
                 # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
                 # We reverse this to reflect the correlation.
                 corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
+
+        if batch > 1 and incremental_entropy is True:
+            self.add_frequency_increments_to_stats()
+
         return corr
 
     def conditional_entropy(self, x_attr, y_attr, batch=1, incremental_entropy=False):
@@ -125,9 +131,6 @@ class DomainEngine:
         xy_entropy = 0.0
 
         if batch == 1 or incremental_entropy is False:
-            if batch > 1:
-                self.add_frequency_increments_to_stats()
-
             y_freq = {}
 
             for value, count in self.single_stats[y_attr].items():
@@ -184,9 +187,6 @@ class DomainEngine:
 
                         xy_entropy = xy_entropy - (old_term * np.log2(log_term_num / log_term_den))
 
-            if batch > 1:
-                self.add_frequency_increments_to_stats()
-
         return xy_entropy
 
     def add_frequency_increments_to_stats(self):
@@ -239,10 +239,18 @@ class DomainEngine:
     def setup_attributes(self, batch=1):
         self.active_attributes = self.get_active_attributes()
 
-        raw_total, new_total, single_stats, pair_stats, inc_single_stats, inc_pair_stats = self.ds.get_statistics(batch)
+        self.ds.collect_stats(batch)
 
-        self.raw_total = raw_total
+        raw_total, new_total, \
+            single_stats, pair_stats, \
+            inc_single_stats, inc_pair_stats = self.ds.get_statistics()
+
         self.new_total = new_total
+
+        if batch > 2:
+            self.raw_total = self.raw_total + self.new_total
+        else:
+            self.raw_total = raw_total
 
         self.single_stats = single_stats
 
@@ -302,16 +310,16 @@ class DomainEngine:
     @staticmethod
     def get_corr_attributes(attr, thres, correlations_lst, corr_attrs_lst):
         """
-        Returns attributes from correlations_lst that are correlated with 'attr'
+        Returns attributes from 'correlations_lst' that are correlated with 'attr'
         within a magnitude of 'thres'.
 
         :param attr: (string) the original attribute to get the correlated attributes for.
         :param thres: (float) correlation threshold for attributes to be returned.
         :param correlations_lst: (dict) correlations between every pair of attributes.
-        :param corr_attrs_lst: (list[list]) correlated attributes to each attribute within the threshold 'thres'.
-               This list is populated in this method and the sublist corresponding to 'attr' is returned.
+        :param corr_attrs_lst: (list[list[(attr, thres)]]) correlated attributes to 'attr' within 'thres'.
+               The list is populated in this method and the sublist corresponding to 'attr' is returned.
 
-        :return (list) attributes correlated to 'attr' within 'thres'.
+        :return (list) attributes correlated to 'attr' within the threshold 'thres'.
         """
         # Not memoized: find correlated attributes from correlation dictionary.
         if (attr, thres) not in corr_attrs_lst:
@@ -417,21 +425,21 @@ class DomainEngine:
                 vid += 1
 
         domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
-        logging.debug('DONE generating initial set of domain values in %.2f', time.clock() - tic)
+        logging.debug('DONE generating initial set of domain values in %.2f secs', time.clock() - tic)
 
         if self.env['weak_label_thresh'] == 1 and self.env['domain_thresh_2'] == 0:
             # Skip estimator if we require no weak labelling nor domain pruning based on posterior probabilities.
             return domain_df
 
-        # Run pruned domain values from correlated attributes above through
-        # posterior model for a naive probability estimation.
+        # Run posterior model over pruned domain values from correlated attributes
+        # for a naive probability estimation.
         logging.debug('Training posterior model for estimating domain value probabilities...')
         tic = time.clock()
-        estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations)
-        logging.debug('DONE training posterior model in %.2fs', time.clock() - tic)
+        estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations, batch)
+        logging.debug('DONE training posterior model in %.2f secs', time.clock() - tic)
 
         # Predict probabilities for all pruned domain values.
-        logging.debug('predicting domain value probabilities from posterior model...')
+        logging.debug('Predicting domain value probabilities from posterior model...')
         tic = time.clock()
         preds_by_cell = estimator.predict_pp_batch()
         logging.debug('DONE predictions in %.2f secs, re-constructing cell domain...', time.clock() - tic)

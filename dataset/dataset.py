@@ -290,9 +290,22 @@ class Dataset:
         vid = tuple_id * self.attr_count + self.attr_to_idx[attr_name]
         return vid
 
-    def get_statistics(self, batch=1):
+    def get_statistics(self):
         """
-        get_statistics returns:
+        Returns the statistics computed in the 'collect_stats' method.
+        """
+        stats = (self.raw_total,
+                 self.new_total,
+                 self.single_attr_stats,
+                 self.pair_attr_stats,
+                 self.inc_single_attr_stats,
+                 self.inc_pair_attr_stats)
+
+        return stats
+
+    def collect_stats(self, batch=1):
+        """
+        Computes the following statistics:
           1. self.raw_total (total # of tuples in the first batch of data)
           2. self.new_total (total # of tuples in the incoming data)
           3. self.single_attr_stats ({ attribute -> { value -> count } })
@@ -306,33 +319,12 @@ class Dataset:
               <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
           5. self.inc_single_attr_stats (same as 'self.single_attr_stats' but for new data)
           6. self.inc_pair_attr_stats (same as 'self.pair_attr_stats' but for new data)
-
-        Neither 'single_attr_stats' nor 'pair_attr_stats' contain frequencies NULL values (NULL_REPR).
-        One would need to explicitly check if the value is NULL before lookup.
-        Also, values that only co-occur with NULLs will NOT be in 'pair_attr_stats'.
         """
+        tic = time.clock()
+
         if batch == 1:
             logging.debug('Computing frequency and co-occurrence statistics from raw data...')
-        else:
-            logging.debug('Computing frequency and co-occurrence statistics from new data, batch %d...', batch)
 
-        tic = time.clock()
-        self.collect_stats(batch)
-        logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
-
-        stats = (self.raw_total,
-                 self.new_total,
-                 self.single_attr_stats,
-                 self.pair_attr_stats,
-                 self.inc_single_attr_stats,
-                 self.inc_pair_attr_stats)
-
-        return stats
-
-    def collect_stats(self, batch=1):
-        logging.debug('Collecting single/pairwise statistics, batch %d...', batch)
-
-        if batch == 1:
             # First batch of data.
             # We get the statistics from the initial data, assigning them for the first time.
             data_df = self.get_raw_data()
@@ -354,11 +346,14 @@ class Dataset:
                                                                                         trg_attr,
                                                                                         data_df)
         else:
+            logging.debug('Computing frequency and co-occurrence statistics from new data, batch %d...', batch)
+
             # New batch of data.
             # We get the statistics from the incoming data.
             data_df = self.get_new_data()
 
             if batch > 2:
+                # In this case, the number of old tuples must be updated.
                 self.raw_total = self.raw_total + self.new_total
 
             # Total number of incoming tuples.
@@ -377,6 +372,8 @@ class Dataset:
                         self.inc_pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr,
                                                                                             trg_attr,
                                                                                             data_df)
+
+        logging.debug('DONE computing statistics in %.2f secs', time.clock() - tic)
 
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr, data_df):
