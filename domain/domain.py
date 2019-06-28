@@ -14,9 +14,9 @@ from utils import NULL_REPR
 class DomainEngine:
     def __init__(self, env, dataset, max_sample=5):
         """
-        :param env: (dict) contains global settings such as verbose
-        :param dataset: (Dataset) current dataset
-        :param max_sample: (int) maximum # of domain values from a random sample
+        :param env: (dict) contains global settings such as verbose.
+        :param dataset: (Dataset) current dataset.
+        :param max_sample: (int) maximum # of domain values from a random sample.
         """
         self.env = env
         self.ds = dataset
@@ -31,7 +31,7 @@ class DomainEngine:
         self.new_total = 0
         self.correlations = None
         self.cond_entropies_base_2 = {}
-        self._corr_attrs = {}
+        self.corr_attrs = {}
         self.cor_strength = env["cor_strength"]
         self.max_sample = max_sample
         self.single_stats = {}
@@ -70,7 +70,7 @@ class DomainEngine:
           attr_a: { cond_attr_i: corr_strength_a_i,
                     cond_attr_j: corr_strength_a_j, ...},
           attr_b: { cond_attr_i: corr_strength_b_i, ...}
-        }
+        }.
 
         :return a dictionary of correlations.
         """
@@ -259,12 +259,12 @@ class DomainEngine:
 
     def _pruned_pair_stats(self, pair_stats):
         """
-        _pruned_pair_stats converts 'pair_stats', which is a dictionary mapping
+        Converts 'pair_stats', which is a dictionary of the form
             { attr1 -> { attr2 -> { val1 -> { val2 -> count } } } }, where
               <val1>: all possible values for attr1,
               <val2>: all values for attr2 that appear at least once with <val1>, and
               <count>: frequency (# of entities) where attr1=<val1> AND attr2=<val2>,
-        to a flattened 4-level dictionary mapping
+        to a flattened 4-level dictionary of the form
             { attr1 -> { attr2 -> { val1 -> [pruned list of val2] } } }.
 
         It keeps only the co-occurring values of attr2 that exceed 'self.domain_thresh_1'.
@@ -288,8 +288,7 @@ class DomainEngine:
 
     def get_active_attributes(self):
         """
-        get_active_attributes returns the attributes to be modeled.
-        They correspond only to attributes that contain at least one potentially erroneous cell.
+        Returns the attributes to be modeled, which are the ones having at least one potentially erroneous cell.
         """
         query = 'SELECT DISTINCT attribute as attribute FROM {}'.format(AuxTables.dk_cells.name)
         result = self.ds.engine.execute_query(query)
@@ -300,34 +299,40 @@ class DomainEngine:
         # Sort the active attributes to maintain the order of the random variable IDs.
         return sorted(itertools.chain(*result))
 
-    def get_corr_attributes(self, attr, thres):
+    @staticmethod
+    def get_corr_attributes(attr, thres, correlations_lst, corr_attrs_lst):
         """
-        get_corr_attributes returns attributes from self.correlations that are correlated with 'attr'
-        within a magnitude of self.cor_strength (initial parameter).
+        Returns attributes from correlations_lst that are correlated with 'attr'
+        within a magnitude of 'thres'.
 
         :param attr: (string) the original attribute to get the correlated attributes for.
-        :param thres: (float) correlation threshold (absolute) for attributes to be returned.
+        :param thres: (float) correlation threshold for attributes to be returned.
+        :param correlations_lst: (dict) correlations between every pair of attributes.
+        :param corr_attrs_lst: (list[list]) correlated attributes to each attribute within the threshold 'thres'.
+               This list is populated in this method and the sublist corresponding to 'attr' is returned.
+
+        :return (list) attributes correlated to 'attr' within 'thres'.
         """
         # Not memoized: find correlated attributes from correlation dictionary.
-        if (attr, thres) not in self._corr_attrs:
-            self._corr_attrs[(attr, thres)] = []
+        if (attr, thres) not in corr_attrs_lst:
+            corr_attrs_lst[(attr, thres)] = []
 
-            if attr in self.correlations:
-                attr_correlations = self.correlations[attr]
-                self._corr_attrs[(attr, thres)] = sorted([corr_attr
-                                                          for corr_attr, corr_strength in attr_correlations.items()
-                                                          if corr_attr != attr and corr_strength > thres])
+            if attr in correlations_lst:
+                attr_correlations = correlations_lst[attr]
+                corr_attrs_lst[(attr, thres)] = sorted([corr_attr
+                                                        for corr_attr, corr_strength in attr_correlations.items()
+                                                        if corr_attr != attr and corr_strength > thres])
 
-        return self._corr_attrs[(attr, thres)]
+        return corr_attrs_lst[(attr, thres)]
 
     def generate_domain(self, batch=1):
         """
         Generates the domain for each cell in the active attributes,
         as well as assigns a random variable ID ('_vid_') to cells with at least 2 domain values.
 
-        See get_domain_cell for how the domain is generated from co-occurrences and correlated attributes.
+        See 'get_domain_cell' for how the domain is generated from co-occurrences and correlated attributes.
 
-        If no values can be found from correlated attributes, return a random sample of domain values.
+        If no values can be found from correlated attributes, then return a random sample of domain values.
 
         :return: DataFrame with columns
             _tid_: entity/tuple ID
@@ -371,9 +376,9 @@ class DomainEngine:
                 cell_status = CellStatus.NOT_SET.value
 
                 if len(dom) <= 1:
-                    # Since we could not come up with a domain and the initial value is NULL,
-                    # a random domain is not likely to help us.
-                    # So, we ignore this cell and continue.
+                    # We could not come up with a domain and the initial value is NULL.
+                    # Therefore, a random domain is not likely to help us.
+                    # We ignore this cell and continue.
                     if init_value == NULL_REPR:
                         continue
 
@@ -392,7 +397,7 @@ class DomainEngine:
                     # Otherwise, add the random additional values to the domain.
                     dom.extend(rand_dom_values)
 
-                    # This was originally just a single value for the domain of this cell.
+                    # There was originally just a single value for the domain of this cell.
                     # Other values were randomly assigned to the domain.
                     # Therefore, these will not be modified by the estimator.
                     cell_status = CellStatus.SINGLE_VALUE.value
@@ -415,12 +420,12 @@ class DomainEngine:
         logging.debug('DONE generating initial set of domain values in %.2f', time.clock() - tic)
 
         if self.env['weak_label_thresh'] == 1 and self.env['domain_thresh_2'] == 0:
-            # Skip estimator model if we require no weak labelling nor domain pruning based on posterior probabilities.
+            # Skip estimator if we require no weak labelling nor domain pruning based on posterior probabilities.
             return domain_df
 
         # Run pruned domain values from correlated attributes above through
         # posterior model for a naive probability estimation.
-        logging.debug('training posterior model for estimating domain value probabilities...')
+        logging.debug('Training posterior model for estimating domain value probabilities...')
         tic = time.clock()
         estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations)
         logging.debug('DONE training posterior model in %.2fs', time.clock() - tic)
@@ -500,11 +505,11 @@ class DomainEngine:
 
         For example:
 
-                cond_attr | attr
-                H           B    <- current row
-                H           C
-                I           D
-                H           E
+                cond_attr  |  attr
+                H             B    <- current row
+                H             C
+                I             D
+                H             E
 
         This would produce [B, C, E] as domain values.
 
@@ -513,7 +518,7 @@ class DomainEngine:
 
         domain = set()
         init_value = row[attr]
-        correlated_attributes = self.get_corr_attributes(attr, self.cor_strength)
+        correlated_attributes = self.get_corr_attributes(attr, self.cor_strength, self.correlations, self.corr_attrs)
 
         # Iterate through all correlated attributes and take the top co-occurring values of 'attr'
         # with respect to the value of 'cond_attr' in the current row.

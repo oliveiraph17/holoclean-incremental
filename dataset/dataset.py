@@ -242,7 +242,7 @@ class Dataset:
         """
         :param aux_table: (AuxTable) auxiliary table to generate.
         :param query: (str) SQL query whose result is used for generating the auxiliary table.
-        :param index_attrs: (list[str]) list of attributes/columns to create index on.
+        :param index_attrs: (list[str]) list of attributes (columns) to create index on.
         """
         try:
             self.aux_table[aux_table] = Table(aux_table.name,
@@ -304,6 +304,8 @@ class Dataset:
               <val1>: value of <attr1>
               <val2>: value of <attr2> that appears at least once with <val1>
               <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
+          5. self.inc_single_attr_stats (same as 'self.single_attr_stats' but for new data)
+          6. self.inc_pair_attr_stats (same as 'self.pair_attr_stats' but for new data)
 
         Neither 'single_attr_stats' nor 'pair_attr_stats' contain frequencies NULL values (NULL_REPR).
         One would need to explicitly check if the value is NULL before lookup.
@@ -355,6 +357,9 @@ class Dataset:
             # New batch of data.
             # We get the statistics from the incoming data.
             data_df = self.get_new_data()
+
+            if batch > 2:
+                self.raw_total = self.raw_total + self.new_total
 
             # Total number of incoming tuples.
             self.new_total = data_df.shape[0]
