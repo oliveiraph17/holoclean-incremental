@@ -431,8 +431,7 @@ class DomainEngine:
             # Skip estimator if we require no weak labelling nor domain pruning based on posterior probabilities.
             return domain_df
 
-        # Run posterior model over pruned domain values from correlated attributes
-        # for a naive probability estimation.
+        # Feed the Naive Bayes estimator with pruned domain values from correlated attributes.
         logging.debug('Training posterior model for estimating domain value probabilities...')
         tic = time.clock()
         estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations, batch)

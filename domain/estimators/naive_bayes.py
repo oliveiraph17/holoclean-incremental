@@ -51,6 +51,7 @@ class NaiveBayes(Estimator):
 
         for val1 in values:
             # PH: should we ignore NULLs in both attributes ('attr' and 'at') being compared?
+            # This check was added recently, whereas the same check for 'val2' was already present.
             if val1 == NULL_REPR:
                 continue
 
