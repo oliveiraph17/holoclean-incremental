@@ -441,46 +441,51 @@ class DomainEngine:
         logging.debug('Predicting domain value probabilities from posterior model...')
         tic = time.clock()
         preds_by_cell = estimator.predict_pp_batch()
-        logging.debug('DONE predictions in %.2f secs, re-constructing cell domain...', time.clock() - tic)
+        logging.debug('DONE predicting in %.2f secs', time.clock() - tic)
 
-        logging.debug('re-assembling final cell domain table...')
+        logging.debug('Assembling final \'cell_domain\' table...')
         tic = time.clock()
-        # iterate through raw/current data and generate posterior probabilities for
-        # weak labelling
+
+        # Iterate through current dataset and generate posterior probabilities for weak labelling.
         num_weak_labels = 0
         updated_domain_df = []
         for preds, row in tqdm(zip(preds_by_cell, domain_df.to_records())):
-            # Do not re-label single valued cells.
+            # Do not relabel single-valued cells.
             if row['fixed'] == CellStatus.SINGLE_VALUE.value:
                 updated_domain_df.append(row)
                 continue
 
-            # prune domain if any of the values are above our domain_thresh_2
-            preds = [[val, proba] for val, proba in preds if proba >= self.domain_thresh_2] or preds
+            # Prune domain if any of the values are below the 'domain_thresh_2' parameter.
+            preds = [[val, prob] for val, prob in preds if prob >= self.domain_thresh_2] or preds
 
-            # cap the maximum # of domain values to self.max_domain based on probabilities.
-            domain_values = [val for val, proba in sorted(preds,
-                                                          key=lambda pred: pred[1],
-                                                          reverse=True)[:self.max_domain]]
+            # Cap the maximum number of domain values to self.max_domain based on probabilities.
+            domain_values = [val for val, prob in sorted(preds,
+                                                         key=lambda pred: pred[1],
+                                                         reverse=True)[:self.max_domain]]
 
-            # ensure the initial value is included even if its probability is low.
+            # Ensure the initial value is included even if its probability is low.
             if row['init_value'] not in domain_values and row['init_value'] != NULL_REPR:
                 domain_values.append(row['init_value'])
+
             domain_values = sorted(domain_values)
-            # update our memoized domain values for this row again
+
+            # Update our memoized domain values for this row.
             row['domain'] = '|||'.join(domain_values)
             row['domain_size'] = len(domain_values)
-            # update init index based on new domain
+
+            # This check occurs because 'init_value' would not be in 'domain_values' if it were NULL.
             if row['init_value'] in domain_values:
+                # Update 'init_index' based on new domain.
                 row['init_index'] = domain_values.index(row['init_value'])
-            # update weak label index based on new domain
+
+            # Update 'weak_label_idx' based on new domain.
             if row['weak_label'] != NULL_REPR:
                 row['weak_label_idx'] = domain_values.index(row['weak_label'])
 
             weak_label, weak_label_prob = max(preds, key=lambda pred: pred[1])
 
-            # Assign weak label if it is not the same as init AND domain value
-            # exceeds our weak label threshold.
+            # Assign weak label if it is different than the initial value
+            # and the domain value exceeds 'self.weak_label_thresh'.
             if weak_label != row['init_value'] and weak_label_prob >= self.weak_label_thresh:
                 num_weak_labels += 1
 
@@ -491,13 +496,14 @@ class DomainEngine:
 
             updated_domain_df.append(row)
 
-        # update our cell domain df with our new updated domain
+        # Update cell domain DataFrame with new updated domain.
         domain_df = pd.DataFrame.from_records(updated_domain_df, columns=updated_domain_df[0].dtype.names)\
             .drop('index', axis=1)\
             .sort_values('_vid_')
-        logging.debug('DONE assembling cell domain table in %.2fs', time.clock() - tic)
 
-        logging.info('number of (additional) weak labels assigned from posterior model: %d', num_weak_labels)
+        logging.debug('DONE assembling \'cell_domain\' table in %.2f secs', time.clock() - tic)
+
+        logging.info('Number of (additional) weak labels assigned from posterior model: %d', num_weak_labels)
 
         logging.debug('DONE generating domain and weak labels')
         return domain_df
