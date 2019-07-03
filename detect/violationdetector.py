@@ -132,6 +132,7 @@ class ViolationDetector(Detector):
 
         return query
 
+    # noinspection PyMethodMayBeStatic
     def gen_tid_attr_output(self, res, attr_list):
         errors = []
 

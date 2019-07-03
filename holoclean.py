@@ -19,32 +19,32 @@ root_logger.setLevel(logging.INFO)
 gensim_logger.setLevel(logging.WARNING)
 
 
-# Arguments for HoloClean
+# Arguments for HoloClean.
 arguments = [
     (('-u', '--db_user'),
-        {'metavar': 'DB_USER',
-         'dest': 'db_user',
-         'default': 'holocleanuser',
-         'type': str,
-         'help': 'User for DB used to persist state.'}),
+     {'metavar': 'DB_USER',
+      'dest': 'db_user',
+      'default': 'holocleanuser',
+      'type': str,
+      'help': 'User for DB used to persist state.'}),
     (('-p', '--db-pwd', '--pass'),
-        {'metavar': 'DB_PWD',
-         'dest': 'db_pwd',
-         'default': 'abcd1234',
-         'type': str,
-         'help': 'Password for DB used to persist state.'}),
+     {'metavar': 'DB_PWD',
+      'dest': 'db_pwd',
+      'default': 'abcd1234',
+      'type': str,
+      'help': 'Password for DB used to persist state.'}),
     (('-h', '--db-host'),
-        {'metavar': 'DB_HOST',
-         'dest': 'db_host',
-         'default': 'localhost',
-         'type': str,
-         'help': 'Host for DB used to persist state.'}),
+     {'metavar': 'DB_HOST',
+      'dest': 'db_host',
+      'default': 'localhost',
+      'type': str,
+      'help': 'Host for DB used to persist state.'}),
     (('-d', '--db_name'),
-        {'metavar': 'DB_NAME',
-         'dest': 'db_name',
-         'default': 'holo',
-         'type': str,
-         'help': 'Name of DB used to persist state.'}),
+     {'metavar': 'DB_NAME',
+      'dest': 'db_name',
+      'default': 'holo',
+      'type': str,
+      'help': 'Name of DB used to persist state.'}),
     (('-t', '--threads'),
      {'metavar': 'THREADS',
       'dest': 'threads',
@@ -110,13 +110,15 @@ arguments = [
       'dest': 'domain_thresh_1',
       'default': 0.1,
       'type': float,
-      'help': 'Minimum co-occurrence probability threshold required for domain values in the first domain pruning stage. Between 0 and 1.'}),
+      'help': 'Minimum co-occurrence probability threshold for domain values in the first domain pruning stage. \
+               Between 0 and 1.'}),
     (('-dt2', '--domain-thresh-2'),
      {'metavar': 'DOMAIN_THRESH_2',
       'dest': 'domain_thresh_2',
       'default': 0,
       'type': float,
-      'help': 'Threshold of posterior probability required for values to be included in the final domain in the second domain pruning stage. Between 0 and 1.'}),
+      'help': 'Threshold of posterior probability for domain values in the second domain pruning stage. \
+               Between 0 and 1.'}),
     (('-md', '--max-domain'),
      {'metavar': 'MAX_DOMAIN',
       'dest': 'max_domain',
@@ -159,9 +161,15 @@ arguments = [
       'default': 32,
       'type': int,
       'help': 'Size of batch used in SGD in the weak labelling and domain generation estimator.'}),
+    (('-inc', '--incremental'),
+     {'metavar': 'INCREMENTAL',
+      'dest': 'incremental',
+      'default': False,
+      'type': bool,
+      'help': 'Run HoloClean over incoming data incrementally.'})
 ]
 
-# Flags for Holoclean mode
+# Flags for HoloClean mode.
 flags = [
     (tuple(['--verbose']),
         {'default': False,
@@ -182,23 +190,23 @@ flags = [
         {'default': False,
          'dest': 'debug_mode',
          'action': 'store_true',
-         'help': 'dump a bunch of debug information to debug\/'}),
+         'help': 'dump a bunch of debug information to debug/'}),
 ]
 
 
 class HoloClean:
     """
     Main entry point for HoloClean.
-    It creates a HoloClean Data Engine
+    It creates a HoloClean Data Engine.
     """
 
     def __init__(self, **kwargs):
         """
-        Constructor for Holoclean
-        :param kwargs: arguments for HoloClean
+        Constructor for Holoclean.
+        :param kwargs: arguments for HoloClean.
         """
 
-        # Initialize default execution arguments
+        # Initialize default execution arguments.
         arg_defaults = {}
         for arg, opts in arguments:
             if 'directory' in arg[0]:
@@ -206,58 +214,55 @@ class HoloClean:
             else:
                 arg_defaults[opts['dest']] = opts['default']
 
-        # Initialize default execution flags
+        # Initialize default execution flags.
         for arg, opts in flags:
             arg_defaults[opts['dest']] = opts['default']
 
-        # check env vars
+        # Check environment variables.
         for arg, opts in arguments:
-            # if env var is set use that
+            # If environment variable is set, use that.
             if opts["metavar"] and opts["metavar"] in os.environ.keys():
-                logging.debug(
-                    "Overriding {} with env varible {} set to {}".format(
-                        opts['dest'],
-                        opts["metavar"],
-                        os.environ[opts["metavar"]])
-                )
+                logging.debug("Overriding {} with env varible {} set to {}".format(opts['dest'],
+                                                                                   opts["metavar"],
+                                                                                   os.environ[opts["metavar"]]))
                 arg_defaults[opts['dest']] = os.environ[opts["metavar"]]
 
-        # Override defaults with manual flags
+        # Override default values with manual flags.
         for key in kwargs:
             arg_defaults[key] = kwargs[key]
 
-        # Initialize additional arguments
+        # Initialize additional arguments.
         for (arg, default) in arg_defaults.items():
             setattr(self, arg, kwargs.get(arg, default))
 
-        # Init empty session collection
+        # Initialize empty session collection.
         self.session = Session(arg_defaults)
 
 
 class Session:
     """
-    Session class controls the entire pipeline of HC
+    Session class controls the entire pipeline of HC.
     """
 
     def __init__(self, env, name="session"):
         """
-        Constructor for Holoclean session
-        :param env: Holoclean environment
-        :param name: Name for the Holoclean session
+        Constructor for Holoclean session.
+        :param env: HoloClean environment.
+        :param name: Name for the HoloClean session.
         """
-        # use DEBUG logging level if verbose enabled
+        # Use DEBUG logging level if verbose is enabled.
         if env['verbose']:
             root_logger.setLevel(logging.DEBUG)
             gensim_logger.setLevel(logging.DEBUG)
 
-        logging.debug('initiating session with parameters: %s', env)
+        logging.debug('Initiating session with parameters: %s', env)
 
         # Initialize random seeds.
         random.seed(env['seed'])
         torch.manual_seed(env['seed'])
         np.random.seed(seed=env['seed'])
 
-        # Initialize members
+        # Initialize members.
         self.name = name
         self.env = env
         self.ds = Dataset(name, env)
