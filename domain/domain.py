@@ -30,7 +30,6 @@ class DomainEngine:
         self.raw_total = 0
         self.new_total = 0
         self.correlations = None
-        self.cond_entropies_base_2 = {}
         self.corr_attrs = {}
         self.cor_strength = env["cor_strength"]
         self.max_sample = max_sample
@@ -58,142 +57,7 @@ class DomainEngine:
         Memoizes to self.correlations a data structure containing pairwise correlations between attributes.
         Values are treated as discrete categories.
         """
-        self.correlations = self._compute_norm_cond_entropy_corr(batch, incremental_entropy)
-
-    def _compute_norm_cond_entropy_corr(self, batch=1, incremental_entropy=False):
-        """
-        Computes the correlations between attributes by calculating the normalized conditional entropy between them.
-        The conditional entropy is asymmetric, therefore we need pairwise computations.
-
-        The computed correlations are stored in a dictionary in the format:
-        {
-          attr_a: { cond_attr_i: corr_strength_a_i,
-                    cond_attr_j: corr_strength_a_j, ...},
-          attr_b: { cond_attr_i: corr_strength_b_i, ...}
-        }.
-
-        :return a dictionary of correlations.
-        """
-        if batch == 1:
-            data_df = self.ds.get_raw_data()
-        else:
-            data_df = self.ds.get_new_data()
-            if incremental_entropy is False:
-                self.add_frequency_increments_to_stats()
-
-        attrs = self.ds.get_attributes()
-
-        corr = {}
-        for x in attrs:
-            corr[x] = {}
-
-            if x not in self.cond_entropies_base_2.keys():
-                self.cond_entropies_base_2[x] = {}
-
-            x_domain_size = data_df[x].nunique()
-
-            for y in attrs:
-                # Set correlation to 0.0 if entropy of x is 1 (only one possible value).
-                if x_domain_size == 1:
-                    corr[x][y] = 0.0
-                    continue
-
-                # Set correlation to 1 for same attributes.
-                if x == y:
-                    corr[x][y] = 1.0
-                    continue
-
-                # Compute the conditional entropy H(x|y).
-                # If H(x|y) = 0, then y determines x, i.e. y -> x.
-                self.cond_entropies_base_2[x][y] = self.conditional_entropy(x, y, batch, incremental_entropy)
-
-                # Use the domain size of x as the log base for normalizing the conditional entropy.
-                # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
-                # We reverse this to reflect the correlation.
-                corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
-
-        if batch > 1 and incremental_entropy is True:
-            self.add_frequency_increments_to_stats()
-
-        return corr
-
-    def conditional_entropy(self, x_attr, y_attr, batch=1, incremental_entropy=False):
-        """
-        Computes the conditional entropy considering the log base 2.
-
-        :param x_attr: (string) name of attribute X.
-        :param y_attr: (string) name of attribute Y.
-        :param batch: (int) identifier of batch.
-        :param incremental_entropy: (bool) determines whether to do it incrementally or not.
-
-        :return: the conditional entropy of attributes X and Y using the log base 2.
-        """
-        xy_entropy = 0.0
-
-        if batch == 1 or incremental_entropy is False:
-            y_freq = {}
-
-            for value, count in self.single_stats[y_attr].items():
-                y_freq[value] = count
-
-            for x_value in self.single_stats[x_attr].keys():
-                for y_value, xy_freq in self.pair_stats[x_attr][y_attr][x_value].items():
-                    p_xy = xy_freq / float(self.raw_total)
-
-                    xy_entropy = xy_entropy - (p_xy * np.log2(xy_freq / float(y_freq[y_value])))
-        else:
-            total = self.raw_total + self.new_total
-            xy_entropy = (self.raw_total / float(total)) * self.cond_entropies_base_2[x_attr][y_attr]
-
-            # Builds the dictionary for existing frequencies of Y including 0's for new values.
-            y_old_freq = {}
-            for y_value in self.inc_single_stats[y_attr].keys():
-                if y_value in self.single_stats[y_attr].keys():
-                    y_old_freq[y_value] = self.single_stats[y_attr][y_value]
-                else:
-                    y_old_freq[y_value] = 0
-
-            # Builds the dictionary for existing co-occurrences of X and Y including 0's for new values.
-            xy_old_freq = {}
-            for x_value in self.inc_pair_stats[x_attr][y_attr].keys():
-                xy_old_freq[x_value] = {}
-                if x_value in self.pair_stats[x_attr][y_attr].keys():
-                    for y_value in self.inc_pair_stats[x_attr][y_attr][x_value].keys():
-                        if y_value in self.pair_stats[x_attr][y_attr][x_value].keys():
-                            xy_old_freq[x_value][y_value] = self.pair_stats[x_attr][y_attr][x_value][y_value]
-                        else:
-                            xy_old_freq[x_value][y_value] = 0
-                else:
-                    for y_value in self.inc_pair_stats[x_attr][y_attr][x_value].keys():
-                        xy_old_freq[x_value][y_value] = 0
-
-            # Updates the entropy regarding the new terms.
-            for x_value in self.inc_pair_stats[x_attr][y_attr].keys():
-                for y_value, xy_freq in self.inc_pair_stats[x_attr][y_attr][x_value].items():
-                    new_term = xy_freq / float(total)
-                    log_term_num = xy_old_freq[x_value][y_value] + xy_freq
-                    log_term_den = y_old_freq[y_value] + self.inc_single_stats[y_attr][y_value]
-
-                    xy_entropy = xy_entropy - (new_term * np.log2(log_term_num / float(log_term_den)))
-
-            # Updates the entropy regarding old terms which might need to be removed.
-            for x_value in self.inc_pair_stats[x_attr][y_attr].keys():
-                for y_value, xy_freq in self.inc_pair_stats[x_attr][y_attr][x_value].items():
-                    if xy_old_freq[x_value][y_value] != 0:
-                        old_term = xy_old_freq[x_value][y_value] / float(total)
-                        log_term_num = 1.0 + (xy_freq / float(xy_old_freq[x_value][y_value]))
-                        log_term_den = 1.0 + (self.inc_single_stats[y_attr][y_value] /
-                                              float(y_old_freq[y_value]))
-
-                        xy_entropy = xy_entropy - (old_term * np.log2(log_term_num / log_term_den))
-
-        return xy_entropy
-
-    def add_frequency_increments_to_stats(self):
-        single_stats, pair_stats = self.ds.add_frequency_increments_to_stats()
-
-        self.single_stats = single_stats
-        self.pair_stats = pair_stats
+        self.correlations = self.ds.compute_norm_cond_entropy_corr(batch, incremental_entropy)
 
     def store_domains(self, domain):
         """
@@ -239,11 +103,9 @@ class DomainEngine:
     def setup_attributes(self, batch=1):
         self.active_attributes = self.get_active_attributes()
 
-        self.ds.collect_stats(batch)
-
         raw_total, new_total, \
             single_stats, pair_stats, \
-            inc_single_stats, inc_pair_stats = self.ds.get_statistics()
+            inc_single_stats, inc_pair_stats = self.ds.get_statistics(batch)
 
         self.new_total = new_total
 
