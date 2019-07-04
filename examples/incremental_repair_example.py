@@ -9,7 +9,7 @@ hc = holoclean.HoloClean(
     db_name='holo',
     domain_thresh_1=0,
     domain_thresh_2=0,
-    weak_label_thresh=0.99,
+    weak_label_thresh=0.8,
     max_domain=10000,
     cor_strength=0.6,
     nb_cor_strength=0.8,
@@ -38,36 +38,36 @@ hc.detect_errors(detectors)
 
 # Repair errors based on the defined features.
 hc.setup_domain()
-# featurizers = [
+featurizers = [
 #     InitAttrFeaturizer(),
-#     OccurAttrFeaturizer(),
+    OccurAttrFeaturizer(),
 #     FreqFeaturizer(),
 #     ConstraintFeaturizer(),
-# ]
-# hc.repair_errors(featurizers)
+]
+hc.repair_errors(featurizers)
 
 # Evaluate the correctness of the results.
-# hc.evaluate(fpath='../testdata/hospital_clean.csv',
-#             tid_col='tid',
-#             attr_col='attribute',
-#             val_col='correct_val')
+hc.evaluate(fpath='../testdata/hospital_clean.csv',
+            tid_col='tid',
+            attr_col='attribute',
+            val_col='correct_val')
 
 ############################################################
 
-batch = 2
-
-# Load incoming data.
-hc.load_new_data('hospital', '../testdata/hospital_0100.csv', batch)
-
-hc.detect_errors(detectors, batch)
-
-hc.setup_domain(batch)
+# batch = 2
+#
+# # Load incoming data.
+# hc.load_new_data('hospital', '../testdata/hospital_0100.csv', batch)
+#
+# hc.detect_errors(detectors, batch)
+#
+# hc.setup_domain(batch)
 
 ############################################################
 
-batch = 3
-
-# Load incoming data.
+# batch = 3
+#
+# # Load incoming data.
 # hc.load_new_data('hospital', '../testdata/hospital_0050_2.csv', batch)
-
+#
 # hc.detect_errors(detectors, batch)

@@ -394,6 +394,7 @@ class DomainEngine:
             candidates = self.pair_stats[cond_attr][attr][cond_val]
             domain.update(candidates)
 
+        domain.discard(NULL_REPR)
         assert NULL_REPR not in domain
 
         # Add the initial value to the domain if it is not NULL.
