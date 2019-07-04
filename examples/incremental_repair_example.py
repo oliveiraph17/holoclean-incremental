@@ -22,16 +22,18 @@ hc = holoclean.HoloClean(
     timeout=3*60000,
     feature_norm=False,
     weight_norm=False,
-    print_fw=True
+    print_fw=True,
+    incremental=True,
+    incremental_entropy=False
 ).session
 
 # Load existing data and Denial Constraints.
-hc.load_data('hospital', '../testdata/hospital_0900.csv')
+hc.load_data('hospital', '../testdata/hospital.csv')
 hc.load_dcs('../testdata/hospital_constraints.txt')
 hc.ds.set_constraints(hc.get_dcs())
 
 # Detect erroneous cells using these two detectors.
-detectors = [NullDetector(), ViolationDetector()]
+detectors = [NullDetector()]  # , ViolationDetector()]
 hc.detect_errors(detectors)
 
 # Repair errors based on the defined features.

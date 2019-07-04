@@ -27,37 +27,26 @@ class DomainEngine:
         self.setup_complete = False
         self.active_attributes = None
         self.domain = None
-        self.raw_total = 0
-        self.new_total = 0
+        self.total = 0
         self.correlations = None
         self.corr_attrs = {}
         self.cor_strength = env["cor_strength"]
         self.max_sample = max_sample
         self.single_stats = {}
         self.pair_stats = {}
-        self.inc_single_stats = {}
-        self.inc_pair_stats = {}
         self.all_attrs = {}
 
-    def setup(self, batch=1, incremental_entropy=False):
+    def setup(self):
         """
         Initializes the in-memory and Postgres auxiliary tables (e.g. 'cell_domain', 'pos_values').
         """
         tic = time.time()
-        self.setup_attributes(batch)
-        self.compute_correlations(batch, incremental_entropy)
+        self.setup_attributes()
         domain = self.generate_domain()
         self.store_domains(domain)
         status = "DONE with domain preparation."
         toc = time.time()
         return status, toc - tic
-
-    def compute_correlations(self, batch=1, incremental_entropy=False):
-        """
-        Memoizes to self.correlations a data structure containing pairwise correlations between attributes.
-        Values are treated as discrete categories.
-        """
-        self.correlations = self.ds.compute_norm_cond_entropy_corr(batch, incremental_entropy)
 
     def store_domains(self, domain):
         """
@@ -100,20 +89,13 @@ class DomainEngine:
 
             self.ds.generate_aux_table_sql(AuxTables.pos_values, query, index_attrs=['_tid_', 'attribute'])
 
-    def setup_attributes(self, batch=1):
+    def setup_attributes(self):
         self.active_attributes = self.get_active_attributes()
+        total, single_stats, pair_stats = self.ds.get_statistics()
+        self.correlations = self.ds.get_correlations()
 
-        raw_total, new_total, \
-            single_stats, pair_stats, \
-            inc_single_stats, inc_pair_stats = self.ds.get_statistics(batch)
-
-        self.new_total = new_total
-
-        if batch > 2:
-            self.raw_total = self.raw_total + self.new_total
-        else:
-            self.raw_total = raw_total
-
+        # TODO: Check if total here should actually be total_loaded + total_incoming as it is
+        self.total = total
         self.single_stats = single_stats
 
         logging.debug("Preparing pruned co-occurring statistics...")
@@ -121,9 +103,6 @@ class DomainEngine:
         self.pair_stats = self._pruned_pair_stats(pair_stats)
         toc = time.clock()
         logging.debug("DONE with pruned co-occurring statistics in %.2f secs", toc - tic)
-
-        self.inc_single_stats = inc_single_stats
-        self.inc_pair_stats = inc_pair_stats
 
         self.setup_complete = True
 
@@ -195,7 +174,7 @@ class DomainEngine:
 
         return corr_attrs_lst[(attr, thres)]
 
-    def generate_domain(self, batch=1):
+    def generate_domain(self):
         """
         Generates the domain for each cell in the active attributes,
         as well as assigns a random variable ID ('_vid_') to cells with at least 2 domain values.
@@ -225,12 +204,7 @@ class DomainEngine:
 
         cells = []
         vid = 0
-
-        if batch == 1:
-            records = self.ds.get_raw_data().to_records()
-        else:
-            records = self.ds.get_new_data().to_records()
-
+        records = self.ds.get_raw_data().to_records()
         self.all_attrs = list(records.dtype.names)
 
         for row in tqdm(list(records)):
@@ -296,7 +270,7 @@ class DomainEngine:
         # Feed the Naive Bayes estimator with pruned domain values from correlated attributes.
         logging.debug('Training posterior model for estimating domain value probabilities...')
         tic = time.clock()
-        estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations, batch)
+        estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations)
         logging.debug('DONE training posterior model in %.2f secs', time.clock() - tic)
 
         # Predict probabilities for all pruned domain values.
@@ -410,7 +384,10 @@ class DomainEngine:
             # Ignore co-occurrence when 'cond_val' is NULL.
             # It does not make sense to retrieve the top co-occurring values with a NULL value.
             # Moreover, ignore co-occurrence when 'cond_val' only co-occurs with NULL values.
-            if cond_val == NULL_REPR or self.pair_stats[cond_attr][attr][cond_val].keys() == [NULL_REPR]:
+            # TODO: PH, please verify the condition  you added in the line below.
+            #       It broke the code as the last level is a list, so it does not have attribute 'keys'.
+            # if cond_val == NULL_REPR or self.pair_stats[cond_attr][attr][cond_val].keys() == [NULL_REPR]:
+            if cond_val == NULL_REPR or cond_val not in self.pair_stats[cond_attr][attr]:
                 continue
 
             # Update domain with the top co-occurring values with 'cond_val'.
@@ -441,6 +418,7 @@ class DomainEngine:
         """
         domain_pool = set(self.single_stats[attr].keys())
 
+        domain_pool.discard(NULL_REPR)
         assert NULL_REPR not in domain_pool
 
         domain_pool.discard(cur_value)

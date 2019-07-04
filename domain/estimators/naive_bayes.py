@@ -3,7 +3,6 @@ import math
 from tqdm import tqdm
 
 from ..estimator import Estimator
-from ..domain import DomainEngine
 from utils import NULL_REPR
 
 
@@ -14,35 +13,26 @@ class NaiveBayes(Estimator):
     where 'v_init_i' is the initial value corresponding to attribute 'i'.
     This probability is normalized over all values passed to predict_pp.
     """
-    def __init__(self, env, dataset, domain_df, correlations, batch):
+    def __init__(self, env, dataset, domain_df, correlations):
         Estimator.__init__(self, env, dataset)
 
         self.cor_strength = self.env['nb_cor_strength']
-
-        self.raw_tuples, self.new_tuples, \
-            self.single_freq, self.pair_freq, \
-            _, _ = self.ds.get_statistics()
-
+        self.total_tuples, self.single_attr_stats, self.pair_attr_stats = self.ds.get_statistics()
         self.domain_df = domain_df
         self.correlations = correlations
         self.corr_attrs = {}
 
-        if batch == 1:
-            self.total = self.raw_tuples
-            self.data_df = self.ds.get_raw_data()
-        else:
-            self.total = self.new_tuples
-            self.data_df = self.ds.get_new_data()
-
         # Rows indexed by TID.
         self.records_by_tid = {}
-        for row in self.data_df.to_records():
+        for row in self.ds.get_raw_data().to_records():
             self.records_by_tid[row['_tid_']] = row
 
     def train(self):
         pass
 
     def predict_pp(self, row, attr, values):
+        from ..domain import DomainEngine
+
         nb_score = []
         correlated_attributes = DomainEngine.get_corr_attributes(attr,
                                                                  self.cor_strength,
@@ -55,8 +45,8 @@ class NaiveBayes(Estimator):
             if val1 == NULL_REPR:
                 continue
 
-            val1_count = self.single_freq[attr][val1]
-            log_prob = math.log(float(val1_count) / float(self.total))
+            val1_count = self.single_attr_stats[attr][val1]
+            log_prob = math.log(float(val1_count) / float(self.total_tuples))
 
             for at in correlated_attributes:
                 # Ignore same attribute and tuple ID.
@@ -72,10 +62,10 @@ class NaiveBayes(Estimator):
                 # PH: why "0.1"?
                 val2_val1_count = 0.1
 
-                if val1 in self.pair_freq[attr][at]:
-                    if val2 in self.pair_freq[attr][at][val1]:
+                if val1 in self.pair_attr_stats[attr][at]:
+                    if val2 in self.pair_attr_stats[attr][at][val1]:
                         # PH: why "- 1.0"?
-                        val2_val1_count = max(self.pair_freq[attr][at][val1][val2] - 1.0, 0.1)
+                        val2_val1_count = max(self.pair_attr_stats[attr][at][val1][val2] - 1.0, 0.1)
 
                 p = float(val2_val1_count) / float(val1_count)
                 log_prob += math.log(p)

@@ -55,19 +55,18 @@ class Dataset:
         self.stats_ready = False
         # Number of tuples.
         self.total_tuples = 0
-        self.new_total = 0
         # Statistics for single attributes.
         self.single_attr_stats = {}
         # Statistics for attribute pairs.
         self.pair_attr_stats = {}
-        # Incremental statistics for single attributes.
-        self.inc_single_attr_stats = {}
-        # Incremental statistics for attribute pairs.
-        self.inc_pair_attr_stats = {}
         # Conditional entropy of each pair of attributes using the log base 2.
         self.cond_entropies_base_2 = {}
+        # Correlations between attributes
+        self.correlations = None
         # Boolean flag for incremental behavior.
         self.incremental = env['incremental']
+        # Boolean flag for compute entropy using the incremental algorithm.
+        self.incremental_entropy = env['incremental_entropy']
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
@@ -215,7 +214,7 @@ class Dataset:
         vid = tuple_id * self.attr_count + self.attr_to_idx[attr_name]
         return vid
 
-    def get_statistics(self, batch=1):
+    def get_statistics(self):
         """
         Returns the statistics computed in the 'collect_stats' method.
         """
@@ -229,6 +228,21 @@ class Dataset:
         self.stats_ready = True
 
         return stats
+
+    def get_correlations(self):
+        """
+        Compute, if not ready, and return attribute correlations based on conditional entropy.
+        :return:
+        """
+        if not self.stats_ready:
+            logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data...')
+            tic = time.clock()
+            self.collect_stats()
+            logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
+
+        self.stats_ready = True
+
+        return self.correlations
 
     def collect_stats(self):
         """
@@ -261,7 +275,7 @@ class Dataset:
         data_df = self.get_raw_data()
 
         # Total number of tuples.
-        self.total_tuples = data_df.len(data_df.index)
+        self.total_tuples = len(data_df.index)
 
         # Single statistics.
         for attr in self.get_attributes():
@@ -282,12 +296,13 @@ class Dataset:
 
         if (not self.incremental) or (single_attr_stats_loaded is None):
             # If any of the '*_loaded' variables is None, it means there were no previous statistics in the database.
-            self.compute_norm_cond_entropy_corr()
+            self.correlations = self.compute_norm_cond_entropy_corr()
         else:
             if self.incremental_entropy:
                 # The incremental entropy calculation requires separate statistics.
-                self.compute_norm_cond_entropy_corr_incremental(total_tuples_loaded, single_attr_stats_loaded,
-                                                                pair_attr_stats_loaded)
+                self.correlations = self.compute_norm_cond_entropy_corr_incremental(total_tuples_loaded,
+                                                                                    single_attr_stats_loaded,
+                                                                                    pair_attr_stats_loaded)
 
                 # Merges statistics from incoming data to the loaded statistics.
                 self.merge_stats(stats1, stats2)
@@ -295,7 +310,7 @@ class Dataset:
                 # Merges statistics from incoming data to the loaded statistics before computing entropy.
                 self.merge_stats(stats1, stats2)
 
-                self.compute_norm_cond_entropy_corr()
+                self.correlations = self.compute_norm_cond_entropy_corr()
 
             # Memoizes merged statistics in class variables.
             self.total_tuples = stats1.total_tuples

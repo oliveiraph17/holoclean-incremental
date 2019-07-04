@@ -166,7 +166,14 @@ arguments = [
       'dest': 'incremental',
       'default': False,
       'type': bool,
-      'help': 'Run HoloClean over incoming data incrementally.'})
+      'help': 'Run HoloClean over incoming data incrementally.'}),
+    (('-inc', '--incremental_entropy'),
+     {'metavar': 'INCREMENTAL_ENTROPY',
+      'dest': 'incremental_entropy',
+      'default': False,
+      'type': bool,
+      'help': 'Compute conditional entropy using the incremental method. It requires incremental=True.'})
+
 ]
 
 # Flags for HoloClean mode.
@@ -295,31 +302,6 @@ class Session:
         logging.info(status)
         logging.debug('Time to load dataset: %.2f secs', load_time)
 
-    def load_new_data(self, name, fpath, batch, na_values=None, entity_col=None, src_col=None):
-        """
-        load_new_data takes the path to a CSV file to load as the incoming data.
-
-        :param name: (str) name to initialize incoming data with.
-        :param fpath: (str) path to CSV file.
-        :param batch: (int) greater than 1, regarding the batch number of the current incoming data.
-        :param na_values: (str) value that identifies a NULL value.
-        :param entity_col: (str) column containing the unique identifier of an entity.
-            For fusion tasks, rows with the same ID will be fused together in the output.
-            If None, assumes every row is a unique entity.
-        :param src_col: (str) if not None, for fusion tasks,
-            specifies the column containing the source for each "mention" of an entity.
-        """
-
-        status, load_time = self.ds.load_new_data(name,
-                                                  fpath,
-                                                  batch,
-                                                  na_values=na_values,
-                                                  entity_col=entity_col,
-                                                  src_col=src_col)
-
-        logging.info(status)
-        logging.debug('Time to load dataset: %.2f secs', load_time)
-
     def load_dcs(self, fpath):
         """
         load_dcs ingests the Denial Constraints for initialized dataset.
@@ -338,8 +320,8 @@ class Session:
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
 
-    def setup_domain(self, batch=1, incremental_entropy=False):
-        status, domain_time = self.domain_engine.setup(batch, incremental_entropy)
+    def setup_domain(self):
+        status, domain_time = self.domain_engine.setup()
         logging.info(status)
         logging.debug('Time to setup the domain: %.2f secs', domain_time)
 

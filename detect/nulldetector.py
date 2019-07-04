@@ -17,10 +17,10 @@ class NullDetector(Detector):
         self.ds = dataset
         self.env = env
 
-        if batch == 1:
-            self.df = self.ds.get_raw_data()
-        else:
-            self.df = self.ds.get_new_data()
+        # if batch == 1:
+        self.df = self.ds.get_raw_data()
+        # else:
+        #     self.df = self.ds.get_new_data()
 
     def detect_noisy_cells(self):
         """
