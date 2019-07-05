@@ -20,6 +20,8 @@ class AuxTables(Enum):
     cell_distr = 5
     inf_values_idx = 6
     inf_values_dom = 7
+    single_attr_stats = 8
+    pair_attr_stats = 9
 
 
 class CellStatus(Enum):
@@ -318,6 +320,7 @@ class Dataset:
             self.pair_attr_stats = stats1.pair_attr_stats
 
         logging.debug('DONE computing statistics in %.2f secs', time.clock() - tic)
+        self.save_stats()
 
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr):
@@ -663,3 +666,28 @@ class Dataset:
         pair_attr_stats = None
 
         return num_tuples, single_attr_stats, pair_attr_stats
+
+    def save_stats(self):
+
+        single_stats = []
+        for attr1 in self.single_attr_stats.keys():
+            attr1_stats = [(attr1, attr2, freq) for attr2, freq in self.single_attr_stats[attr1].items()]
+            single_stats += attr1_stats
+
+        single_stats_df = pd.DataFrame(columns=['attr', 'val', 'freq'], data=single_stats)
+        self.generate_aux_table(AuxTables.single_attr_stats,
+                                single_stats_df.sort_values(by=['attr', 'val']), store=True)
+
+        pair_stats = []
+        for attr1 in self.pair_attr_stats.keys():
+            for attr2 in self.pair_attr_stats[attr1].keys():
+                for val1 in self.pair_attr_stats[attr1][attr2].keys():
+                    attr1_attr2_val1_val2_stats = [(attr1, attr2, val1, val2, freq)
+                                                   for val2, freq in self.pair_attr_stats[attr1][attr2][val1].items()]
+            pair_stats += attr1_attr2_val1_val2_stats
+
+        pair_stats_df = pd.DataFrame(columns=['attr1', 'attr2', 'val1', 'val2', 'freq'], data=pair_stats)
+        self.generate_aux_table(AuxTables.pair_attr_stats,
+                                pair_stats_df.sort_values(by=['attr1', 'attr2', 'val1', 'val2']), store=True)
+
+        logging.info('Okay')
