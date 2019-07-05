@@ -11,49 +11,44 @@ class DetectEngine:
         self.env = env
         self.ds = dataset
 
-    def detect_errors(self, detectors, batch=1):
+    def detect_errors(self, detectors):
         """
         Detects errors using a list of detectors.
-        :param detectors: (list of) ErrorDetector objects
-        :param batch: equal to 1 when handling initial data, greater than 1 when handling incoming data
+        :param detectors: (list) ErrorDetector objects
         """
         errors = []
         tic_total = time.clock()
 
         # Initialize all error detectors.
         for detector in detectors:
-            detector.setup(self.ds, self.env, batch)
+            detector.setup(self.ds, self.env)
 
         # Run detection using each detector.
         for detector in detectors:
             tic = time.clock()
+            # PH: call it with new parameters.
             error_df = detector.detect_noisy_cells()
             toc = time.clock()
-            logging.debug("DONE with Error Detector: %s in %.2f secs", detector.name, toc-tic)
+            logging.debug("DONE with %s in %.2f secs", detector.name, toc - tic)
             errors.append(error_df)
 
-        # Get unique errors only that might have been detected from multiple detectors.
+        # Get unique errors only, which might have been detected by multiple detectors.
         errors_df = pd.concat(errors, ignore_index=True).drop_duplicates().reset_index(drop=True)
         errors_df['_cid_'] = errors_df.apply(lambda x: self.ds.get_cell_id(x['_tid_'], x['attribute']), axis=1)
-        logging.info("detected %d potentially erroneous cells", errors_df.shape[0])
+        logging.info("Detected %d potentially erroneous cells", errors_df.shape[0])
 
-        # Store errors to db.
-        if batch == 1:
-            self.store_detected_errors(errors_df)
-        else:
-            self.store_detected_errors(errors_df, append=True)
+        # Store errors in 'dk_cells' table of database.
+        # If there is a previous version of this table, it will be replaced with a new one.
+        self.store_detected_errors(errors_df)
 
-        status = "DONE with error detection."
+        status = "DONE with error detection"
         toc_total = time.clock()
         detect_time = toc_total - tic_total
         return status, detect_time
 
-    def store_detected_errors(self, errors_df, append=False):
+    def store_detected_errors(self, errors_df):
         if errors_df.empty:
-            raise Exception("ERROR: Detected errors DataFrame is empty.")
+            raise Exception("ERROR while trying to create \'dk_cells\' table: DataFrame \'errors_df\' is empty")
 
-        if append:
-            self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, append=True)
-        else:
-            self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
-            self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])
+        self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
+        self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])

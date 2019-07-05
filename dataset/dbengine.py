@@ -39,7 +39,7 @@ class DBengine:
         results = self._apply_func(partial(_execute_query, conn_args=self.conn_args),
                                    [(idx, q) for idx, q in enumerate(queries)])
         toc = time.clock()
-        logging.debug('Time to execute %d queries: %.2f secs', len(queries), toc-tic)
+        logging.debug('Time to execute %d queries: %.2f secs', len(queries), toc - tic)
         return results
 
     def execute_queries_w_backup(self, queries):
@@ -54,7 +54,7 @@ class DBengine:
             partial(_execute_query_w_backup, conn_args=self.conn_args, timeout=self.timeout),
             [(idx, q) for idx, q in enumerate(queries)])
         toc = time.clock()
-        logging.debug('Time to execute %d queries: %.2f secs', len(queries), toc-tic)
+        logging.debug('Time to execute %d queries: %.2f secs', len(queries), toc - tic)
         return results
 
     def execute_query(self, query):
@@ -68,7 +68,7 @@ class DBengine:
         result = conn.execute(query).fetchall()
         conn.close()
         toc = time.clock()
-        logging.debug('Time to execute query: %.2f secs', toc-tic)
+        logging.debug('Time to execute query: %.2f secs', toc - tic)
         return result
 
     def create_db_table_from_query(self, name, query):
@@ -80,7 +80,7 @@ class DBengine:
         conn.execute(create)
         conn.close()
         toc = time.clock()
-        logging.debug('Time to create table: %.2f secs', toc-tic)
+        logging.debug('Time to create table: %.2f secs', toc - tic)
         return True
 
     def create_db_index(self, name, table, attr_list):
@@ -101,7 +101,7 @@ class DBengine:
         result = conn.execute(stmt)
         conn.close()
         toc = time.clock()
-        logging.debug('Time to create index: %.2f secs', toc-tic)
+        logging.debug('Time to create index: %.2f secs', toc - tic)
         return result
 
     def _apply_func(self, func, collection):

@@ -9,7 +9,7 @@ hc = holoclean.HoloClean(
     db_name='holo',
     domain_thresh_1=0,
     domain_thresh_2=0,
-    weak_label_thresh=0.8,
+    weak_label_thresh=0.99,
     max_domain=10000,
     cor_strength=0.6,
     nb_cor_strength=0.8,
@@ -33,16 +33,16 @@ hc.load_dcs('../testdata/hospital_constraints.txt')
 hc.ds.set_constraints(hc.get_dcs())
 
 # Detect erroneous cells using these two detectors.
-detectors = [NullDetector()]  # , ViolationDetector()]
+detectors = [NullDetector(), ViolationDetector()]
 hc.detect_errors(detectors)
 
 # Repair errors based on the defined features.
 hc.setup_domain()
 featurizers = [
-#     InitAttrFeaturizer(),
+    InitAttrFeaturizer(),
     OccurAttrFeaturizer(),
-#     FreqFeaturizer(),
-#     ConstraintFeaturizer(),
+    FreqFeaturizer(),
+    ConstraintFeaturizer()
 ]
 hc.repair_errors(featurizers)
 
@@ -54,10 +54,8 @@ hc.evaluate(fpath='../testdata/hospital_clean.csv',
 
 ############################################################
 
-# batch = 2
-#
 # # Load incoming data.
-# hc.load_new_data('hospital', '../testdata/hospital_0100.csv', batch)
+# hc.load_data('hospital', '../testdata/hospital_0050_1.csv')
 #
 # hc.detect_errors(detectors, batch)
 #
@@ -65,9 +63,7 @@ hc.evaluate(fpath='../testdata/hospital_clean.csv',
 
 ############################################################
 
-# batch = 3
-#
 # # Load incoming data.
-# hc.load_new_data('hospital', '../testdata/hospital_0050_2.csv', batch)
+# hc.load_data('hospital', '../testdata/hospital_0050_2.csv')
 #
 # hc.detect_errors(detectors, batch)

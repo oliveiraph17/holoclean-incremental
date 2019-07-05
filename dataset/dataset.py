@@ -35,7 +35,6 @@ class Dataset:
     def __init__(self, name, env):
         self.id = name
         self.raw_data = None
-        self.new_data = None
         self.repaired_data = None
         self.constraints = None
         self.aux_table = {}
@@ -51,8 +50,8 @@ class Dataset:
         # Members to convert (tuple_id, attribute) to cell_id.
         self.attr_to_idx = {}
         self.attr_count = 0
-        # Dataset statistics
-        self.stats_ready = False
+        # Dataset statistics.
+        self.stats_ready = None
         # Number of tuples.
         self.total_tuples = 0
         # Statistics for single attributes.
@@ -84,10 +83,12 @@ class Dataset:
         :param src_col: (str) if not None, for fusion tasks,
             specifies the column containing the source for each "mention" of an entity.
         """
-
         tic = time.clock()
+
+        self.stats_ready = False
+
         try:
-            # Do not include TID, batch number, and source column as trainable attributes.
+            # Do not include TID, and source column as trainable attributes.
             exclude_attr_cols = ['_tid_']
             if src_col is not None:
                 exclude_attr_cols.append(src_col)
@@ -663,3 +664,6 @@ class Dataset:
         pair_attr_stats = None
 
         return num_tuples, single_attr_stats, pair_attr_stats
+
+    def get_total_tuples(self):
+        return self.total_tuples

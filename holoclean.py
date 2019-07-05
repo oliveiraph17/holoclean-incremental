@@ -182,22 +182,22 @@ flags = [
         {'default': False,
          'dest': 'verbose',
          'action': 'store_true',
-         'help': 'verbose'}),
+         'help': 'Verbose.'}),
     (tuple(['--bias']),
         {'default': False,
          'dest': 'bias',
          'action': 'store_true',
-         'help': 'Use bias term'}),
+         'help': 'Use bias term.'}),
     (tuple(['--printfw']),
         {'default': False,
          'dest': 'print_fw',
          'action': 'store_true',
-         'help': 'print the weights of featurizers'}),
+         'help': 'Print the weights of featurizers.'}),
     (tuple(['--debug-mode']),
         {'default': False,
          'dest': 'debug_mode',
          'action': 'store_true',
-         'help': 'dump a bunch of debug information to debug/'}),
+         'help': 'Dump a bunch of debug information to \'debug/\'.'}),
 ]
 
 
@@ -254,6 +254,7 @@ class Session:
     def __init__(self, env, name="session"):
         """
         Constructor for Holoclean session.
+
         :param env: HoloClean environment.
         :param name: Name for the HoloClean session.
         """
@@ -285,14 +286,12 @@ class Session:
 
         :param name: (str) name to initialize dataset with.
         :param fpath: (str) filepath to CSV file.
-        :param na_values: (str) value that identifies a NULL value
-        :param entity_col: (st) column containing the unique
-            identifier/ID of an entity.  For fusion tasks, rows with
-            the same ID will be fused together in the output.
-            If None, assumes every row is a unique entity.
-        :param src_col: (str) if not None, for fusion tasks
-            specifies the column containing the source for each "mention" of an
-            entity.
+        :param na_values: (str) value that identifies a NULL value.
+        :param entity_col: (str) column containing the unique identifier/ID of an entity.
+                           For fusion tasks, rows with the same ID will be fused together in the output.
+                           If None, every row is assumed to be a unique entity.
+        :param src_col: (str) if not None, for fusion tasks, specifies the column containing the source
+                        for each "mention" of an entity.
         """
         status, load_time = self.ds.load_data(name,
                                               fpath,
@@ -306,7 +305,7 @@ class Session:
         """
         load_dcs ingests the Denial Constraints for initialized dataset.
 
-        :param fpath: filepath to TXT file where each line contains one denial constraint.
+        :param fpath: filepath to TXT file where each line contains one Denial Constraint.
         """
         status, load_time = self.dc_parser.load_denial_constraints(fpath)
         logging.info(status)
@@ -315,8 +314,8 @@ class Session:
     def get_dcs(self):
         return self.dc_parser.get_dcs()
 
-    def detect_errors(self, detect_list, batch=1):
-        status, detect_time = self.detect_engine.detect_errors(detect_list, batch)
+    def detect_errors(self, detect_list):
+        status, detect_time = self.detect_engine.detect_errors(detect_list)
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
 
@@ -352,17 +351,16 @@ class Session:
 
     def evaluate(self, fpath, tid_col, attr_col, val_col, na_values=None):
         """
-        evaluate generates an evaluation report with metrics (e.g. precision,
-        recall) given a test set.
+        evaluate generates an evaluation report with metrics (e.g. precision, recall) given a test set.
 
-        :param fpath: (str) filepath to test set (ground truth) CSV file.
+        :param fpath: (str) filepath to test set (ground-truth) CSV file.
         :param tid_col: (str) column in CSV that corresponds to the TID.
         :param attr_col: (str) column in CSV that corresponds to the attribute.
-        :param val_col: (str) column in CSV that corresponds to correct value
-            for the current TID and attribute (i.e. cell).
+        :param val_col: (str) column in CSV that corresponds to the correct value
+                        for the current TID and attribute (i.e. cell).
         :param na_values: (Any) how na_values are represented in the data.
 
-        Returns an EvalReport named tuple containing the experiment results.
+        Returns an EvalReport namedtuple containing the experimental results.
         """
         name = self.ds.raw_data.name + '_clean'
         status, load_time = self.eval_engine.load_data(name, fpath, tid_col, attr_col, val_col, na_values=na_values)
