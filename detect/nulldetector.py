@@ -35,13 +35,13 @@ class NullDetector(Detector):
             table_repaired_name = self.ds.raw_data.name + '_repaired'
 
             for attr in attributes:
-                q = query_template.substitute(table_repaired=table_repaired_name,
-                                              attribute=attr,
-                                              null=NULL_REPR)
+                query = query_template.substitute(table_repaired=table_repaired_name,
+                                                  attribute=attr,
+                                                  null=NULL_REPR)
 
                 # Queries the database for potential errors in cells of attribute 'attr' that were already repaired.
-                res = self.ds.engine.execute_query(q)
-                table_repaired_errors_df = self._gen_tid_attr_output(res, [attr])
+                results = self.ds.engine.execute_query(query)
+                table_repaired_errors_df = self._gen_tid_attr_output(results, [attr])
                 errors.append(table_repaired_errors_df)
 
                 # Filters the DataFrame of incoming tuples to get NULL cells of attribute 'attr'.

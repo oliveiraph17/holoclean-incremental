@@ -440,6 +440,8 @@ class Dataset:
 
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
         self.repaired_data.store_to_db(self.engine.engine)
+        # This index is useful for retrieving the maximum _tid_ value from the database in self.get_first_tid().
+        self.repaired_data.create_db_index(self.engine, ['_tid_'])
 
         status = "DONE generating repaired dataset"
 
@@ -458,7 +460,7 @@ class Dataset:
           attr_a: { cond_attr_i: corr_strength_a_i,
                     cond_attr_j: corr_strength_a_j, ...},
           attr_b: { cond_attr_i: corr_strength_b_i, ...}
-        }.
+        }
 
         :return a dictionary of correlations.
         """
@@ -474,39 +476,42 @@ class Dataset:
             x_domain_size = len(self.single_attr_stats[x].keys())
 
             for y in attrs:
-                # Set correlation to 0.0 if entropy of x is 1 (only one possible value).
+                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
                 if x_domain_size == 1:
                     corr[x][y] = 0.0
                     continue
 
-                # Set correlation to 1 for same attributes.
+                # Sets correlation to 1.0 for same attributes.
                 if x == y:
                     corr[x][y] = 1.0
                     continue
 
-                # Compute the conditional entropy H(x|y).
+                # Computes the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
                 self.cond_entropies_base_2[x][y] = self._conditional_entropy(x, y)
 
-                # Use the domain size of x as the log base for normalizing the conditional entropy.
-                # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
+                # Uses the domain size of x as the log base for normalizing the conditional entropy.
+                # The conditional entropy is 0.0 for strongly correlated attributes and 1.0 for independent attributes.
                 # We reverse this to reflect the correlation.
                 corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
 
         return corr
 
-    def compute_norm_cond_entropy_corr_incremental(self, num_tuples_loaded, single_attr_stats_loaded,
+    def compute_norm_cond_entropy_corr_incremental(self,
+                                                   num_tuples_loaded,
+                                                   single_attr_stats_loaded,
                                                    pair_attr_stats_loaded):
         """
         Computes the correlations between attributes by calculating the normalized conditional entropy between them.
         The conditional entropy is asymmetric, therefore we need pairwise computations.
+        Performs the computation incrementally.
 
         The computed correlations are stored in a dictionary in the format:
         {
           attr_a: { cond_attr_i: corr_strength_a_i,
                     cond_attr_j: corr_strength_a_j, ...},
           attr_b: { cond_attr_i: corr_strength_b_i, ...}
-        }.
+        }
 
         :return a dictionary of correlations.
         """
@@ -521,31 +526,33 @@ class Dataset:
                 self.cond_entropies_base_2[x] = {}
 
             if single_attr_stats_loaded is not None:
-                # Compute the number of unique values for the attribute regarding both loaded and current stats
+                # Computes the number of unique values for this attribute regarding both loaded and current stats.
                 unique_x_values = set(single_attr_stats_loaded[x].keys() + self.single_attr_stats[x].keys())
                 x_domain_size = len(unique_x_values)
             else:
                 x_domain_size = len(self.single_attr_stats[x].keys())
 
             for y in attrs:
-                # Set correlation to 0.0 if entropy of x is 1 (only one possible value).
+                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
                 if x_domain_size == 1:
                     corr[x][y] = 0.0
                     continue
 
-                # Set correlation to 1 for same attributes.
+                # Sets correlation to 1.0 for same attributes.
                 if x == y:
                     corr[x][y] = 1.0
                     continue
 
-                # Compute the conditional entropy H(x|y).
+                # Computes the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
-                self.cond_entropies_base_2[x][y] = self._conditional_entropy_incremental(x, y, num_tuples_loaded,
+                self.cond_entropies_base_2[x][y] = self._conditional_entropy_incremental(x,
+                                                                                         y,
+                                                                                         num_tuples_loaded,
                                                                                          single_attr_stats_loaded,
                                                                                          pair_attr_stats_loaded)
 
-                # Use the domain size of x as the log base for normalizing the conditional entropy.
-                # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
+                # Uses the domain size of x as the log base for normalizing the conditional entropy.
+                # The conditional entropy is 0.0 for strongly correlated attributes and 1.0 for independent attributes.
                 # We reverse this to reflect the correlation.
                 corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
 
@@ -555,8 +562,8 @@ class Dataset:
         """
         Computes the conditional entropy considering the log base 2.
 
-        :param x_attr: (string) name of attribute X.
-        :param y_attr: (string) name of attribute Y.
+        :param x_attr: (str) name of attribute X.
+        :param y_attr: (str) name of attribute Y.
 
         :return: the conditional entropy of attributes X and Y using the log base 2.
         """
@@ -575,14 +582,20 @@ class Dataset:
 
         return xy_entropy
 
-    def _conditional_entropy_incremental(self, x_attr, y_attr, num_tuples_loaded, single_attr_stats_loaded,
+    def _conditional_entropy_incremental(self,
+                                         x_attr,
+                                         y_attr,
+                                         num_tuples_loaded,
+                                         single_attr_stats_loaded,
                                          pair_attr_stats_loaded):
         """
         Incrementally computes the conditional entropy considering the log base 2.
 
-        :param x_attr: (string) name of attribute X.
-        :param y_attr: (string) name of attribute Y.
-        TODO: complete the comment
+        :param x_attr: (str) name of attribute X.
+        :param y_attr: (str) name of attribute Y.
+        :param num_tuples_loaded: (int) number of existing tuples in the database.
+        :param single_attr_stats_loaded: (dict) single-attribute statistics of existing tuples.
+        :param pair_attr_stats_loaded: (dict) pairwise statistics of existing tuples.
 
         :return: the conditional entropy of attributes X and Y using the log base 2.
         """
@@ -635,27 +648,32 @@ class Dataset:
         return xy_entropy
 
     def get_first_tid(self):
-        first_tid = 0
-
         if self.incremental:
-            # TODO: Fetch from the database
-            pass
+
+            table_repaired_name = self.raw_data.name + '_repaired'
+            query = 'SELECT MAX(t1._tid_) FROM {} as t1'.format(table_repaired_name)
+            result = self.engine.execute_query(query)
+            first_tid = result[0][0]
+        else:
+            first_tid = 0
 
         return first_tid
 
+    # noinspection PyUnresolvedReferences,PyBroadException
     def load_stats(self):
-
         num_tuples = None
         single_attr_stats = None
         pair_attr_stats = None
 
         try:
-            self.aux_table[AuxTables.single_attr_stats] = Table(AuxTables.single_attr_stats.name, Source.DB,
+            self.aux_table[AuxTables.single_attr_stats] = Table(AuxTables.single_attr_stats.name,
+                                                                Source.DB,
                                                                 db_engine=self.engine)
 
             single_attr_stats = dictify_df(self.aux_table[AuxTables.single_attr_stats].df)
 
-            self.aux_table[AuxTables.pair_attr_stats] = Table(AuxTables.pair_attr_stats.name, Source.DB,
+            self.aux_table[AuxTables.pair_attr_stats] = Table(AuxTables.pair_attr_stats.name,
+                                                              Source.DB,
                                                               db_engine=self.engine)
 
             pair_attr_stats = dictify_df(self.aux_table[AuxTables.pair_attr_stats].df)
@@ -664,14 +682,13 @@ class Dataset:
             query = 'SELECT COUNT(*) FROM {}'.format(table_repaired_name)
             result = self.engine.execute_query(query)
             num_tuples = result[0][0]
-
         except Exception:
-            logging.debug('No statistics in the database... skipping loading...')
+            logging.debug('No statistics to be loaded from the database')
 
         return num_tuples, single_attr_stats, pair_attr_stats
 
+    # noinspection PyTypeChecker
     def save_stats(self):
-
         # For using an attribute table (attr_idx, attr_name)
         # attrs = pd.DataFrame(data=self.attr_to_idx.items(), columns=['attr_name', 'attr_idx'])
         # self.generate_aux_table(AuxTables.attrs, attrs, store=True)
@@ -683,7 +700,8 @@ class Dataset:
 
         single_stats_df = pd.DataFrame(columns=['attr', 'val', 'freq'], data=single_stats)
         self.generate_aux_table(AuxTables.single_attr_stats,
-                                single_stats_df.sort_values(by=['attr', 'val']), store=True)
+                                single_stats_df.sort_values(by=['attr', 'val']),
+                                store=True)
 
         pair_stats = []
         for attr1 in self.pair_attr_stats.keys():
@@ -695,7 +713,8 @@ class Dataset:
 
         pair_stats_df = pd.DataFrame(columns=['attr1', 'attr2', 'val1', 'val2', 'freq'], data=pair_stats)
         self.generate_aux_table(AuxTables.pair_attr_stats,
-                                pair_stats_df.sort_values(by=['attr1', 'attr2', 'val1', 'val2']), store=True)
+                                pair_stats_df.sort_values(by=['attr1', 'attr2', 'val1', 'val2']),
+                                store=True)
 
     def get_total_tuples(self):
         return self.total_tuples
