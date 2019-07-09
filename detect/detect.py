@@ -26,7 +26,6 @@ class DetectEngine:
         # Run detection using each detector.
         for detector in detectors:
             tic = time.clock()
-            # PH: call it with new parameters.
             error_df = detector.detect_noisy_cells()
             toc = time.clock()
             logging.debug("DONE with %s in %.2f secs", detector.name, toc - tic)

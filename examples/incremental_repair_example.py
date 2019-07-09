@@ -24,11 +24,11 @@ hc = holoclean.HoloClean(
     weight_norm=False,
     print_fw=True,
     incremental=True,
-    incremental_entropy=False
+    incremental_entropy=True
 ).session
 
 # Load existing data and Denial Constraints.
-hc.load_data('hospital', '../testdata/hospital.csv')
+hc.load_data('hospital', '../testdata/hospital_0900.csv')
 hc.load_dcs('../testdata/hospital_constraints.txt')
 hc.ds.set_constraints(hc.get_dcs())
 
@@ -54,16 +54,16 @@ hc.evaluate(fpath='../testdata/hospital_clean.csv',
 
 ############################################################
 
-# # Load incoming data.
-# hc.load_data('hospital', '../testdata/hospital_0050_1.csv')
-#
-# hc.detect_errors(detectors, batch)
-#
-# hc.setup_domain(batch)
+# Load incoming data.
+hc.load_data('hospital', '../testdata/hospital_0100.csv')
+
+hc.detect_errors(detectors)
+
+hc.setup_domain()
 
 ############################################################
 
 # # Load incoming data.
 # hc.load_data('hospital', '../testdata/hospital_0050_2.csv')
 #
-# hc.detect_errors(detectors, batch)
+# hc.detect_errors(detectors)

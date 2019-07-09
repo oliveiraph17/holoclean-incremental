@@ -32,15 +32,6 @@ class Detector:
         """
         raise NotImplementedError
 
-    # This method can be used when the Detector is able to handle incremental data.
-    def is_first_batch(self):
-        # Since we perform error detection before collecting statistics from the database,
-        # the total number of tuples will be 0 at this point if this is the first batch of data.
-        if self.ds.get_total_tuples() == 0:
-            return True
-        else:
-            return False
-
     @staticmethod
     def _gen_tid_attr_output(res, attr_list):
         errors = []

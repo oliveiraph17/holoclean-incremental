@@ -5,7 +5,7 @@ import pandas as pd
 from .detector import Detector
 from utils import NULL_REPR
 
-query_template = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE "$attribute" = $null')
+query_template = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE t1."$attribute" = \'$null\'')
 
 
 class NullDetector(Detector):
@@ -31,7 +31,7 @@ class NullDetector(Detector):
         attributes = self.ds.get_attributes()
         errors = []
 
-        if self.ds.incremental and not self.is_first_batch():
+        if self.ds.incremental and not self.ds.is_first_batch():
             table_repaired_name = self.ds.raw_data.name + '_repaired'
 
             for attr in attributes:

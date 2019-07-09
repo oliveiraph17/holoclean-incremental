@@ -108,7 +108,8 @@ class Dataset:
             # If entity_col is not supplied, we use auto-incrementing values.
             # Otherwise, we use the entity values directly as _tid_'s.
             if entity_col is None:
-                df.insert(0, '_tid_', range(self.get_first_tid(), len(df.index)))
+                first_tid = self.get_first_tid()
+                df.insert(0, '_tid_', range(first_tid, first_tid + len(df.index)))
             else:
                 df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
 
@@ -648,8 +649,7 @@ class Dataset:
         return xy_entropy
 
     def get_first_tid(self):
-        if self.incremental:
-
+        if self.incremental and not self.is_first_batch():
             table_repaired_name = self.raw_data.name + '_repaired'
             query = 'SELECT MAX(t1._tid_) FROM {} as t1'.format(table_repaired_name)
             result = self.engine.execute_query(query)
@@ -716,5 +716,10 @@ class Dataset:
                                 pair_stats_df.sort_values(by=['attr1', 'attr2', 'val1', 'val2']),
                                 store=True)
 
-    def get_total_tuples(self):
-        return self.total_tuples
+    def is_first_batch(self):
+        # This check must be performed before collecting statistics from the database.
+        # Then, the total number of tuples will be 0 if this is the first batch of data.
+        if self.total_tuples == 0:
+            return True
+        else:
+            return False

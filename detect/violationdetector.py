@@ -34,7 +34,7 @@ class ViolationDetector(Detector):
     def setup(self, dataset):
         self.ds = dataset
 
-    def detect_noisy_cells(self, incremental=False, first_batch=True):
+    def detect_noisy_cells(self):
         """
         Returns a pandas.DataFrame containing all cells that violate Denial Constraints in the data previously loaded.
 
@@ -76,7 +76,7 @@ class ViolationDetector(Detector):
         return query
 
     def _gen_unary_query(self, tbl, c):
-        if self.ds.incremental and not self.is_first_batch():
+        if self.ds.incremental and not self.ds.is_first_batch():
             query = unary_template_incremental.substitute(table_repaired=tbl + '_repaired',
                                                           table=tbl,
                                                           cond=c.cnf_form)
@@ -109,7 +109,7 @@ class ViolationDetector(Detector):
             a.append("'" + b + "'")
 
         if cond1 != '':
-            if self.ds.incremental and not self.is_first_batch():
+            if self.ds.incremental and not self.ds.is_first_batch():
                 query = multi_template_incremental.substitute(table_repaired=tbl + '_repaired',
                                                               table=tbl,
                                                               cond1=cond1,
@@ -121,7 +121,7 @@ class ViolationDetector(Detector):
                                                   c='AND',
                                                   cond2=cond2)
         else:
-            if self.ds.incremental and not self.is_first_batch():
+            if self.ds.incremental and not self.ds.is_first_batch():
                 query = multi_template_incremental.substitute(table_repaired=tbl + '_repaired',
                                                               table=tbl,
                                                               cond1=cond1,
