@@ -301,16 +301,21 @@ class Dataset:
 
                 # Merges statistics from incoming data to the loaded statistics.
                 self.merge_stats(stats1, stats2)
+
+                # Memoizes merged statistics in class variables.
+                self.total_tuples = stats1.total_tuples
+                self.single_attr_stats = stats1.single_attr_stats
+                self.pair_attr_stats = stats1.pair_attr_stats
             else:
                 # Merges statistics from incoming data to the loaded statistics before computing entropy.
                 self.merge_stats(stats1, stats2)
 
-                self.correlations = self.compute_norm_cond_entropy_corr()
+                # Memoizes merged statistics in class variables.
+                self.total_tuples = stats1.total_tuples
+                self.single_attr_stats = stats1.single_attr_stats
+                self.pair_attr_stats = stats1.pair_attr_stats
 
-            # Memoizes merged statistics in class variables.
-            self.total_tuples = stats1.total_tuples
-            self.single_attr_stats = stats1.single_attr_stats
-            self.pair_attr_stats = stats1.pair_attr_stats
+                self.correlations = self.compute_norm_cond_entropy_corr()
 
         logging.debug('DONE computing statistics from incoming data in %.2f secs', time.clock() - tic)
 

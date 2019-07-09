@@ -24,7 +24,7 @@ hc = holoclean.HoloClean(
     weight_norm=False,
     print_fw=True,
     incremental=True,
-    incremental_entropy=True
+    incremental_entropy=False
 ).session
 
 # Load existing data and Denial Constraints.
