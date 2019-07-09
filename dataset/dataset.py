@@ -222,10 +222,7 @@ class Dataset:
         Returns the statistics computed in the 'collect_stats' method.
         """
         if not self.stats_ready:
-            logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data...')
-            tic = time.clock()
             self.collect_stats()
-            logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
 
         stats = (self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
         self.stats_ready = True
@@ -238,10 +235,7 @@ class Dataset:
         :return:
         """
         if not self.stats_ready:
-            logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data...')
-            tic = time.clock()
             self.collect_stats()
-            logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
 
         self.stats_ready = True
 
@@ -262,17 +256,19 @@ class Dataset:
               <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
             Also known as co-occurrence count.
         """
-        tic = time.clock()
 
         total_tuples_loaded = None
         single_attr_stats_loaded = None
         pair_attr_stats_loaded = None
 
-        if self.incremental:
-            logging.debug('Loading existing statistics from the database...')
-            total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded = self.load_stats()
+        logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data...')
 
-        logging.debug('Computing frequency and co-occurrence statistics from raw data...')
+        if self.incremental:
+            tic = time.clock()
+            total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded = self.load_stats()
+            logging.debug('DONE loading existing statistics from the database in %.2f secs', time.clock() - tic)
+
+        tic = time.clock()
 
         # We get the statistics from the incoming data.
         data_df = self.get_raw_data()
@@ -320,8 +316,11 @@ class Dataset:
             self.single_attr_stats = stats1.single_attr_stats
             self.pair_attr_stats = stats1.pair_attr_stats
 
-        logging.debug('DONE computing statistics in %.2f secs', time.clock() - tic)
+        logging.debug('DONE computing statistics from incoming data in %.2f secs', time.clock() - tic)
+
+        tic = time.clock()
         self.save_stats()
+        logging.debug('DONE storing computed statistics in the database in %.2f secs', time.clock() - tic)
 
     # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr):
@@ -393,6 +392,9 @@ class Dataset:
                             else:
                                 new_dict = {cond_val: {trg_val: count}}
                                 stats1.pair_attr_stats[cond_attr][trg_attr].update(new_dict)
+
+        # Named tuples do not allow simple attribution. Using method replace instead.
+        stats1 = stats1._replace(total_tuples=(stats1.total_tuples + stats2.total_tuples))
 
     # noinspection PyUnresolvedReferences
     def get_domain_info(self):
@@ -647,33 +649,42 @@ class Dataset:
         return first_tid
 
     def load_stats(self):
-        # query = "SELECT _vid_, _cid_, _tid_, attribute, a.rv_val, a.val_id FROM %s" % AuxTables.cell_domain.name
-        # query += ", unnest(string_to_array(regexp_replace(domain, \'[{\"\"}]\', \'\', \'gi\'), \'|||\'))"
-        # query += "WITH ORDINALITY a(rv_val, val_id)"
-        #
-        # self.ds.generate_aux_table_sql(AuxTables.pos_values, query, index_attrs=['_tid_', 'attribute'])
-        #
-        # tmp_df = data_df[[first_attr, second_attr]]\
-        #     .groupby([first_attr, second_attr])\
-        #     .size()\
-        #     .reset_index(name="count")
-        #
-        # dictify_df(tmp_df)
-        #
-        # num_tuples = 0
-        #
+
         num_tuples = None
         single_attr_stats = None
         pair_attr_stats = None
+
+        try:
+            self.aux_table[AuxTables.single_attr_stats] = Table(AuxTables.single_attr_stats.name, Source.DB,
+                                                                db_engine=self.engine)
+
+            single_attr_stats = dictify_df(self.aux_table[AuxTables.single_attr_stats].df)
+
+            self.aux_table[AuxTables.pair_attr_stats] = Table(AuxTables.pair_attr_stats.name, Source.DB,
+                                                              db_engine=self.engine)
+
+            pair_attr_stats = dictify_df(self.aux_table[AuxTables.pair_attr_stats].df)
+
+            table_repaired_name = self.raw_data.name + '_repaired'
+            query = 'SELECT COUNT(*) FROM {}'.format(table_repaired_name)
+            result = self.engine.execute_query(query)
+            num_tuples = result[0][0]
+
+        except Exception:
+            logging.debug('No statistics in the database... skipping loading...')
 
         return num_tuples, single_attr_stats, pair_attr_stats
 
     def save_stats(self):
 
+        # For using an attribute table (attr_idx, attr_name)
+        # attrs = pd.DataFrame(data=self.attr_to_idx.items(), columns=['attr_name', 'attr_idx'])
+        # self.generate_aux_table(AuxTables.attrs, attrs, store=True)
+
         single_stats = []
-        for attr1 in self.single_attr_stats.keys():
-            attr1_stats = [(attr1, attr2, freq) for attr2, freq in self.single_attr_stats[attr1].items()]
-            single_stats += attr1_stats
+        for attr in self.single_attr_stats.keys():
+            attr_stats = [(attr, val, freq) for val, freq in self.single_attr_stats[attr].items()]
+            single_stats += attr_stats
 
         single_stats_df = pd.DataFrame(columns=['attr', 'val', 'freq'], data=single_stats)
         self.generate_aux_table(AuxTables.single_attr_stats,
@@ -685,13 +696,11 @@ class Dataset:
                 for val1 in self.pair_attr_stats[attr1][attr2].keys():
                     attr1_attr2_val1_val2_stats = [(attr1, attr2, val1, val2, freq)
                                                    for val2, freq in self.pair_attr_stats[attr1][attr2][val1].items()]
-            pair_stats += attr1_attr2_val1_val2_stats
+                    pair_stats += attr1_attr2_val1_val2_stats
 
         pair_stats_df = pd.DataFrame(columns=['attr1', 'attr2', 'val1', 'val2', 'freq'], data=pair_stats)
         self.generate_aux_table(AuxTables.pair_attr_stats,
                                 pair_stats_df.sort_values(by=['attr1', 'attr2', 'val1', 'val2']), store=True)
-
-        logging.info('Okay')
 
     def get_total_tuples(self):
         return self.total_tuples
