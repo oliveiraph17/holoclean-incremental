@@ -6,17 +6,17 @@ from .detector import Detector
 
 unary_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
 
-unary_template_incremental = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond ' +
+unary_template_incremental = Template('SELECT t1._tid_ FROM "$repaired" as t1 WHERE $cond ' +
                                       'UNION ' +
                                       'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
 
 multi_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
                           'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2)')
 
-multi_template_incremental = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond1 $c ' +
-                                      'EXISTS (SELECT t2._tid_ FROM "$table_repaired" as t2 WHERE $cond2) ' +
+multi_template_incremental = Template('SELECT t1._tid_ FROM "$repaired" as t1 WHERE $cond1 $c ' +
+                                      'EXISTS (SELECT t2._tid_ FROM "$repaired" as t2 WHERE $cond2) ' +
                                       'UNION ' +
-                                      'SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond1 $c ' +
+                                      'SELECT t1._tid_ FROM "$repaired" as t1 WHERE $cond1 $c ' +
                                       'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2) ' +
                                       'UNION ' +
                                       'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
@@ -75,10 +75,14 @@ class ViolationDetector(Detector):
 
         return query
 
-    @staticmethod
-    def _gen_unary_query(tbl, c):
-        query = unary_template.substitute(table=tbl,
-                                          cond=c.cnf_form)
+    def _gen_unary_query(self, tbl, c):
+        if self.ds.incremental and not self.is_first_batch():
+            query = unary_template_incremental.substitute(repaired=tbl + '_repaired',
+                                                          table=tbl,
+                                                          cond=c.cnf_form)
+        else:
+            query = unary_template.substitute(table=tbl,
+                                              cond=c.cnf_form)
 
         return query
 
@@ -106,11 +110,11 @@ class ViolationDetector(Detector):
 
         if cond1 != '':
             if self.ds.incremental and not self.is_first_batch():
-                query = multi_template_incremental.substitute(table=tbl,
+                query = multi_template_incremental.substitute(repaired=tbl + '_repaired',
+                                                              table=tbl,
                                                               cond1=cond1,
                                                               c='AND',
-                                                              cond2=cond2,
-                                                              repaired=tbl + '_repaired')
+                                                              cond2=cond2)
             else:
                 query = multi_template.substitute(table=tbl,
                                                   cond1=cond1,
@@ -118,11 +122,11 @@ class ViolationDetector(Detector):
                                                   cond2=cond2)
         else:
             if self.ds.incremental and not self.is_first_batch():
-                query = multi_template_incremental.substitute(table=tbl,
+                query = multi_template_incremental.substitute(repaired=tbl + '_repaired',
+                                                              table=tbl,
                                                               cond1=cond1,
                                                               c='',
-                                                              cond2=cond2,
-                                                              repaired=tbl + '_repaired')
+                                                              cond2=cond2)
             else:
                 query = multi_template.substitute(table=tbl,
                                                   cond1=cond1,
