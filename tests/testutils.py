@@ -6,7 +6,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 def random_database():
     """
-    Creates a random database in the testing Postgres instance and returns the
+    Creates a random database in the testing PostgreSQL instance and returns the
     name of the database.
     """
     # Setup connection with default credentials for testing.
@@ -14,7 +14,7 @@ def random_database():
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         with conn.cursor() as cur:
             while True:
-                # Generate a random DB name that is not already in Postgres.
+                # Generate a random DB name that is not already in PostgreSQL.
                 db_name = 'test_holo_{}'.format(random.randint(0, 1e6))
                 cur.execute("""
                     SELECT EXISTS(

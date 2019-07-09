@@ -40,7 +40,7 @@ class Dataset:
         self.repaired_data = None
         self.constraints = None
         self.aux_table = {}
-        # Start DBengine.
+        # Starts DBengine.
         self.engine = DBengine(
             env['db_user'],
             env['db_pwd'],
@@ -62,7 +62,7 @@ class Dataset:
         self.pair_attr_stats = {}
         # Conditional entropy of each pair of attributes using the log base 2.
         self.cond_entropies_base_2 = {}
-        # Correlations between attributes
+        # Correlations between attributes.
         self.correlations = None
         # Boolean flag for incremental behavior.
         self.incremental = env['incremental']
@@ -90,12 +90,12 @@ class Dataset:
         self.stats_ready = False
 
         try:
-            # Do not include TID, and source column as trainable attributes.
+            # Do not include TID and source column as trainable attributes.
             exclude_attr_cols = ['_tid_']
             if src_col is not None:
                 exclude_attr_cols.append(src_col)
 
-            # Load raw CSV file into a table 'name' (param) in PostgreSQL.
+            # Loads raw CSV file into a table 'name' (param) in PostgreSQL.
             self.raw_data = Table(name,
                                   Source.FILE,
                                   na_values=na_values,
@@ -104,15 +104,15 @@ class Dataset:
 
             df = self.raw_data.df
 
-            # Add '_tid_' column to dataset for uniquely identifying an entity.
-            # If entity_col is not supplied, use auto-incrementing values.
+            # Adds '_tid_' column to dataset for uniquely identifying an entity.
+            # If entity_col is not supplied, we use auto-incrementing values.
             # Otherwise, we use the entity values directly as _tid_'s.
             if entity_col is None:
                 df.insert(0, '_tid_', range(self.get_first_tid(), len(df.index)))
             else:
                 df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
 
-            # Use NULL_REPR to represent NULL values.
+            # Uses NULL_REPR to represent NULL values.
             df.fillna(NULL_REPR, inplace=True)
 
             logging.info("Loaded %d rows with %d cells",
@@ -122,11 +122,11 @@ class Dataset:
             self.raw_data.store_to_db(self.engine.engine)
             status = 'DONE Loading {fname}'.format(fname=os.path.basename(fpath))
 
-            # Generate indexes on attribute columns for faster queries.
+            # Generates indexes on attribute columns for faster queries.
             for attr in self.raw_data.get_attributes():
                 self.raw_data.create_db_index(self.engine, [attr])
 
-            # Create attr_to_idx dictionary, which assigns a unique index to each attribute,
+            # Creates attr_to_idx dictionary, which assigns a unique index to each attribute,
             # and attr_count (total # of attributes).
             self.attr_to_idx = {attr: idx for idx, attr in enumerate(self.raw_data.get_attributes())}
             self.attr_count = len(self.attr_to_idx)
@@ -140,21 +140,19 @@ class Dataset:
     def set_constraints(self, constraints):
         self.constraints = constraints
 
-    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False, append=False):
+    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False):
         """
-        generate_aux_table writes/overwrites/appends to the auxiliary table specified by 'aux_table'.
+        generate_aux_table writes/overwrites the auxiliary table specified by 'aux_table'.
 
         It does the following:
-          1. stores/replaces the specified aux_table into Postgres (store=True), AND/OR
-          2. sets an index on the aux_table's internal Pandas DataFrame (index_attrs=[<columns>]), AND/OR
-          3. creates Postgres indexes for aux_table (store=True and index_attrs=[<columns>]), OR
-          4. appends the specified aux_table to Postgres table
+          1. stores/replaces the specified aux_table in PostgreSQL (store=True), AND/OR
+          2. sets an index on the aux_table's internal pandas.DataFrame (index_attrs=[<columns>]), AND/OR
+          3. creates PostgreSQL indexes on aux_table (store=True and index_attrs=[<columns>]).
 
         :param aux_table: (AuxTable) auxiliary table to generate.
-        :param df: (DataFrame) dataframe to memoize/store for this auxiliary table.
-        :param store: (bool) if true, creates/replaces Postgres table for this auxiliary table.
+        :param df: (DataFrame) dataframe used for memoizing and storing this auxiliary table.
+        :param store: (bool) if True, creates/replaces PostgreSQL table with this auxiliary table.
         :param index_attrs: (list[str]) list of attributes to create indexes on.
-        :param append: (bool) if true, appends this auxiliary table to Postgres table.
         """
         try:
             self.aux_table[aux_table] = Table(aux_table.name,
@@ -167,8 +165,6 @@ class Dataset:
                 self.aux_table[aux_table].create_df_index(index_attrs)
             if store and index_attrs:
                 self.aux_table[aux_table].create_db_index(self.engine, index_attrs)
-            if append:
-                self.aux_table[aux_table].store_to_db(self.engine.engine, if_exists='append')
         except Exception:
             logging.error('Generating aux_table %s', aux_table.name)
             raise
@@ -223,9 +219,9 @@ class Dataset:
         """
         if not self.stats_ready:
             self.collect_stats()
+            self.stats_ready = True
 
         stats = (self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
-        self.stats_ready = True
 
         return stats
 
@@ -236,8 +232,7 @@ class Dataset:
         """
         if not self.stats_ready:
             self.collect_stats()
-
-        self.stats_ready = True
+            self.stats_ready = True
 
         return self.correlations
 
@@ -261,7 +256,7 @@ class Dataset:
         single_attr_stats_loaded = None
         pair_attr_stats_loaded = None
 
-        logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data...')
+        logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data')
 
         if self.incremental:
             tic = time.clock()
@@ -293,7 +288,7 @@ class Dataset:
         stats1 = Stats(total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded)
         stats2 = Stats(self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
 
-        if (not self.incremental) or (single_attr_stats_loaded is None):
+        if not self.incremental or single_attr_stats_loaded is None:
             # If any of the '*_loaded' variables is None, it means there were no previous statistics in the database.
             self.correlations = self.compute_norm_cond_entropy_corr()
         else:
@@ -322,46 +317,45 @@ class Dataset:
         self.save_stats()
         logging.debug('DONE storing computed statistics in the database in %.2f secs', time.clock() - tic)
 
-    # noinspection PyMethodMayBeStatic
     def get_stats_single(self, attr):
         """
         Returns a dictionary where the keys are domain values for :param attr: and
         the values contain the frequency count of that value for this attribute.
         """
-        # need to decode values into unicode strings since we do lookups via
-        # unicode strings from Postgres
+        # Need to decode values as unicode strings since we do lookups via unicode strings from PostgreSQL.
         data_df = self.get_raw_data()
 
-        # TODO: Add a not null check everywhere needed as NULLs are now part of the statistics because of entropy
+        # TODO: Add a not-null check everywhere needed as NULLs are now part of the statistics because of entropy.
         # return data_df[[attr]].loc[data_df[attr] != NULL_REPR].groupby([attr]).size().to_dict()
+
         return data_df[[attr]].groupby([attr]).size().to_dict()
 
-    # noinspection PyMethodMayBeStatic
     def get_stats_pair(self, first_attr, second_attr):
         """
-        Returns a dictionary {first_val -> {second_val -> count } } where:
-            <first_val>: all possible values for first_attr
-            <second_val>: all values for second_attr that appear at least once with <first_val>
+        Returns a dictionary { first_val -> { second_val -> count } } where:
+            <first_val>: a possible value of 'first_attr'
+            <second_val>: a possible value of 'second_attr' that appears at least once with <first_val>
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
-        Filters out NULL values so no entries in the dictionary would have NULLs.
         """
         data_df = self.get_raw_data()
 
-        # TODO: Add a not null check everywhere needed as NULLs are now part of the statistics because of entropy
+        # TODO: Add a not-null check everywhere needed as NULLs are now part of the statistics because of entropy.
         # tmp_df = data_df[[first_attr, second_attr]]\
         #     .loc[(data_df[first_attr] != NULL_REPR) & (data_df[second_attr] != NULL_REPR)]\
         #     .groupby([first_attr, second_attr])\
         #     .size()\
         #     .reset_index(name="count")
+
         tmp_df = data_df[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
             .size()\
             .reset_index(name="count")
         return dictify_df(tmp_df)
 
+    # noinspection PyProtectedMember,PyUnusedLocal
     def merge_stats(self, stats1, stats2):
         """
-        Concatenates statistics from stats2 to stats1
+        Adds statistics from stats2 to stats1.
 
         :param stats1: (tuple) ...
         :param stats2: (tuple) ...
@@ -393,7 +387,8 @@ class Dataset:
                                 new_dict = {cond_val: {trg_val: count}}
                                 stats1.pair_attr_stats[cond_attr][trg_attr].update(new_dict)
 
-        # Named tuples do not allow simple attribution. Using method replace instead.
+        # Namedtuples do not allow simple attribution.
+        # Using method '_replace' instead.
         stats1 = stats1._replace(total_tuples=(stats1.total_tuples + stats2.total_tuples))
 
     # noinspection PyUnresolvedReferences
@@ -422,7 +417,7 @@ class Dataset:
         self.generate_aux_table_sql(AuxTables.inf_values_dom, query, index_attrs=['_tid_'])
         self.aux_table[AuxTables.inf_values_dom].create_db_index(self.engine, ['attribute'])
 
-        status = "DONE collecting the inferred values."
+        status = "DONE collecting the inferred values"
 
         toc = time.clock()
         total_time = toc - tic
@@ -446,7 +441,7 @@ class Dataset:
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
         self.repaired_data.store_to_db(self.engine.engine)
 
-        status = "DONE generating repaired dataset."
+        status = "DONE generating repaired dataset"
 
         toc = time.clock()
         total_time = toc - tic

@@ -94,7 +94,7 @@ class Predicate:
             if isinstance(component, str):
                 self.cnf_form += component
             else:
-                # Need to wrap column names in quotations for Postgres
+                # Need to wrap column names in quotations for PostgreSQL.
                 self.cnf_form += '{alias}."{attr}"'.format(
                         alias=component[0],
                         attr=component[1])

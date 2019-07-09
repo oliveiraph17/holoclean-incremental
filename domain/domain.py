@@ -38,7 +38,7 @@ class DomainEngine:
 
     def setup(self):
         """
-        Initializes the in-memory and Postgres auxiliary tables (e.g. 'cell_domain', 'pos_values').
+        Initializes the in-memory and PostgreSQL auxiliary tables (e.g. 'cell_domain', 'pos_values').
         """
         tic = time.time()
         self.setup_attributes()
@@ -52,7 +52,7 @@ class DomainEngine:
         """
         Generates the domain DataFrame as the 'cell_domain' auxiliary table,
         as well as generates the 'pos_values' auxiliary table,
-        and stores them in Postgres.
+        and stores them in PostgreSQL.
 
         Schema for cell_domain:
             _cid_: cell ID
