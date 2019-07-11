@@ -10,6 +10,9 @@ from .table import Table, Source
 from utils import dictify_df, NULL_REPR
 from recordtype import recordtype
 from math import log2
+from timeit import default_timer as timer
+from statistics import mean
+from pyitlib import discrete_random_variable as drv
 
 
 class AuxTables(Enum):
@@ -291,10 +294,33 @@ class Dataset:
         stats2 = Stats(self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
 
         if not self.incremental or single_attr_stats_loaded is None:
-            # If any of the '*_loaded' variables is None, it means there were no previous statistics in the database.
             self.correlations = self.compute_norm_cond_entropy_corr()
+
+            # If any of the '*_loaded' variables is None, it means there were no previous statistics in the database.
+            # times = []
+            # for i in range(1000):
+            #     self.cond_entropies_base_2.clear()
+            #     start = timer()
+            #     self.correlations = self.compute_norm_cond_entropy_corr()
+            #     end = timer()
+            #     times.append(end - start)
+            # times = sorted(times)
+            # logging.debug('ENTROPY EXECUTION TIME: %.10f secs', mean(times[100:900]))
         else:
             if self.incremental_entropy:
+                # times = []
+                # cond_entropies_base_2_copy = self.cond_entropies_base_2.copy()
+                # for i in range(1000):
+                #     start = timer()
+                #     self.correlations = self.compute_norm_cond_entropy_corr_incremental(total_tuples_loaded,
+                #                                                                         single_attr_stats_loaded,
+                #                                                                         pair_attr_stats_loaded)
+                #     end = timer()
+                #     times.append(end - start)
+                #     self.cond_entropies_base_2 = cond_entropies_base_2_copy.copy()
+                # times = sorted(times)
+                # logging.debug('FULLY INCREMENTAL ENTROPY EXECUTION TIME: %.10f secs', mean(times[100:900]))
+
                 # The incremental entropy calculation requires separate statistics.
                 self.correlations = self.compute_norm_cond_entropy_corr_incremental(total_tuples_loaded,
                                                                                     single_attr_stats_loaded,
@@ -317,6 +343,17 @@ class Dataset:
                 self.pair_attr_stats = stats1.pair_attr_stats
 
                 self.correlations = self.compute_norm_cond_entropy_corr()
+
+                # times = []
+                # cond_entropies_base_2_copy = self.cond_entropies_base_2.copy()
+                # for i in range(1000):
+                #     start = timer()
+                #     self.correlations = self.compute_norm_cond_entropy_corr()
+                #     end = timer()
+                #     times.append(end - start)
+                #     self.cond_entropies_base_2 = cond_entropies_base_2_copy.copy()
+                # times = sorted(times)
+                # logging.debug('SEMI-INCREMENTAL ENTROPY EXECUTION TIME: %.10f secs', mean(times[100:900]))
 
         logging.debug('DONE computing statistics from incoming data in %.2f secs', time.clock() - tic)
 
@@ -357,6 +394,7 @@ class Dataset:
             .groupby([first_attr, second_attr])\
             .size()\
             .reset_index(name="count")
+
         return dictify_df(tmp_df)
 
     # noinspection PyProtectedMember,PyUnusedLocal
@@ -501,6 +539,10 @@ class Dataset:
                 # The conditional entropy is 0.0 for strongly correlated attributes and 1.0 for independent attributes.
                 # We reverse this to reflect the correlation.
                 corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / log2(x_domain_size))
+
+                # corr[x][y] = 1.0 - drv.entropy_conditional(self.raw_data.df[x],
+                #                                            self.raw_data.df[y],
+                #                                            base=x_domain_size).item()
 
         return corr
 
