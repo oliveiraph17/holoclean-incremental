@@ -24,7 +24,7 @@ hc = holoclean.HoloClean(
     weight_norm=False,
     print_fw=True,
     incremental=True,
-    incremental_entropy=False
+    incremental_entropy=True
 ).session
 
 # Load existing data and Denial Constraints.
@@ -63,7 +63,7 @@ hc.setup_domain()
 
 ############################################################
 
-# # Load incoming data.
+# Load incoming data.
 # hc.load_data('hospital', '../testdata/hospital_0050_2.csv')
 #
 # hc.detect_errors(detectors)

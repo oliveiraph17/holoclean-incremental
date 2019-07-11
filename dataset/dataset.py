@@ -4,12 +4,12 @@ import os
 import time
 
 import pandas as pd
-import numpy as np
 
 from .dbengine import DBengine
 from .table import Table, Source
 from utils import dictify_df, NULL_REPR
-from collections import namedtuple
+from recordtype import recordtype
+from math import log2
 
 
 class AuxTables(Enum):
@@ -237,6 +237,7 @@ class Dataset:
 
         return self.correlations
 
+    # noinspection PyPep8Naming
     def collect_stats(self):
         """
         Computes the following statistics:
@@ -285,7 +286,7 @@ class Dataset:
                     self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr,
                                                                                     trg_attr)
 
-        Stats = namedtuple('Stats', 'total_tuples single_attr_stats pair_attr_stats')
+        Stats = recordtype('Stats', 'total_tuples single_attr_stats pair_attr_stats')
         stats1 = Stats(total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded)
         stats2 = Stats(self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
 
@@ -362,9 +363,11 @@ class Dataset:
     def merge_stats(self, stats1, stats2):
         """
         Adds statistics from stats2 to stats1.
+        They are handled via recordtypes, which work like namedtuples but are mutable.
+        The statistics are: total_tuples, single_attr_stats, and pair_attr_stats.
 
-        :param stats1: (tuple) ...
-        :param stats2: (tuple) ...
+        :param stats1: (recordtype) loaded statistics.
+        :param stats2: (recordtype) incoming statistics.
         """
 
         attrs = self.get_attributes()
@@ -393,9 +396,7 @@ class Dataset:
                                 new_dict = {cond_val: {trg_val: count}}
                                 stats1.pair_attr_stats[cond_attr][trg_attr].update(new_dict)
 
-        # Namedtuples do not allow simple attribution.
-        # Using method '_replace' instead.
-        stats1 = stats1._replace(total_tuples=(stats1.total_tuples + stats2.total_tuples))
+        stats1.total_tuples += stats2.total_tuples
 
     # noinspection PyUnresolvedReferences
     def get_domain_info(self):
@@ -499,7 +500,7 @@ class Dataset:
                 # Uses the domain size of x as the log base for normalizing the conditional entropy.
                 # The conditional entropy is 0.0 for strongly correlated attributes and 1.0 for independent attributes.
                 # We reverse this to reflect the correlation.
-                corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
+                corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / log2(x_domain_size))
 
         return corr
 
@@ -531,12 +532,11 @@ class Dataset:
             if x not in self.cond_entropies_base_2.keys():
                 self.cond_entropies_base_2[x] = {}
 
-            if single_attr_stats_loaded is not None:
-                # Computes the number of unique values for this attribute regarding both loaded and current stats.
-                unique_x_values = set(single_attr_stats_loaded[x].keys() + self.single_attr_stats[x].keys())
-                x_domain_size = len(unique_x_values)
-            else:
-                x_domain_size = len(self.single_attr_stats[x].keys())
+            # Computes the number of unique values for this attribute regarding both loaded and current statistics.
+            unique_x_values = set(single_attr_stats_loaded[x].keys())
+            unique_x_values.update(self.single_attr_stats[x].keys())
+
+            x_domain_size = len(unique_x_values)
 
             for y in attrs:
                 # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
@@ -560,7 +560,7 @@ class Dataset:
                 # Uses the domain size of x as the log base for normalizing the conditional entropy.
                 # The conditional entropy is 0.0 for strongly correlated attributes and 1.0 for independent attributes.
                 # We reverse this to reflect the correlation.
-                corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / np.log2(x_domain_size))
+                corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / log2(x_domain_size))
 
         return corr
 
@@ -575,16 +575,11 @@ class Dataset:
         """
         xy_entropy = 0.0
 
-        y_freq = {}
-
-        for value, count in self.single_attr_stats[y_attr].items():
-            y_freq[value] = count
-
         for x_value in self.single_attr_stats[x_attr].keys():
             for y_value, xy_freq in self.pair_attr_stats[x_attr][y_attr][x_value].items():
                 p_xy = xy_freq / float(self.total_tuples)
 
-                xy_entropy = xy_entropy - (p_xy * np.log2(xy_freq / float(y_freq[y_value])))
+                xy_entropy = xy_entropy - (p_xy * log2(xy_freq / float(self.single_attr_stats[y_attr][y_value])))
 
         return xy_entropy
 
@@ -638,7 +633,7 @@ class Dataset:
                 log_term_num = xy_old_freq[x_value][y_value] + xy_freq
                 log_term_den = y_old_freq[y_value] + self.single_attr_stats[y_attr][y_value]
 
-                xy_entropy = xy_entropy - (new_term * np.log2(log_term_num / float(log_term_den)))
+                xy_entropy = xy_entropy - (new_term * log2(log_term_num / float(log_term_den)))
 
         # Updates the entropy regarding old terms which might need to be removed.
         for x_value in self.pair_attr_stats[x_attr][y_attr].keys():
@@ -649,7 +644,7 @@ class Dataset:
                     log_term_den = 1.0 + (self.single_attr_stats[y_attr][y_value] /
                                           float(y_old_freq[y_value]))
 
-                    xy_entropy = xy_entropy - (old_term * np.log2(log_term_num / log_term_den))
+                    xy_entropy = xy_entropy - (old_term * log2(log_term_num / log_term_den))
 
         return xy_entropy
 
