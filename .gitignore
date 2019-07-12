@@ -21,5 +21,7 @@ dist/
 lib/
 info/
 
-# Holoclean specific files
+# HoloClean specific files
 debug/
+
+testdata/confidential/
