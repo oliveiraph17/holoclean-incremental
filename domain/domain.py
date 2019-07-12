@@ -94,7 +94,7 @@ class DomainEngine:
         total, single_stats, pair_stats = self.ds.get_statistics()
         self.correlations = self.ds.get_correlations()
 
-        # TODO: Check if total here should actually be total_loaded + total_incoming as it is
+        # PH: the class variable 'total' is never used.
         self.total = total
         self.single_stats = single_stats
 

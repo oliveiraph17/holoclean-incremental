@@ -1,38 +1,39 @@
-import sys
 import holoclean
+import logging
+import sys
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 sys.path.append('../')
 
-import logging
-
 dataset_name = 'hospital'
-batches = ['1-100', '101-200', '201-300', '301-400', '401-500', '501-600', '601-700', '701-800', '801-900', '901-1000']
+# batches = ['1-100', '101-200', '201-300', '301-400', '401-500',
+#            '501-600', '601-700', '701-800', '801-900', '901-1000']
+batches = ['1-900', '901-1000']
+
+# Setup a HoloClean session.
+hc = holoclean.HoloClean(
+    db_name='holo',
+    domain_thresh_1=0,
+    domain_thresh_2=0,
+    weak_label_thresh=0.99,
+    max_domain=10000,
+    cor_strength=0.6,
+    nb_cor_strength=0.8,
+    epochs=2,
+    weight_decay=0.01,
+    learning_rate=0.001,
+    threads=1,
+    batch_size=1,
+    verbose=False,
+    timeout=3 * 60000,
+    feature_norm=False,
+    weight_norm=False,
+    print_fw=False,
+    incremental=True,
+    incremental_entropy=False
+).session
 
 for batch in batches:
-    # Setup a HoloClean session.
-    hc = holoclean.HoloClean(
-        db_name='holo',
-        domain_thresh_1=0,
-        domain_thresh_2=0,
-        weak_label_thresh=0.99,
-        max_domain=10000,
-        cor_strength=0.6,
-        nb_cor_strength=0.8,
-        epochs=2,
-        weight_decay=0.01,
-        learning_rate=0.001,
-        threads=1,
-        batch_size=1,
-        verbose=False,
-        timeout=3*60000,
-        feature_norm=False,
-        weight_norm=False,
-        print_fw=False,
-        incremental=True,
-        incremental_entropy=False
-    ).session
-
     # Load existing data and Denial Constraints.
     hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + batch + '.csv')
     hc.load_dcs('../testdata/' + dataset_name + '_constraints.txt')

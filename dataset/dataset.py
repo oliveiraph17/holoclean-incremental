@@ -71,7 +71,7 @@ class Dataset:
         self.incremental = env['incremental']
         # Boolean flag for compute entropy using the incremental algorithm.
         self.incremental_entropy = env['incremental_entropy']
-        # First tid to be loaded.
+        # First _tid_ to be loaded.
         self.first_tid = None
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
@@ -480,7 +480,7 @@ class Dataset:
 
         for tid in repaired_vals:
             for attr in repaired_vals[tid]:
-                init_records[tid - self.first_tid][attr] = repaired_vals[tid][attr]
+                init_records[tid][attr] = repaired_vals[tid][attr]
 
         repaired_df = pd.DataFrame.from_records(init_records)
         name = self.raw_data.name + '_repaired'
@@ -489,8 +489,10 @@ class Dataset:
 
         if self.incremental:
             self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
-            # This index is useful for retrieving the maximum _tid_ value from the database in self.get_first_tid().
-            # self.repaired_data.create_db_index(self.engine, ['_tid_'])
+
+            if self.is_first_batch():
+                # This index is useful for retrieving the maximum _tid_ value from the database in self.get_first_tid().
+                self.repaired_data.create_db_index(self.engine, ['_tid_'])
         else:
             self.repaired_data.store_to_db(self.engine.engine)
 
@@ -696,6 +698,7 @@ class Dataset:
 
         return xy_entropy
 
+    # noinspection PyBroadException
     def get_first_tid(self):
         first_tid = 0
 
@@ -769,5 +772,5 @@ class Dataset:
                                 store=True)
 
     def is_first_batch(self):
-        # first_tid is set to 0 in 'load_data' if this is the first batch of data.
+        # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.
         return self.first_tid == 0
