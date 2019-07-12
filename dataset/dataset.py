@@ -71,6 +71,8 @@ class Dataset:
         self.incremental = env['incremental']
         # Boolean flag for compute entropy using the incremental algorithm.
         self.incremental_entropy = env['incremental_entropy']
+        # First tid to be loaded.
+        self.first_tid = None
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
@@ -111,8 +113,8 @@ class Dataset:
             # If entity_col is not supplied, we use auto-incrementing values.
             # Otherwise, we use the entity values directly as _tid_'s.
             if entity_col is None:
-                first_tid = self.get_first_tid()
-                df.insert(0, '_tid_', range(first_tid, first_tid + len(df.index)))
+                self.first_tid = self.get_first_tid()
+                df.insert(0, '_tid_', range(self.first_tid, self.first_tid + len(df.index)))
             else:
                 df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
 
@@ -478,15 +480,19 @@ class Dataset:
 
         for tid in repaired_vals:
             for attr in repaired_vals[tid]:
-                init_records[tid][attr] = repaired_vals[tid][attr]
+                init_records[tid - self.first_tid][attr] = repaired_vals[tid][attr]
 
         repaired_df = pd.DataFrame.from_records(init_records)
         name = self.raw_data.name + '_repaired'
 
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
-        self.repaired_data.store_to_db(self.engine.engine)
-        # This index is useful for retrieving the maximum _tid_ value from the database in self.get_first_tid().
-        self.repaired_data.create_db_index(self.engine, ['_tid_'])
+
+        if self.incremental:
+            self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
+            # This index is useful for retrieving the maximum _tid_ value from the database in self.get_first_tid().
+            # self.repaired_data.create_db_index(self.engine, ['_tid_'])
+        else:
+            self.repaired_data.store_to_db(self.engine.engine)
 
         status = "DONE generating repaired dataset"
 
@@ -691,13 +697,17 @@ class Dataset:
         return xy_entropy
 
     def get_first_tid(self):
-        if self.incremental and not self.is_first_batch():
-            table_repaired_name = self.raw_data.name + '_repaired'
-            query = 'SELECT MAX(t1._tid_) FROM {} as t1'.format(table_repaired_name)
-            result = self.engine.execute_query(query)
-            first_tid = result[0][0]
-        else:
-            first_tid = 0
+        first_tid = 0
+
+        if self.incremental:
+            try:
+                table_repaired_name = self.raw_data.name + '_repaired'
+                query = 'SELECT MAX(t1._tid_) FROM {} as t1'.format(table_repaired_name)
+                result = self.engine.execute_query(query)
+                first_tid = result[0][0] + 1
+            except Exception:
+                # There is no previously repaired table in the database.
+                pass
 
         return first_tid
 
@@ -759,9 +769,5 @@ class Dataset:
                                 store=True)
 
     def is_first_batch(self):
-        # This check must be performed before collecting statistics from the database.
-        # Then, the total number of tuples will be 0 if this is the first batch of data.
-        if self.total_tuples == 0:
-            return True
-        else:
-            return False
+        # first_tid is set to 0 in 'load_data' if this is the first batch of data.
+        return self.first_tid == 0
