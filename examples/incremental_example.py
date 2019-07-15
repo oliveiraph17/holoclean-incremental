@@ -10,30 +10,35 @@ dataset_name = 'hospital'
 #            '501-600', '601-700', '701-800', '801-900', '901-1000']
 batches = ['1-900', '901-1000']
 
-# Setup a HoloClean session.
-hc = holoclean.HoloClean(
-    db_name='holo',
-    domain_thresh_1=0,
-    domain_thresh_2=0,
-    weak_label_thresh=0.99,
-    max_domain=10000,
-    cor_strength=0.6,
-    nb_cor_strength=0.8,
-    epochs=2,
-    weight_decay=0.01,
-    learning_rate=0.001,
-    threads=1,
-    batch_size=1,
-    verbose=False,
-    timeout=3 * 60000,
-    feature_norm=False,
-    weight_norm=False,
-    print_fw=False,
-    incremental=True,
-    incremental_entropy=False
-).session
+# The line above is to pause the execution to drop the tables if needed.
+dropped_tables = input('Do you want to drop tables <dataset>_repair, single_attr_stats and pair_attr_stats? (y/n) ')
 
+# We may run out of memory if HoloClean is not reinstantiated at each loading step
 for batch in batches:
+
+    # Setup a HoloClean session.
+    hc = holoclean.HoloClean(
+        db_name='holo',
+        domain_thresh_1=0,
+        domain_thresh_2=0,
+        weak_label_thresh=0.99,
+        max_domain=10000,
+        cor_strength=0.6,
+        nb_cor_strength=0.8,
+        epochs=2,
+        weight_decay=0.01,
+        learning_rate=0.001,
+        threads=1,
+        batch_size=1,
+        verbose=False,
+        timeout=3 * 60000,
+        feature_norm=False,
+        weight_norm=False,
+        print_fw=False,
+        incremental=True,
+        incremental_entropy=False
+    ).session
+
     # Load existing data and Denial Constraints.
     hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + batch + '.csv')
     hc.load_dcs('../testdata/' + dataset_name + '_constraints.txt')
