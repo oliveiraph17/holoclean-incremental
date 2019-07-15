@@ -480,7 +480,7 @@ class Dataset:
 
         for tid in repaired_vals:
             for attr in repaired_vals[tid]:
-                init_records[tid][attr] = repaired_vals[tid][attr]
+                init_records[tid - self.first_tid][attr] = repaired_vals[tid][attr]
 
         repaired_df = pd.DataFrame.from_records(init_records)
         name = self.raw_data.name + '_repaired'
