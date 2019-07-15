@@ -10,12 +10,11 @@ dataset_name = 'hospital'
 #            '501-600', '601-700', '701-800', '801-900', '901-1000']
 batches = ['1-900', '901-1000']
 
-# The line above is to pause the execution to drop the tables if needed.
-dropped_tables = input('Do you want to drop tables <dataset>_repair, single_attr_stats and pair_attr_stats? (y/n) ')
+# This line pauses the execution to drop the tables if needed.
+dropped_tables = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats? (y/n)\n')
 
-# We may run out of memory if HoloClean is not reinstantiated at each loading step
+# We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
-
     # Setup a HoloClean session.
     hc = holoclean.HoloClean(
         db_name='holo',
