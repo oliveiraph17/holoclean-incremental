@@ -149,14 +149,14 @@ class DomainEngine:
         return sorted(itertools.chain(*result))
 
     @staticmethod
-    def get_corr_attributes(attr, thres, correlations_lst, corr_attrs_lst):
+    def get_corr_attributes(attr, thres, corr_lst, corr_attrs_lst):
         """
         Returns attributes from 'correlations_lst' that are correlated with 'attr'
         within a magnitude of 'thres'.
 
         :param attr: (string) the original attribute to get the correlated attributes for.
         :param thres: (float) correlation threshold for attributes to be returned.
-        :param correlations_lst: (dict) correlations between every pair of attributes.
+        :param corr_lst: (dict) correlations between every pair of attributes.
         :param corr_attrs_lst: (list[list[(attr, thres)]]) correlated attributes to 'attr' within 'thres'.
                The list is populated in this method and the sublist corresponding to 'attr' is returned.
 
@@ -166,8 +166,8 @@ class DomainEngine:
         if (attr, thres) not in corr_attrs_lst:
             corr_attrs_lst[(attr, thres)] = []
 
-            if attr in correlations_lst:
-                attr_correlations = correlations_lst[attr]
+            if attr in corr_lst:
+                attr_correlations = corr_lst[attr]
                 corr_attrs_lst[(attr, thres)] = sorted([corr_attr
                                                         for corr_attr, corr_strength in attr_correlations.items()
                                                         if corr_attr != attr and corr_strength > thres])
