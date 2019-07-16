@@ -11,7 +11,9 @@ dataset_name = 'hospital'
 batches = ['1-900', '901-1000']
 
 # This line pauses the execution to drop the tables if needed.
-dropped_tables = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats? (y/n)\n')
+drop = None
+while drop != 'y' and drop != 'n':
+    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats? (y/n)\n')
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
@@ -37,6 +39,10 @@ for batch in batches:
         incremental=True,
         incremental_entropy=False
     ).session
+
+    if batch == batches[0]:
+        if drop == 'y':
+            hc.ds.engine.drop_tables([dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats'])
 
     # Load existing data and Denial Constraints.
     hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + batch + '.csv')

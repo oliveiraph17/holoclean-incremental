@@ -86,14 +86,13 @@ class DBengine:
     def create_db_index(self, name, table, attr_list):
         """
         create_db_index creates a (multi-column) index on the columns/attributes
-        specified in :param attr_list: with the given :param name: on
-        :param table:.
+        specified in :param attr_list: with the given :param name: on :param table:.
 
         :param name: (str) name of index
         :param table: (str) name of table
         :param attr_list: (list[str]) list of attributes/columns to create index on
         """
-        # We need to quote each attribute since PostgreSQL auto-downcases unquoted column references
+        # We need to quote each attribute since PostgreSQL auto-downcases unquoted column references.
         quoted_attrs = map(lambda attr: '"{}"'.format(attr), attr_list)
         stmt = index_template.substitute(idx_title=name, table=table, attrs=','.join(quoted_attrs))
         tic = time.clock()
@@ -103,6 +102,16 @@ class DBengine:
         toc = time.clock()
         logging.debug('Time to create index: %.2f secs', toc - tic)
         return result
+
+    def drop_tables(self, table_list):
+        tic = time.clock()
+        conn = self.engine.connect()
+        for table in table_list:
+            conn.execute(drop_table_template.substitute(table=table))
+        conn.close()
+        toc = time.clock()
+        logging.debug('Time to drop %d tables: %.2f secs', len(table_list), toc - tic)
+        return True
 
     def _apply_func(self, func, collection):
         if self._pool is None:
