@@ -53,12 +53,11 @@ class OccurAttrFeaturizer(Featurizer):
         for attr in self.all_attrs:
             val = tuple[attr]
 
-            # Ignore co-occurrences of same attribute or with null values.
-            # It's possible a value is not in pair_stats if it only co-occurred
-            # with NULL values.
+            # Ignore co-occurrence with the same attribute, when the value is NULL,
+            # as well as when the value only co-occurs with NULL values.
             if attr == rv_attr \
                     or val == NULL_REPR \
-                    or val not in self.pair_stats[attr][rv_attr]:
+                    or self.pair_stats[attr][rv_attr][val] == [NULL_REPR]:
                 continue
             attr_idx = self.ds.attr_to_idx[attr]
             count1 = float(self.single_stats[attr][val])

@@ -384,10 +384,7 @@ class DomainEngine:
             # Ignore co-occurrence when 'cond_val' is NULL.
             # It does not make sense to retrieve the top co-occurring values with a NULL value.
             # Moreover, ignore co-occurrence when 'cond_val' only co-occurs with NULL values.
-            # TODO: PH, please verify the condition  you added in the line below.
-            #       It broke the code as the last level is a list, so it does not have attribute 'keys'.
-            # if cond_val == NULL_REPR or self.pair_stats[cond_attr][attr][cond_val].keys() == [NULL_REPR]:
-            if cond_val == NULL_REPR or cond_val not in self.pair_stats[cond_attr][attr]:
+            if cond_val == NULL_REPR or self.pair_stats[cond_attr][attr][cond_val] == [NULL_REPR]:
                 continue
 
             # Update domain with the top co-occurring values with 'cond_val'.

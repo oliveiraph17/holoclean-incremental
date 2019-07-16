@@ -10,9 +10,9 @@ from .table import Table, Source
 from utils import dictify_df, NULL_REPR
 from recordtype import recordtype
 from math import log2
-from timeit import default_timer as timer
-from statistics import mean
-from pyitlib import discrete_random_variable as drv
+# from timeit import default_timer as timer
+# from statistics import mean
+# from pyitlib import discrete_random_variable as drv
 
 
 class AuxTables(Enum):
