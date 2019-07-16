@@ -7,6 +7,16 @@ from utils import NULL_REPR
 
 
 class OccurAttrFeaturizer(Featurizer):
+    def __init__(self):
+        self.all_attrs = None
+        self.attrs_number = None
+        self.raw_data_dict = None
+        self.total = None
+        self.single_stats = None
+        self.pair_stats = None
+
+        Featurizer.__init__(self)
+
     def specific_setup(self):
         self.name = 'OccurAttrFeaturizer'
         if not self.setup_done:
@@ -26,10 +36,10 @@ class OccurAttrFeaturizer(Featurizer):
         self.single_stats = single_stats
         self.pair_stats = pair_stats
 
+    # noinspection PyShadowingBuiltins,PyTypeChecker
     def create_tensor(self):
-        # Iterate over tuples in domain
+        # Iterate over tuples in domain.
         tensors = []
-        # Set tuple_id index on raw_data
         t = self.ds.aux_table[AuxTables.cell_domain]
         sorted_domain = t.df.reset_index().sort_values(by=['_vid_'])[['_tid_', 'attribute', '_vid_', 'domain']]
         records = sorted_domain.to_records()
@@ -42,14 +52,19 @@ class OccurAttrFeaturizer(Featurizer):
         combined = torch.cat(tensors)
         return combined
 
+    # noinspection PyShadowingBuiltins,PyUnresolvedReferences
     def gen_feat_tensor(self, row, tuple):
         tensor = torch.zeros(1, self.classes, self.attrs_number * self.attrs_number)
+
         rv_attr = row['attribute']
         domain = row['domain'].split('|||')
         rv_domain_idx = {val: idx for idx, val in enumerate(domain)}
+
         # We should not have any NULLs in our domain.
         assert NULL_REPR not in rv_domain_idx
+
         rv_attr_idx = self.ds.attr_to_idx[rv_attr]
+
         for attr in self.all_attrs:
             val = tuple[attr]
 
@@ -59,15 +74,19 @@ class OccurAttrFeaturizer(Featurizer):
                     or val == NULL_REPR \
                     or self.pair_stats[attr][rv_attr][val] == [NULL_REPR]:
                 continue
+
             attr_idx = self.ds.attr_to_idx[attr]
             count1 = float(self.single_stats[attr][val])
             all_vals = self.pair_stats[attr][rv_attr][val]
+
             for rv_val in domain:
                 count2 = float(all_vals.get(rv_val, 0.0))
                 prob = count2 / count1
+
                 if rv_val in rv_domain_idx:
                     index = rv_attr_idx * self.attrs_number + attr_idx
                     tensor[0][rv_domain_idx[rv_val]][index] = prob
+
         return tensor
 
     def feature_names(self):

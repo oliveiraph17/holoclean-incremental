@@ -5,6 +5,14 @@ from .featurizer import Featurizer
 
 
 class FreqFeaturizer(Featurizer):
+    def __init__(self):
+        self.all_attrs = None
+        self.attrs_number = None
+        self.total = None
+        self.single_stats = None
+
+        Featurizer.__init__(self)
+
     def specific_setup(self):
         self.name = 'FreqFeaturizer'
         self.all_attrs = self.ds.get_attributes()
@@ -13,17 +21,18 @@ class FreqFeaturizer(Featurizer):
         self.total = total
         self.single_stats = single_stats
 
+    # noinspection PyShadowingBuiltins,PyUnresolvedReferences
     def gen_feat_tensor(self, input, classes):
         attribute = input[1]
         domain = input[2].split('|||')
         attr_idx = self.ds.attr_to_idx[attribute]
         tensor = torch.zeros(1, classes, self.attrs_number)
         for idx, val in enumerate(domain):
-            prob = float(self.single_stats[attribute][val])/float(self.total)
+            prob = float(self.single_stats[attribute][val]) / float(self.total)
             tensor[0][idx][attr_idx] = prob
         return tensor
 
-    # noinspection PyMethodMayBeStatic
+    # noinspection PyTypeChecker
     def create_tensor(self):
         query = 'SELECT _vid_, attribute, domain FROM %s ORDER BY _vid_' % AuxTables.cell_domain.name
         results = self.ds.engine.execute_query(query)
@@ -31,6 +40,5 @@ class FreqFeaturizer(Featurizer):
         combined = torch.cat(tensors)
         return combined
 
-    # noinspection PyMethodMayBeStatic
     def feature_names(self):
         return self.all_attrs

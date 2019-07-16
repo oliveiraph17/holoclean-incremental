@@ -20,7 +20,7 @@ class Featurizer:
     def setup_featurizer(self, dataset, processes=20, batch_size=32):
         self.ds = dataset
         self.total_vars, self.classes = self.ds.get_domain_info()
-        # only create a pool if processes > 1
+        # Only create a pool if processes > 1.
         self._pool = Pool(processes) if processes > 1 else None
         self._batch_size = batch_size
         self.setup_done = True
@@ -34,7 +34,7 @@ class Featurizer:
     def create_tensor(self):
         """
          This method creates a tensor which has shape
-         (# of cells/rvs, max size of domain, # of features for this featurizer)
+         (# of cells/rvs, maximum size of domain, # of features for this featurizer).
 
         :return: PyTorch Tensor
         """
@@ -43,8 +43,7 @@ class Featurizer:
     @abstractmethod
     def feature_names(self):
         """
-        Returns list of human-readable description/names for each feature
-        this featurizer produces.
+        Returns list of human-readable descriptions/names for each feature this featurizer produces.
         """
         raise NotImplementedError
 
