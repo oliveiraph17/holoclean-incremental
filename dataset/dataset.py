@@ -73,6 +73,10 @@ class Dataset:
         self.incremental_entropy = env['incremental_entropy']
         # First _tid_ to be loaded.
         self.first_tid = None
+        # Boolean flag of repairing previous errors.
+        self.repair_previous_errors = env['repair_previous_errors']
+        # DataFrame with the rows from the previous dataset that are involved in violations.
+        self.previous_error_rows = None
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
@@ -460,7 +464,27 @@ class Dataset:
     def get_repaired_dataset(self):
         tic = time.clock()
 
-        init_records = self.raw_data.df.sort_values(['_tid_']).to_records(index=False)
+        # TODO: Remove the extra variables below (used for debugging)
+        if not self.repair_previous_errors or self.is_first_batch():
+            init_records = self.raw_data.df.sort_values(['_tid_']).to_records(index=False)
+            tmp_df = self.raw_data.df.sort_values(['_tid_'])
+            tmp_df.reset_index(level=0, inplace=True)
+            df2 = tmp_df[['index', '_tid_']]
+            df3 = df2.set_index('_tid_')
+            tid_to_idx = df3.to_dict()
+        else:
+            df = pd.concat([self.get_previous_error_rows(), self.get_raw_data()])
+            init_records = df.sort_values(['_tid_']).to_records(index=False)
+
+            tmp_df1 = df.sort_values(['_tid_'])
+            tmp_df1.reset_index(drop=True, inplace=True)
+            tmp_df1.reset_index(level=0, inplace=True)
+            df21 = tmp_df1[['index', '_tid_']]
+            df31 = df21.set_index('_tid_')
+            tid_to_idx = df31.to_dict()
+
+            # tid_to_idx = df.reset_index(level=0, inplace=True) ['_tid_'].to_dict()
+
         t = self.aux_table[AuxTables.inf_values_dom]
         repaired_vals = dictify_df(t.df.reset_index())
 
@@ -470,14 +494,14 @@ class Dataset:
                 # Before replacing the value in 'init_records', we must decrement its frequency from the statistics.
                 # Moreover, we must increment the corresponding frequency of the repaired value in 'repaired_vals'.
                 # This part still has to be finished.
-                obsolete_value = init_records[tid - self.first_tid][attr]
+                # obsolete_value = init_records[tid - self.first_tid][attr]
+                #
+                # if self.single_attr_stats[attr][obsolete_value] == 1:
+                #     self.single_attr_stats[attr].pop(obsolete_value)
+                # else:
+                #     self.single_attr_stats[attr][obsolete_value] -= 1
 
-                if self.single_attr_stats[attr][obsolete_value] == 1:
-                    self.single_attr_stats[attr].pop(obsolete_value)
-                else:
-                    self.single_attr_stats[attr][obsolete_value] -= 1
-
-                init_records[tid - self.first_tid][attr] = repaired_vals[tid][attr]
+                init_records[tid_to_idx['index'][tid]][attr] = repaired_vals[tid][attr]
 
         repaired_df = pd.DataFrame.from_records(init_records)
         name = self.raw_data.name + '_repaired'
@@ -485,7 +509,8 @@ class Dataset:
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
 
         if self.incremental:
-            self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
+            # TODO: Update correctly the repaired dataset considering re-repaired tuples
+            self.repaired_data.store_to_db(self.engine.engine)  # , if_exists='append')
 
             if self.is_first_batch():
                 # This index is useful for retrieving the maximum _tid_ value from the database in self.get_first_tid().
@@ -771,3 +796,11 @@ class Dataset:
     def is_first_batch(self):
         # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.
         return self.first_tid == 0
+
+    def set_previous_error_rows(self, previous_error_rows):
+        self.previous_error_rows = previous_error_rows
+
+    def get_previous_error_rows(self):
+        if self.previous_error_rows is None:
+            raise Exception('ERROR No previous error rows loaded')
+        return self.previous_error_rows

@@ -13,7 +13,7 @@ class NaiveBayes(Estimator):
     where 'v_init_i' is the initial value corresponding to attribute 'i'.
     This probability is normalized over all values passed to predict_pp.
     """
-    def __init__(self, env, dataset, domain_df, correlations):
+    def __init__(self, env, dataset, domain_df, correlations, records):
         Estimator.__init__(self, env, dataset)
 
         self.cor_strength = self.env['nb_cor_strength']
@@ -24,7 +24,8 @@ class NaiveBayes(Estimator):
 
         # Rows indexed by TID.
         self.records_by_tid = {}
-        for row in self.ds.get_raw_data().to_records():
+        for row in records:
+        # for row in self.ds.get_raw_data().to_records():
             self.records_by_tid[row['_tid_']] = row
 
     def train(self):

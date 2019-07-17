@@ -1,6 +1,8 @@
 import torch
 from tqdm import tqdm
 
+import pandas as pd
+
 from .featurizer import Featurizer
 from dataset import AuxTables
 from utils import NULL_REPR
@@ -30,7 +32,13 @@ class OccurAttrFeaturizer(Featurizer):
         self.setup_stats()
 
     def setup_stats(self):
-        self.raw_data_dict = self.ds.raw_data.df.set_index('_tid_').to_dict('index')
+        if not self.repair_previous_errors or self.ds.is_first_batch():
+            self.raw_data_dict = self.ds.get_raw_data().set_index('_tid_').to_dict('index')
+        else:
+            df = pd.concat([self.ds.get_previous_error_rows(), self.ds.get_raw_data()])
+            df.reset_index(drop=True, inplace=True)
+            self.raw_data_dict = df.set_index('_tid_').to_dict('index')
+
         total, single_stats, pair_stats = self.ds.get_statistics()
         self.total = float(total)
         self.single_stats = single_stats

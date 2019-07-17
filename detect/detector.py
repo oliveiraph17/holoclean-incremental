@@ -20,7 +20,7 @@ class Detector:
         self.ds = None
 
     @abstractmethod
-    def setup(self, dataset):
+    def setup(self, dataset, repair_previous_errors):
         raise NotImplementedError
 
     @abstractmethod

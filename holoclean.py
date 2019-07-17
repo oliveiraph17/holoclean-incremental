@@ -172,8 +172,14 @@ arguments = [
       'dest': 'incremental_entropy',
       'default': False,
       'type': bool,
-      'help': 'Compute conditional entropy using the incremental method. It requires incremental=True.'})
-
+      'help': 'Compute conditional entropy using the incremental method. It requires incremental=True.'}),
+    (('-rpe', '--repair-previous-errors'),
+     {'metavar': 'REPAIR PREVIOUS ERRORS',
+      'dest': 'repair_previous_errors',
+      'default': False,
+      'type': bool,
+      'help': 'Try to repair again errors that were not repaired in previous iterations.' +
+              'It requires incremental=True.'})
 ]
 
 # Flags for HoloClean mode.

@@ -17,12 +17,13 @@ class Featurizer:
         self._pool = None
         self._batch_size = None
 
-    def setup_featurizer(self, dataset, processes=20, batch_size=32):
+    def setup_featurizer(self, dataset, processes=20, batch_size=32, repair_previous_errors=False):
         self.ds = dataset
         self.total_vars, self.classes = self.ds.get_domain_info()
         # Only create a pool if processes > 1.
         self._pool = Pool(processes) if processes > 1 else None
         self._batch_size = batch_size
+        self.repair_previous_errors = repair_previous_errors
         self.setup_done = True
         self.specific_setup()
 

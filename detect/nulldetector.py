@@ -16,8 +16,9 @@ class NullDetector(Detector):
     def __init__(self, name='NullDetector'):
         super(NullDetector, self).__init__(name)
 
-    def setup(self, dataset):
+    def setup(self, dataset, repair_previous_errors=False):
         self.ds = dataset
+        self.repair_previous_errors = repair_previous_errors
 
     def detect_noisy_cells(self):
         """
@@ -31,7 +32,7 @@ class NullDetector(Detector):
         attributes = self.ds.get_attributes()
         errors = []
 
-        if self.ds.incremental and not self.ds.is_first_batch():
+        if self.repair_previous_errors and not self.ds.is_first_batch():
             table_repaired_name = self.ds.raw_data.name + '_repaired'
 
             for attr in attributes:

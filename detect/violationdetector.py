@@ -6,21 +6,22 @@ from .detector import Detector
 
 unary_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
 
-unary_template_incremental = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond ' +
-                                      'UNION ' +
-                                      'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
+unary_template_inc_repair_previous = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond ' +
+                                              'UNION ' +
+                                              'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
 
 multi_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
                           'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2)')
 
-multi_template_incremental = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond1 $c ' +
-                                      'EXISTS (SELECT t2._tid_ FROM "$table_repaired" as t2 WHERE $cond2) ' +
-                                      'UNION ' +
-                                      'SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond1 $c ' +
-                                      'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2) ' +
-                                      'UNION ' +
-                                      'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
-                                      'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2)')
+multi_template_inc = Template('WITH all_rows AS ' +
+                              '(SELECT * FROM "$table" UNION SELECT * FROM "$table_repaired") ' +
+                              'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
+                              'EXISTS (SELECT t2._tid_ FROM all_rows as t2 WHERE $cond2)')
+
+multi_template_inc_repair_previous = Template('WITH all_rows AS ' +
+                                              '(SELECT * FROM "$table" UNION SELECT * FROM "$table_repaired") ' +
+                                              'SELECT t1._tid_ FROM all_rows as t1 WHERE $cond1 $c ' +
+                                              'EXISTS (SELECT t2._tid_ FROM all_rows as t2 WHERE $cond2)')
 
 
 class ViolationDetector(Detector):
@@ -31,8 +32,9 @@ class ViolationDetector(Detector):
     def __init__(self, name='ViolationDetector'):
         super(ViolationDetector, self).__init__(name)
 
-    def setup(self, dataset):
+    def setup(self, dataset, repair_previous_errors):
         self.ds = dataset
+        self.repair_previous_errors = repair_previous_errors
 
     def detect_noisy_cells(self):
         """
@@ -77,9 +79,9 @@ class ViolationDetector(Detector):
 
     def _gen_unary_query(self, tbl, c):
         if self.ds.incremental and not self.ds.is_first_batch():
-            query = unary_template_incremental.substitute(table_repaired=tbl + '_repaired',
-                                                          table=tbl,
-                                                          cond=c.cnf_form)
+            query = unary_template_inc_repair_previous.substitute(table_repaired=tbl + '_repaired',
+                                                                  table=tbl,
+                                                                  cond=c.cnf_form)
         else:
             query = unary_template.substitute(table=tbl,
                                               cond=c.cnf_form)
@@ -109,28 +111,27 @@ class ViolationDetector(Detector):
             a.append("'" + b + "'")
 
         if cond1 != '':
-            if self.ds.incremental and not self.ds.is_first_batch():
-                query = multi_template_incremental.substitute(table_repaired=tbl + '_repaired',
-                                                              table=tbl,
-                                                              cond1=cond1,
-                                                              c='AND',
-                                                              cond2=cond2)
-            else:
-                query = multi_template.substitute(table=tbl,
-                                                  cond1=cond1,
-                                                  c='AND',
-                                                  cond2=cond2)
+            c_param = 'AND'
         else:
-            if self.ds.incremental and not self.ds.is_first_batch():
-                query = multi_template_incremental.substitute(table_repaired=tbl + '_repaired',
-                                                              table=tbl,
-                                                              cond1=cond1,
-                                                              c='',
-                                                              cond2=cond2)
+            c_param = ''
+
+        if self.ds.incremental and not self.ds.is_first_batch():
+            if self.repair_previous_errors:
+                query = multi_template_inc_repair_previous.substitute(table_repaired=tbl + '_repaired',
+                                                                      table=tbl,
+                                                                      cond1=cond1,
+                                                                      c=c_param,
+                                                                      cond2=cond2)
             else:
-                query = multi_template.substitute(table=tbl,
-                                                  cond1=cond1,
-                                                  c='',
-                                                  cond2=cond2)
+                query = multi_template_inc.substitute(table_repaired=tbl + '_repaired',
+                                                      table=tbl,
+                                                      cond1=cond1,
+                                                      c=c_param,
+                                                      cond2=cond2)
+        else:
+            query = multi_template.substitute(table=tbl,
+                                              cond1=cond1,
+                                              c=c_param,
+                                              cond2=cond2)
 
         return query

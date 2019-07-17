@@ -37,7 +37,8 @@ for batch in batches:
         weight_norm=False,
         print_fw=False,
         incremental=True,
-        incremental_entropy=False
+        incremental_entropy=False,
+        repair_previous_errors=True
     ).session
 
     if batch == batches[0]:
