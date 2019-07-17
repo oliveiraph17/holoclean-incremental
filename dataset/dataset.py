@@ -288,8 +288,7 @@ class Dataset:
 
             for trg_attr in self.get_attributes():
                 if cond_attr != trg_attr:
-                    self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr,
-                                                                                    trg_attr)
+                    self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr, trg_attr)
 
         Stats = recordtype('Stats', 'total_tuples single_attr_stats pair_attr_stats')
         stats1 = Stats(total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded)
@@ -371,9 +370,6 @@ class Dataset:
         # Need to decode values as unicode strings since we do lookups via unicode strings from PostgreSQL.
         data_df = self.get_raw_data()
 
-        # TODO: Add a not-null check everywhere needed as NULLs are now part of the statistics because of entropy.
-        # return data_df[[attr]].loc[data_df[attr] != NULL_REPR].groupby([attr]).size().to_dict()
-
         return data_df[[attr]].groupby([attr]).size().to_dict()
 
     def get_stats_pair(self, first_attr, second_attr):
@@ -384,13 +380,6 @@ class Dataset:
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
         """
         data_df = self.get_raw_data()
-
-        # TODO: Add a not-null check everywhere needed as NULLs are now part of the statistics because of entropy.
-        # tmp_df = data_df[[first_attr, second_attr]]\
-        #     .loc[(data_df[first_attr] != NULL_REPR) & (data_df[second_attr] != NULL_REPR)]\
-        #     .groupby([first_attr, second_attr])\
-        #     .size()\
-        #     .reset_index(name="count")
 
         tmp_df = data_df[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
@@ -454,11 +443,8 @@ class Dataset:
         tic = time.clock()
 
         # Index of 'domain' equals inferred_val_idx + 1 because SQL arrays begin at index 1.
-        query = "SELECT t1._tid_, t1.attribute, domain[inferred_val_idx + 1] as rv_value " \
-                "FROM " \
-                "(SELECT _tid_, attribute, _vid_, init_value, " \
-                "string_to_array(regexp_replace(domain, \'[{\"\"}]\', \'\', \'gi\'), \'|||\') as domain " \
-                "FROM %s) as t1, %s as t2 " \
+        query = "SELECT t1._tid_, t1.attribute, t2.inferred_val as rv_value " \
+                "FROM (SELECT _tid_, attribute, _vid_ FROM %s) as t1, %s as t2 " \
                 "WHERE t1._vid_ = t2._vid_" % (AuxTables.cell_domain.name, AuxTables.inf_values_idx.name)
 
         self.generate_aux_table_sql(AuxTables.inf_values_dom, query, index_attrs=['_tid_'])
@@ -480,6 +466,17 @@ class Dataset:
 
         for tid in repaired_vals:
             for attr in repaired_vals[tid]:
+                # TODO: Update statistics upon repairing data.
+                # Before replacing the value in 'init_records', we must decrement its frequency from the statistics.
+                # Moreover, we must increment the corresponding frequency of the repaired value in 'repaired_vals'.
+                # This part still has to be finished.
+                obsolete_value = init_records[tid - self.first_tid][attr]
+
+                if self.single_attr_stats[attr][obsolete_value] == 1:
+                    self.single_attr_stats[attr].pop(obsolete_value)
+                else:
+                    self.single_attr_stats[attr][obsolete_value] -= 1
+
                 init_records[tid - self.first_tid][attr] = repaired_vals[tid][attr]
 
         repaired_df = pd.DataFrame.from_records(init_records)

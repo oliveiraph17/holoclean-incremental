@@ -12,12 +12,14 @@ class RepairEngine:
     def __init__(self, env, dataset):
         self.ds = dataset
         self.env = env
+        self.feat_dataset = None
+        self.repair_model = None
 
     def setup_featurized_ds(self, featurizers):
         tic = time.clock()
         self.feat_dataset = FeaturizedDataset(self.ds, self.env, featurizers)
         toc = time.clock()
-        status = "DONE setting up featurized dataset."
+        status = "DONE setting up featurized dataset"
         feat_time = toc - tic
         return status, feat_time
 
@@ -27,38 +29,36 @@ class RepairEngine:
         output_dim = self.feat_dataset.classes
         self.repair_model = RepairModel(self.env, feat_info, output_dim, bias=self.env['bias'])
         toc = time.clock()
-        status = "DONE setting up repair model."
+        status = "DONE setting up repair model"
         setup_time = toc - tic
         return status, setup_time
 
     def fit_repair_model(self):
         tic = time.clock()
-        X_train, Y_train, mask_train = self.feat_dataset.get_training_data()
-        logging.info('training with %d training examples (cells)', X_train.shape[0])
-        self.repair_model.fit_model(X_train, Y_train, mask_train)
+        x_train, y_train, mask_train = self.feat_dataset.get_training_data()
+        logging.info('Training with %d training examples (cells)', x_train.shape[0])
+        self.repair_model.fit_model(x_train, y_train, mask_train)
         toc = time.clock()
-        status = "DONE training repair model."
+        status = "DONE training repair model"
         train_time = toc - tic
-        # self.repair_model.save_model() #KASTER
         return status, train_time
 
     def infer_repairs(self):
-        # self.repair_model.load_model() #KASTER
         tic = time.clock()
-        X_pred, mask_pred, infer_idx = self.feat_dataset.get_infer_data()
-        Y_pred = self.repair_model.infer_values(X_pred, mask_pred)
-        distr_df, infer_val_df = self.get_infer_dataframes(infer_idx, Y_pred)
+        x_pred, mask_pred, infer_idx = self.feat_dataset.get_infer_data()
+        y_pred = self.repair_model.infer_values(x_pred, mask_pred)
+        distr_df, infer_val_df = self.get_infer_dataframes(infer_idx, y_pred)
         self.ds.generate_aux_table(AuxTables.cell_distr, distr_df, store=True, index_attrs=['_vid_'])
         self.ds.generate_aux_table(AuxTables.inf_values_idx, infer_val_df, store=True, index_attrs=['_vid_'])
         toc = time.clock()
-        status = "DONE inferring repairs."
+        status = "DONE inferring repairs"
         infer_time = toc - tic
         return status, infer_time
 
-    def get_infer_dataframes(self, infer_idx, Y_pred):
+    def get_infer_dataframes(self, infer_idx, y_pred):
         distr = []
         infer_val = []
-        Y_assign = Y_pred.data.numpy().argmax(axis=1)
+        y_assign = y_pred.data.numpy().argmax(axis=1)
         domain_size = self.feat_dataset.var_to_domsize
 
         # Need to map the inferred value index of the random variable to the actual value
@@ -72,15 +72,15 @@ class RepairEngine:
             vid_to_val[vid] = vid_to_val.get(vid, {})
             vid_to_val[vid][val_idx] = val
 
-        for idx in range(Y_pred.shape[0]):
+        for idx in range(y_pred.shape[0]):
             vid = int(infer_idx[idx])
-            rv_distr = list(Y_pred[idx].data.numpy())
-            rv_val_idx = int(Y_assign[idx])
+            rv_distr = list(y_pred[idx].data.numpy())
+            rv_val_idx = int(y_assign[idx])
             rv_val = vid_to_val[vid][rv_val_idx]
-            rv_prob = Y_pred[idx].data.numpy().max()
+            rv_prob = y_pred[idx].data.numpy().max()
             d_size = domain_size[vid]
-            distr.append({'_vid_': vid, 'distribution':[str(p) for p in rv_distr[:d_size]]})
-            infer_val.append({'_vid_': vid, 'inferred_val_idx': rv_val_idx, 'inferred_val': rv_val, 'prob':rv_prob})
+            distr.append({'_vid_': vid, 'distribution': [str(p) for p in rv_distr[:d_size]]})
+            infer_val.append({'_vid_': vid, 'inferred_val_idx': rv_val_idx, 'inferred_val': rv_val, 'prob': rv_prob})
         distr_df = pd.DataFrame(data=distr)
         infer_val_df = pd.DataFrame(data=infer_val)
         return distr_df, infer_val_df

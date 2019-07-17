@@ -8,7 +8,7 @@ sys.path.append('../')
 dataset_name = 'hospital'
 # batches = ['1-100', '101-200', '201-300', '301-400', '401-500',
 #            '501-600', '601-700', '701-800', '801-900', '901-1000']
-batches = ['1-900', '901-1000']
+batches = ['1-100', '101-200']
 
 # This line pauses the execution to drop the tables if needed.
 drop = None
