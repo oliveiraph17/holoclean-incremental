@@ -13,7 +13,7 @@ batches = ['1-100', '101-200']
 # This line pauses the execution to drop the tables if needed.
 drop = None
 while drop != 'y' and drop != 'n':
-    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats? (y/n)\n')
+    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats? (y/n) ')
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
@@ -54,6 +54,48 @@ for batch in batches:
     detectors = [NullDetector(), ViolationDetector()]
     hc.detect_errors(detectors)
 
+    pause = input('Calculate the total number of errors. Ready? (y/n) ')
+    """
+    --Count the total number of errors before repairing (first batch: only table)
+    DO $$
+    DECLARE
+      c RECORD;
+      cnt BIGINT;
+      qry TEXT;
+    BEGIN
+      FOR c IN (SELECT column_name
+           FROM information_schema.columns
+           WHERE table_schema = 'public'
+           AND table_name   = 'hospital') LOOP
+        qry := 'SELECT count(*) FROM  hospital as t1, hospital_clean as t2 WHERE t1._tid_ = t2._tid_ 
+                 AND t2._attribute_ = ''' || c.column_name || ''' AND t1."' || c.column_name || '"::text != t2._value_';
+        EXECUTE qry INTO cnt;
+        RAISE NOTICE E'% = %', c.column_name, cnt;
+      END LOOP;
+    END;
+    $$ LANGUAGE plpgsql;
+    
+    --Count the total number of errors before repairing (subsequent batches: table + table_repaired)
+    DO $$
+    DECLARE
+      c RECORD;
+      cnt BIGINT;
+      qry TEXT;
+    BEGIN
+      FOR c IN (SELECT column_name
+           FROM information_schema.columns
+           WHERE table_schema = 'public'
+           AND table_name   = 'hospital') LOOP
+        qry := 'WITH all_rows AS (SELECT * FROM hospital UNION SELECT * FROM hospital_repaired)
+              SELECT count(*) FROM  all_rows as t1, hospital_clean as t2 WHERE t1._tid_ = t2._tid_ 
+                AND t2._attribute_ = ''' || c.column_name || ''' AND t1."' || c.column_name || '"::text != t2._value_';
+      EXECUTE qry INTO cnt;
+      RAISE NOTICE E'% = %', c.column_name, cnt;
+      END LOOP;
+    END;
+    $$ LANGUAGE plpgsql;
+    """
+
     # Repair errors based on the defined features.
     hc.setup_domain()
     featurizers = [
@@ -71,3 +113,66 @@ for batch in batches:
                 val_col='correct_val')
 
     logging.info('Batch %s finished', batch)
+
+    pause = input('Count the number of remaining errors and update the stats for the repaired table. Ready? (y/n) ')
+    """
+    --Count the total number of errors after repairing (table_repaired)
+    DO $$
+    DECLARE
+      c RECORD;
+      cnt BIGINT;
+      qry TEXT;
+    BEGIN
+      FOR c IN (SELECT column_name
+           FROM information_schema.columns
+           WHERE table_schema = 'public'
+           AND table_name   = 'hospital') LOOP
+        qry := 'SELECT count(*) FROM  hospital_repaired as t1, hospital_clean as t2 WHERE t1._tid_ = t2._tid_ 
+                 AND t2._attribute_ = ''' || c.column_name || ''' AND t1."' || c.column_name || '"::text != t2._value_';
+        EXECUTE qry INTO cnt;
+        RAISE NOTICE E'% = %', c.column_name, cnt;
+      END LOOP;
+    END;
+    $$ LANGUAGE plpgsql;    
+    
+    --update single_attr_stats
+    DO $$
+    DECLARE
+      c RECORD;
+      qry TEXT;
+    BEGIN
+      TRUNCATE TABLE single_attr_stats;
+      FOR c IN (SELECT column_name
+           FROM information_schema.columns
+           WHERE table_schema = 'public'
+           AND table_name   = 'hospital') LOOP
+        qry := 'INSERT INTO single_attr_stats(attr, val, freq) 
+                SELECT ''' || c.column_name || ''' AS attr, "' || c.column_name || '"::text AS valor, count(*) AS freq
+                FROM  hospital_repaired as t1 GROUP BY "' || c.column_name || '"';
+          --RAISE NOTICE '%', qry;
+        EXECUTE qry;
+      END LOOP;
+    END;
+    $$ LANGUAGE plpgsql;
+    
+    --update pair_attr_stats
+    DO $$
+    DECLARE
+      c1 RECORD; c2 RECORD; c3 RECORD;
+      qry_schema TEXT; qry TEXT;
+    BEGIN
+      TRUNCATE TABLE pair_attr_stats;
+      qry_schema := 'SELECT column_name FROM information_schema.columns WHERE table_schema = ''public'' AND table_name = ''hospital''';
+      FOR c1 IN EXECUTE qry_schema LOOP
+        FOR c2 IN EXECUTE qry_schema LOOP
+          qry := 'INSERT INTO pair_attr_stats(attr1, attr2, val1, val2, freq) 
+              SELECT ''' || c1.column_name || ''' AS attr1, ''' || c2.column_name || ''' AS attr2, "'
+            || c1.column_name || '"::text AS val1, "' || c2.column_name || '"::text AS val2, count(*) AS freq
+            FROM  hospital_repaired as t1 GROUP BY "' || c1.column_name || '", "' || c2.column_name || '"';
+          --RAISE NOTICE '%', qry;
+        EXECUTE qry;
+      END LOOP;
+      END LOOP;
+    END;
+    $$ LANGUAGE plpgsql;
+    """
