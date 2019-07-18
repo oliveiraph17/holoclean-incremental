@@ -66,4 +66,4 @@ class DetectEngine:
         results = self.ds.engine.execute_query(query)
         df = pd.DataFrame(results, columns=results[0].keys())
 
-        self.ds.set_previous_error_rows(df)
+        self.ds.set_previous_dirty_rows(df)

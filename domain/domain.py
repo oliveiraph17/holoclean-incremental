@@ -206,12 +206,9 @@ class DomainEngine:
         vid = 0
 
         if self.ds.is_first_batch() or not self.env['repair_previous_errors']:
-            # previous_error_records = self.ds.get_previous_error_rows().to_records()
-            # records = np.concatenate([records, previous_error_records])
             records = self.ds.get_raw_data().to_records(index=False)
         else:
-            df = pd.concat([self.ds.get_previous_error_rows(), self.ds.get_raw_data()])
-            records = df.to_records(index=False)
+            records = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()]).to_records(index=False)
 
         self.all_attrs = list(records.dtype.names)
 
@@ -278,7 +275,7 @@ class DomainEngine:
         # Feed the Naive Bayes estimator with pruned domain values from correlated attributes.
         logging.debug('Training posterior model for estimating domain value probabilities...')
         tic = time.clock()
-        estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations, records)
+        estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations)
         logging.debug('DONE training posterior model in %.2f secs', time.clock() - tic)
 
         # Predict probabilities for all pruned domain values.

@@ -18,6 +18,7 @@ class Detector:
         """
         self.name = name
         self.ds = None
+        self.repair_previous_errors = None
 
     @abstractmethod
     def setup(self, dataset, repair_previous_errors):

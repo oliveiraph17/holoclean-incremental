@@ -76,7 +76,7 @@ class Dataset:
         # Boolean flag of repairing previous errors.
         self.repair_previous_errors = env['repair_previous_errors']
         # DataFrame with the rows from the previous dataset that are involved in violations.
-        self.previous_error_rows = None
+        self.previous_dirty_rows = None
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
@@ -464,26 +464,15 @@ class Dataset:
     def get_repaired_dataset(self):
         tic = time.clock()
 
-        # TODO: Remove the extra variables below (used for debugging)
         if not self.repair_previous_errors or self.is_first_batch():
-            init_records = self.raw_data.df.sort_values(['_tid_']).to_records(index=False)
-            tmp_df = self.raw_data.df.sort_values(['_tid_'])
-            tmp_df.reset_index(level=0, inplace=True)
-            df2 = tmp_df[['index', '_tid_']]
-            df3 = df2.set_index('_tid_')
-            tid_to_idx = df3.to_dict()
+            df_by_tid = self.raw_data.df.sort_values(['_tid_'])
         else:
-            df = pd.concat([self.get_previous_error_rows(), self.get_raw_data()])
-            init_records = df.sort_values(['_tid_']).to_records(index=False)
+            df_by_tid = pd.concat([self.previous_dirty_rows, self.raw_data.df]).sort_values(['_tid_'])
 
-            tmp_df1 = df.sort_values(['_tid_'])
-            tmp_df1.reset_index(drop=True, inplace=True)
-            tmp_df1.reset_index(level=0, inplace=True)
-            df21 = tmp_df1[['index', '_tid_']]
-            df31 = df21.set_index('_tid_')
-            tid_to_idx = df31.to_dict()
+        init_records = df_by_tid.to_records(index=False)
 
-            # tid_to_idx = df.reset_index(level=0, inplace=True) ['_tid_'].to_dict()
+        df_by_tid.reset_index(level=0, inplace=True)
+        tid_to_idx = df_by_tid[['index', '_tid_']].set_index('_tid_').to_dict()
 
         t = self.aux_table[AuxTables.inf_values_dom]
         repaired_vals = dictify_df(t.df.reset_index())
@@ -509,8 +498,8 @@ class Dataset:
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
 
         if self.incremental:
-            # TODO: Update correctly the repaired dataset considering re-repaired tuples
-            self.repaired_data.store_to_db(self.engine.engine)  # , if_exists='append')
+            # TODO: Update the repaired dataset considering re-repaired tuples.
+            self.repaired_data.store_to_db(self.engine.engine)
 
             if self.is_first_batch():
                 # This index is useful for retrieving the maximum _tid_ value from the database in self.get_first_tid().
@@ -797,10 +786,10 @@ class Dataset:
         # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.
         return self.first_tid == 0
 
-    def set_previous_error_rows(self, previous_error_rows):
-        self.previous_error_rows = previous_error_rows
+    def set_previous_dirty_rows(self, previous_dirty_rows):
+        self.previous_dirty_rows = previous_dirty_rows
 
-    def get_previous_error_rows(self):
-        if self.previous_error_rows is None:
-            raise Exception('ERROR No previous error rows loaded')
-        return self.previous_error_rows
+    def get_previous_dirty_rows(self):
+        if self.previous_dirty_rows is None:
+            raise Exception('ERROR Potentially dirty rows from the previous dataset could not be loaded')
+        return self.previous_dirty_rows

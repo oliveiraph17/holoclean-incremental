@@ -35,7 +35,7 @@ class OccurAttrFeaturizer(Featurizer):
         if not self.repair_previous_errors or self.ds.is_first_batch():
             self.raw_data_dict = self.ds.get_raw_data().set_index('_tid_').to_dict('index')
         else:
-            df = pd.concat([self.ds.get_previous_error_rows(), self.ds.get_raw_data()])
+            df = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()])
             df.reset_index(drop=True, inplace=True)
             self.raw_data_dict = df.set_index('_tid_').to_dict('index')
 

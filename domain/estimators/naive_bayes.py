@@ -1,4 +1,5 @@
 import math
+import pandas as pd
 
 from tqdm import tqdm
 
@@ -13,7 +14,7 @@ class NaiveBayes(Estimator):
     where 'v_init_i' is the initial value corresponding to attribute 'i'.
     This probability is normalized over all values passed to predict_pp.
     """
-    def __init__(self, env, dataset, domain_df, correlations, records):
+    def __init__(self, env, dataset, domain_df, correlations):
         Estimator.__init__(self, env, dataset)
 
         self.cor_strength = self.env['nb_cor_strength']
@@ -22,10 +23,11 @@ class NaiveBayes(Estimator):
         self.correlations = correlations
         self.corr_attrs = {}
 
-        # Rows indexed by TID.
+        # Rows indexed by _tid_.
         self.records_by_tid = {}
+
+        records = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()]).to_records(index=False)
         for row in records:
-        # for row in self.ds.get_raw_data().to_records():
             self.records_by_tid[row['_tid_']] = row
 
     def train(self):
