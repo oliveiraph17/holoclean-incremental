@@ -479,18 +479,54 @@ class Dataset:
 
         for tid in repaired_vals:
             for attr in repaired_vals[tid]:
-                # TODO: Update statistics upon repairing data.
+                # TODO: Update statistics so they match the repaired data.
                 # Before replacing the value in 'init_records', we must decrement its frequency from the statistics.
                 # Moreover, we must increment the corresponding frequency of the repaired value in 'repaired_vals'.
                 # This part still has to be finished.
-                # obsolete_value = init_records[tid - self.first_tid][attr]
-                #
-                # if self.single_attr_stats[attr][obsolete_value] == 1:
-                #     self.single_attr_stats[attr].pop(obsolete_value)
-                # else:
-                #     self.single_attr_stats[attr][obsolete_value] -= 1
+                idx_from_tid = tid_to_idx['index'][tid]
 
-                init_records[tid_to_idx['index'][tid]][attr] = repaired_vals[tid][attr]
+                # Memoizes the old value to be replaced.
+                obsolete_attr_value = init_records[idx_from_tid][attr]
+
+                # This if-else block focuses on removing/decrementing the count of 'obsolete_attr_value'.
+                if self.single_attr_stats[attr][obsolete_attr_value] == 1:
+                    # Removes it from the single-attribute statistics.
+                    self.single_attr_stats[attr].pop(obsolete_attr_value)
+
+                    # All entries corresponding to 'obsolete_attr_value'
+                    # must be removed from the pairwise statistics as well.
+                    for other_attr in self.get_attributes():
+                        if attr != other_attr:
+                            # Between 'attr' and 'other_attr'.
+                            self.pair_attr_stats[attr][other_attr].pop(obsolete_attr_value)
+
+                            # The other way around.
+                            for other_attr_value in self.pair_attr_stats[other_attr][attr]:
+                                self.pair_attr_stats[other_attr][attr][other_attr_value].pop(obsolete_attr_value)
+                else:
+                    # Decrements it in the single-attribute statistics.
+                    self.single_attr_stats[attr][obsolete_attr_value] -= 1
+
+                    # The entries corresponding to 'obsolete_attr_value' must be
+                    # either removed from or decremented in the pairwise statistics.
+                    for other_attr in self.get_attributes():
+                        if attr != other_attr:
+                            # Between 'attr' and 'other_attr'.
+                            for other_attr_value in self.pair_attr_stats[attr][other_attr][obsolete_attr_value]:
+                                if self.pair_attr_stats[attr][other_attr][obsolete_attr_value][other_attr_value] == 1:
+                                    self.pair_attr_stats[attr][other_attr][obsolete_attr_value].pop(other_attr_value)
+                                else:
+                                    self.pair_attr_stats[attr][other_attr][obsolete_attr_value][other_attr_value] -= 1
+
+                            # The other way around.
+                            for other_attr_value in self.pair_attr_stats[other_attr][attr]:
+                                if self.pair_attr_stats[other_attr][attr][other_attr_value][obsolete_attr_value] == 1:
+                                    self.pair_attr_stats[other_attr][attr][other_attr_value].pop(obsolete_attr_value)
+                                else:
+                                    self.pair_attr_stats[other_attr][attr][other_attr_value][obsolete_attr_value] -= 1
+
+                # After having updated the statistics, updates the record.
+                init_records[idx_from_tid][attr] = repaired_vals[tid][attr]
 
         repaired_df = pd.DataFrame.from_records(init_records)
         name = self.raw_data.name + '_repaired'
