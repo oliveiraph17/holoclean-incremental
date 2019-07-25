@@ -478,17 +478,17 @@ class Dataset:
         repaired_vals = dictify_df(t.df.reset_index())
 
         for tid in repaired_vals:
+            idx_from_tid = tid_to_idx['index'][tid]
+
             for attr in repaired_vals[tid]:
-                # TODO: Update statistics so they match the repaired data.
+                # TODO: Check if everything is right.
                 # Before replacing the value in 'init_records', we must decrement its frequency from the statistics.
-                # Moreover, we must increment the corresponding frequency of the repaired value in 'repaired_vals'.
-                # This part still has to be finished.
-                idx_from_tid = tid_to_idx['index'][tid]
+                # Moreover, the repaired value in 'repaired_vals' must have its corresponding frequency incremented.
 
                 # Memoizes the old value to be replaced.
                 obsolete_attr_value = init_records[idx_from_tid][attr]
 
-                # This if-else block focuses on removing/decrementing the count of 'obsolete_attr_value'.
+                # This if-else block removes/decrements the frequency of 'obsolete_attr_value'.
                 if self.single_attr_stats[attr][obsolete_attr_value] == 1:
                     # Removes it from the single-attribute statistics.
                     self.single_attr_stats[attr].pop(obsolete_attr_value)
@@ -501,29 +501,77 @@ class Dataset:
                             self.pair_attr_stats[attr][other_attr].pop(obsolete_attr_value)
 
                             # The other way around.
-                            for other_attr_value in self.pair_attr_stats[other_attr][attr]:
-                                self.pair_attr_stats[other_attr][attr][other_attr_value].pop(obsolete_attr_value)
+                            for other_attr_val in self.pair_attr_stats[other_attr][attr]:
+                                self.pair_attr_stats[other_attr][attr][other_attr_val].pop(obsolete_attr_value)
                 else:
                     # Decrements it in the single-attribute statistics.
                     self.single_attr_stats[attr][obsolete_attr_value] -= 1
 
-                    # The entries corresponding to 'obsolete_attr_value' must be
-                    # either removed from or decremented in the pairwise statistics.
+                    # The frequency of 'obsolete_attr_value' with each co-occurring value
+                    # in the current repaired tuple must be updated in the pairwise statistics.
                     for other_attr in self.get_attributes():
                         if attr != other_attr:
+                            # Co-occurring value of 'other_attr' in the current repaired tuple.
+                            other_attr_val = init_records[idx_from_tid][other_attr]
+
                             # Between 'attr' and 'other_attr'.
-                            for other_attr_value in self.pair_attr_stats[attr][other_attr][obsolete_attr_value]:
-                                if self.pair_attr_stats[attr][other_attr][obsolete_attr_value][other_attr_value] == 1:
-                                    self.pair_attr_stats[attr][other_attr][obsolete_attr_value].pop(other_attr_value)
-                                else:
-                                    self.pair_attr_stats[attr][other_attr][obsolete_attr_value][other_attr_value] -= 1
+                            if self.pair_attr_stats[attr][other_attr][obsolete_attr_value][other_attr_val] == 1:
+                                self.pair_attr_stats[attr][other_attr][obsolete_attr_value].pop(other_attr_val)
+                            else:
+                                self.pair_attr_stats[attr][other_attr][obsolete_attr_value][other_attr_val] -= 1
 
                             # The other way around.
-                            for other_attr_value in self.pair_attr_stats[other_attr][attr]:
-                                if self.pair_attr_stats[other_attr][attr][other_attr_value][obsolete_attr_value] == 1:
-                                    self.pair_attr_stats[other_attr][attr][other_attr_value].pop(obsolete_attr_value)
-                                else:
-                                    self.pair_attr_stats[other_attr][attr][other_attr_value][obsolete_attr_value] -= 1
+                            if self.pair_attr_stats[other_attr][attr][other_attr_val][obsolete_attr_value] == 1:
+                                self.pair_attr_stats[other_attr][attr][other_attr_val].pop(obsolete_attr_value)
+                            else:
+                                self.pair_attr_stats[other_attr][attr][other_attr_val][obsolete_attr_value] -= 1
+
+                # Now we either create a new entry for the repaired value frequency or increment it.
+                repaired_attr_val = repaired_vals[tid][attr]
+                if self.single_attr_stats[attr].get(repaired_attr_val) is None:
+                    # The repaired value does not exist yet, so we create an entry for its frequency.
+                    self.single_attr_stats[attr][repaired_attr_val] = 1
+
+                    # The frequency of 'repaired_attr_val' with each co-occurring value
+                    # in the current repaired tuple must be created in the pairwise statistics.
+                    for other_attr in self.get_attributes():
+                        if attr != other_attr:
+                            other_attr_val = init_records[idx_from_tid][other_attr]
+
+                            # Adds the key 'repaired_attr_val' with the corresponding nested dictionary.
+                            self.pair_attr_stats[attr][other_attr][repaired_attr_val] = {other_attr_val: 1}
+
+                            # Adds the key 'repaired_attr_val' with the value 1.
+                            self.pair_attr_stats[other_attr][attr][other_attr_val][repaired_attr_val] = 1
+                else:
+                    # The repaired value already exists, so we increment its frequency.
+                    self.single_attr_stats[attr][repaired_attr_val] += 1
+
+                    # The frequency of 'repaired_attr_val' with each co-occurring value
+                    # in the current repaired tuple must be updated in the pairwise statistics.
+                    for other_attr in self.get_attributes():
+                        if attr != other_attr:
+                            # Co-occurring value of 'other_attr' in the current repaired tuple.
+                            other_attr_val = init_records[idx_from_tid][other_attr]
+
+                            # Between 'attr' and 'other_attr'.
+                            if self.pair_attr_stats[attr][other_attr].get(repaired_attr_val) is None:
+                                # Adds the key 'repaired_attr_val' with the corresponding nested dictionary.
+                                self.pair_attr_stats[attr][other_attr][repaired_attr_val] = {other_attr_val: 1}
+                            elif self.pair_attr_stats[attr][other_attr][repaired_attr_val].get(other_attr_val) is None:
+                                # Adds the key 'other_attr_val' with the value 1.
+                                self.pair_attr_stats[attr][other_attr][repaired_attr_val][other_attr_val] = 1
+                            else:
+                                # Increments the frequency.
+                                self.pair_attr_stats[attr][other_attr][repaired_attr_val][other_attr_val] += 1
+
+                            # The other way around.
+                            if self.pair_attr_stats[other_attr][attr][other_attr_val].get(repaired_attr_val) is None:
+                                # Adds the key 'repaired_attr_val' with the value 1.
+                                self.pair_attr_stats[other_attr][attr][other_attr_val][repaired_attr_val] = 1
+                            else:
+                                # Increments the frequency.
+                                self.pair_attr_stats[other_attr][attr][other_attr_val][repaired_attr_val] += 1
 
                 # After having updated the statistics, updates the record.
                 init_records[idx_from_tid][attr] = repaired_vals[tid][attr]
