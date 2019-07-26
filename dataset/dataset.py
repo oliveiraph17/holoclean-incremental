@@ -470,19 +470,29 @@ class Dataset:
             df_by_tid = pd.concat([self.previous_dirty_rows, self.raw_data.df]).sort_values(['_tid_'])
 
         init_records = df_by_tid.to_records(index=False)
+        tid_to_idx = {}
 
-        df_by_tid.reset_index(level=0, inplace=True)
-        tid_to_idx = df_by_tid[['index', '_tid_']].set_index('_tid_').to_dict()
+        if not self.repair_previous_errors:
+            # This is only used when not repairing errors from previous batches,
+            # as the first tuple in 'init_records' would have a _tid_ greater than 0
+            # from the second batch onwards.
+            # Since 'init_records' is indexed starting from 0, we need to convert
+            # the _tid_ to the corresponding index.
+            df_by_tid.reset_index(level=0, inplace=True)
+            tid_to_idx = df_by_tid[['index', '_tid_']].set_index('_tid_').to_dict()
 
         t = self.aux_table[AuxTables.inf_values_dom]
         repaired_vals = dictify_df(t.df.reset_index())
 
         for tid in repaired_vals:
-            idx_from_tid = tid_to_idx['index'][tid]
+            if not self.repair_previous_errors:
+                idx = tid_to_idx['index'][tid]
+            else:
+                idx = tid
 
             for attr in repaired_vals[tid]:
                 # Memoizes the old value to be replaced and the repaired value.
-                obsolete_attr_val = init_records[idx_from_tid][attr]
+                obsolete_attr_val = init_records[idx][attr]
                 repaired_attr_val = repaired_vals[tid][attr]
 
                 if obsolete_attr_val == repaired_attr_val:
@@ -500,7 +510,7 @@ class Dataset:
                     for other_attr in self.get_attributes():
                         if attr != other_attr:
                             # Co-occurring value of 'other_attr' in the current repaired tuple.
-                            other_attr_val = init_records[idx_from_tid][other_attr]
+                            other_attr_val = init_records[idx][other_attr]
 
                             # Between 'attr' and 'other_attr'.
                             self.pair_attr_stats[attr][other_attr].pop(obsolete_attr_val)
@@ -516,7 +526,7 @@ class Dataset:
                     for other_attr in self.get_attributes():
                         if attr != other_attr:
                             # Co-occurring value of 'other_attr' in the current repaired tuple.
-                            other_attr_val = init_records[idx_from_tid][other_attr]
+                            other_attr_val = init_records[idx][other_attr]
 
                             # Between 'attr' and 'other_attr'.
                             if self.pair_attr_stats[attr][other_attr][obsolete_attr_val][other_attr_val] == 1:
@@ -539,7 +549,7 @@ class Dataset:
                     # in the current repaired tuple must be created in the pairwise statistics.
                     for other_attr in self.get_attributes():
                         if attr != other_attr:
-                            other_attr_val = init_records[idx_from_tid][other_attr]
+                            other_attr_val = init_records[idx][other_attr]
 
                             # Adds the key 'repaired_attr_val' with the corresponding nested dictionary.
                             self.pair_attr_stats[attr][other_attr][repaired_attr_val] = {other_attr_val: 1}
@@ -555,7 +565,7 @@ class Dataset:
                     for other_attr in self.get_attributes():
                         if attr != other_attr:
                             # Co-occurring value of 'other_attr' in the current repaired tuple.
-                            other_attr_val = init_records[idx_from_tid][other_attr]
+                            other_attr_val = init_records[idx][other_attr]
 
                             # Between 'attr' and 'other_attr'.
                             if self.pair_attr_stats[attr][other_attr].get(repaired_attr_val) is None:
@@ -577,7 +587,7 @@ class Dataset:
                                 self.pair_attr_stats[other_attr][attr][other_attr_val][repaired_attr_val] += 1
 
                 # After having updated the statistics, updates the record.
-                init_records[idx_from_tid][attr] = repaired_vals[tid][attr]
+                init_records[idx][attr] = repaired_vals[tid][attr]
 
         repaired_df = pd.DataFrame.from_records(init_records)
         name = self.raw_data.name + '_repaired'
