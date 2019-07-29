@@ -14,6 +14,7 @@ FeatInfo = namedtuple('FeatInfo', ['name', 'size', 'learnable', 'init_weight', '
 
 
 class FeaturizedDataset:
+    # noinspection PyTypeChecker,PyUnresolvedReferences,PyArgumentList
     def __init__(self, dataset, env, featurizers):
         self.ds = dataset
         self.env = env
@@ -21,7 +22,7 @@ class FeaturizedDataset:
         self.processes = self.env['threads']
         for f in featurizers:
             f.setup_featurizer(self.ds, self.processes, self.env['batch_size'], self.env['repair_previous_errors'])
-        logging.debug('featurizing training data...')
+        logging.debug('Featurizing training data...')
         tensors = [f.create_tensor() for f in featurizers]
         self.featurizer_info = [FeatInfo(featurizer.name,
                                          tensor.size()[2],
@@ -32,30 +33,32 @@ class FeaturizedDataset:
         tensor = torch.cat(tensors, 2)
         self.tensor = tensor
 
-        logging.debug('DONE featurization.')
+        logging.debug('DONE featurization')
 
         if self.env['debug_mode']:
             weights_df = pd.DataFrame(self.tensor.reshape(-1, self.tensor.shape[-1]).numpy())
-            weights_df.columns = ["{}::{}".format(f.name, featname) for f in featurizers for featname in f.feature_names()]
+            weights_df.columns = ["{}::{}".format(f.name, featname)
+                                  for f in featurizers for featname in f.feature_names()]
             weights_df.insert(0, 'vid', np.floor_divide(np.arange(weights_df.shape[0]), self.tensor.shape[1]) + 1)
             weights_df.insert(1, 'val_idx', np.tile(np.arange(self.tensor.shape[1]), self.tensor.shape[0]))
             weights_df.to_pickle('debug/{}_train_features.pkl'.format(self.ds.id))
 
-        # TODO: remove after we validate it is not needed.
+        # TODO: Remove after we validate it is not needed.
         self.in_features = self.tensor.shape[2]
-        logging.debug("generating weak labels...")
+        logging.debug("Generating weak labels...")
         self.weak_labels, self.is_clean = self.generate_weak_labels()
-        logging.debug("DONE generating weak labels.")
-        logging.debug("generating mask...")
+        logging.debug("DONE generating weak labels")
+        logging.debug("Generating mask...")
         self.var_class_mask, self.var_to_domsize = self.generate_var_mask()
-        logging.debug("DONE generating mask.")
+        logging.debug("DONE generating mask")
 
         if self.env['feature_norm']:
-            logging.debug("normalizing features...")
-            n_cells, n_classes, n_feats = self.tensor.shape
-            # normalize within each cell the features
+            logging.debug("Normalizing features...")
+            # n_cells, n_classes, n_feats = self.tensor.shape
+
+            # Normalize the features within each cell.
             self.tensor = F.normalize(self.tensor, p=2, dim=1)
-            logging.debug("DONE feature normalization.")
+            logging.debug("DONE feature normalization")
 
     def generate_weak_labels(self):
         """

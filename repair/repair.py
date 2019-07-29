@@ -61,9 +61,8 @@ class RepairEngine:
         y_assign = y_pred.data.numpy().argmax(axis=1)
         domain_size = self.feat_dataset.var_to_domsize
 
-        # Need to map the inferred value index of the random variable to the actual value
-        # val_idx = val_id - 1 since val_id was numbered starting from 1 whereas
-        # val_idx starts at 0.
+        # Need to map the inferred value index of the random variable into the actual value.
+        # val_idx = val_id - 1 since val_id was numbered starting from 1, whereas val_idx starts at 0.
         query = 'SELECT _vid_, val_id-1, rv_val FROM {pos_values}'.format(pos_values=AuxTables.pos_values.name)
         pos_values = self.ds.engine.execute_query(query)
         # dict mapping _vid_ --> val_idx --> value
