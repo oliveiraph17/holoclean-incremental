@@ -65,12 +65,12 @@ class NaiveBayes(Estimator):
                 if val2 == NULL_REPR:
                     continue
 
-                # PH: why "0.1"?
+                # PH: Why "0.1"?
                 val2_val1_count = 0.1
 
                 if val1 in self.pair_attr_stats[attr][at]:
                     if val2 in self.pair_attr_stats[attr][at][val1]:
-                        # PH: why "- 1.0"?
+                        # PH: Why "- 1.0"?
                         val2_val1_count = max(self.pair_attr_stats[attr][at][val1][val2] - 1.0, 0.1)
 
                 p = float(val2_val1_count) / float(val1_count)

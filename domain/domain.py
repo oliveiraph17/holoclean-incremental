@@ -246,6 +246,10 @@ class DomainEngine:
                     # Otherwise, add the random additional values to the domain.
                     dom.extend(rand_dom_values)
 
+                    # TODO: Check if this can be done.
+                    # dom = sorted(dom)
+                    # init_value_idx = dom.index(init_value)
+
                     # There was originally just a single value for the domain of this cell.
                     # Other values were randomly assigned to the domain.
                     # Therefore, these will not be modified by the estimator.
@@ -326,7 +330,7 @@ class DomainEngine:
             weak_label, weak_label_prob = max(preds, key=lambda pred: pred[1])
 
             # Assign weak label if it is different than the initial value
-            # and the domain value exceeds 'self.weak_label_thresh'.
+            # and the domain value probability exceeds 'self.weak_label_thresh'.
             if weak_label != row['init_value'] and weak_label_prob >= self.weak_label_thresh:
                 num_weak_labels += 1
 
