@@ -138,7 +138,7 @@ class FeaturizedDataset:
     def get_training_data(self):
         """
         Returns the tensors 'x_train', 'y_train', and 'mask_train', where each row of each tensor is a variable/_vid_.
-        The training data are selected by indexes representing weak labels different than -1 and 0.
+        The training data are selected by indexes representing weak labels different than -1.
         The tensor 'y_train' has weak labels for each variable, i.e. they are set as the initial values.
 
         This assumes that we have a larger proportion of correct initial values and only
