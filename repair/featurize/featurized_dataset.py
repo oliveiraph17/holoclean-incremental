@@ -154,7 +154,7 @@ class FeaturizedDataset:
         """
         Retrieves the samples to be inferred, i.e. DK cells.
         """
-        # Only infer on those that are DK cells.
+        # Infer only those that are DK cells.
         infer_idx = (self.is_clean == 0).nonzero()[:, 0]
         x_infer = self.tensor.index_select(0, infer_idx)
         mask_infer = self.var_class_mask.index_select(0, infer_idx)

@@ -246,9 +246,9 @@ class DomainEngine:
                     # Otherwise, add the random additional values to the domain.
                     dom.extend(rand_dom_values)
 
-                    # TODO: Check if this can be done.
-                    # dom = sorted(dom)
-                    # init_value_idx = dom.index(init_value)
+                    # PH: I added this because some domains in the 'cell_domain' table were unsorted.
+                    dom = sorted(dom)
+                    init_value_idx = dom.index(init_value)
 
                     # There was originally just a single value for the domain of this cell.
                     # Other values were randomly assigned to the domain.
