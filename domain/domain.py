@@ -44,7 +44,7 @@ class DomainEngine:
         self.setup_attributes()
         domain = self.generate_domain()
         self.store_domains(domain)
-        status = "DONE with domain preparation."
+        status = "DONE with domain preparation"
         toc = time.time()
         return status, toc - tic
 
