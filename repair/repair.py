@@ -65,7 +65,8 @@ class RepairEngine:
         # val_idx = val_id - 1 since val_id was numbered starting from 1, whereas val_idx starts at 0.
         query = 'SELECT _vid_, val_id-1, rv_val FROM {pos_values}'.format(pos_values=AuxTables.pos_values.name)
         pos_values = self.ds.engine.execute_query(query)
-        # dict mapping _vid_ --> val_idx --> value
+
+        # Dictionary mapping _vid_ --> val_idx --> value.
         vid_to_val = {}
         for vid, val_idx, val in pos_values:
             vid_to_val[vid] = vid_to_val.get(vid, {})

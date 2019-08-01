@@ -6,7 +6,6 @@ from torch import optim
 from torch.autograd import Variable
 from torch.nn import Parameter, ParameterList
 from torch.nn.functional import softmax
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 import numpy as np
 
@@ -24,61 +23,78 @@ class TiedLinear(torch.nn.Module):
     def __init__(self, env, feat_info, output_dim, bias=False):
         super(TiedLinear, self).__init__()
         self.env = env
-        # Init parameters
+
+        # Initial parameters.
         self.in_features = 0.0
         self.weight_list = ParameterList()
         if bias:
-             self.bias_list = ParameterList()
+            self.bias_list = ParameterList()
         else:
-             self.register_parameter('bias', None)
+            self.register_parameter('bias', None)
         self.output_dim = output_dim
         self.bias_flag = bias
-        # Iterate over featurizer info list
+
+        # Iterate over featurizer info list.
         for feat_entry in feat_info:
             learnable = feat_entry.learnable
             feat_size = feat_entry.size
             init_weight = feat_entry.init_weight
             self.in_features += feat_size
-            feat_weight = Parameter(init_weight*torch.ones(1, feat_size), requires_grad=learnable)
+
+            feat_weight = Parameter(init_weight * torch.ones(1, feat_size), requires_grad=learnable)
             if learnable:
                 self.reset_parameters(feat_weight)
             self.weight_list.append(feat_weight)
+
             if bias:
                 feat_bias = Parameter(torch.zeros(1, feat_size), requires_grad=learnable)
                 if learnable:
                     self.reset_parameters(feat_bias)
                 self.bias_list.append(feat_bias)
 
-    def reset_parameters(self, tensor):
-        stdv = 1. / math.sqrt(tensor.size(0))
+        self.w = None
+        self.b = None
+
+    @staticmethod
+    def reset_parameters(tensor):
+        stdv = 1.0 / math.sqrt(tensor.size(0))
         tensor.data.uniform_(-stdv, stdv)
 
+    # noinspection PyTypeChecker
     def concat_weights(self):
-        self.W = torch.cat([t for t in self.weight_list],-1)
+        self.w = torch.cat([t for t in self.weight_list], -1)
+
         # Normalize weights.
         if self.env['weight_norm']:
-            self.W = self.W.div(self.W.norm(p=2))
-        # expand so we can do matrix multiplication with each cell and their max # of domain values
-        self.W = self.W.expand(self.output_dim, -1)
-        if self.bias_flag:
-            self.B = torch.cat([t.expand(self.output_dim, -1) for t in self.bias_list],-1)
+            self.w = self.w.div(self.w.norm(p=2))
 
-    def forward(self, X, index, mask):
-        # Concatenates different featurizer weights - need to call during every pass.
-        self.concat_weights()
-        output = X.mul(self.W)
+        # Expand so we can do matrix multiplication with each cell and their maximum domain size.
+        self.w = self.w.expand(self.output_dim, -1)
+
         if self.bias_flag:
-            output += self.B
+            self.b = torch.cat([t.expand(self.output_dim, -1) for t in self.bias_list], -1)
+
+    def forward(self, x, index, mask):
+        # Concatenates different featurizer weights.
+        # Needs to be called every pass because the weights might have been updated in previous epochs.
+        self.concat_weights()
+
+        # Although 'x' is 3D and 'w' is 2D, the tensors are broadcasted first so that both are 3D.
+        # Then, each element in 'x' is multiplied by the corresponding element in 'w'.
+        output = x.mul(self.w)
+
+        if self.bias_flag:
+            output += self.b
+
         output = output.sum(2)
-        # Add our mask so that invalid domain classes for a given variable/VID
-        # has a large negative value, resulting in a softmax probability
-        # of de facto 0.
+
+        # Add our mask so that invalid domain classes for a given variable/_vid_ have a large negative value,
+        # resulting in a softmax probability of 0.
         output.index_add_(0, index, mask)
         return output
 
 
 class RepairModel:
-
     def __init__(self, env, feat_info, output_dim, bias=False):
         self.env = env
         # A list of tuples (name, is_featurizer_learnable, featurizer_output_size, init_weight, feature_names (list))
@@ -87,17 +103,21 @@ class RepairModel:
         self.model = TiedLinear(self.env, feat_info, output_dim, bias)
         self.featurizer_weights = {}
 
-    def fit_model(self, X_train, Y_train, mask_train):
-        n_examples, n_classes, n_features = X_train.shape
+    def fit_model(self, x_train, y_train, mask_train):
+        n_examples, n_classes, n_features = x_train.shape
 
         loss = torch.nn.CrossEntropyLoss()
 
         trainable_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         if self.env['optimizer'] == 'sgd':
-            optimizer = optim.SGD(trainable_parameters, lr=self.env['learning_rate'], momentum=self.env['momentum'],
+            optimizer = optim.SGD(trainable_parameters,
+                                  lr=self.env['learning_rate'],
+                                  momentum=self.env['momentum'],
                                   weight_decay=self.env['weight_decay'])
         else:
-            optimizer = optim.Adam(trainable_parameters, lr=self.env['learning_rate'], weight_decay=self.env['weight_decay'])
+            optimizer = optim.Adam(trainable_parameters,
+                                   lr=self.env['learning_rate'],
+                                   weight_decay=self.env['weight_decay'])
 
         # lr_sched = ReduceLROnPlateau(optimizer, 'min', verbose=True, eps=1e-5, patience=5)
 
@@ -108,34 +128,34 @@ class RepairModel:
             num_batches = n_examples // batch_size
             for k in range(num_batches):
                 start, end = k * batch_size, (k + 1) * batch_size
-                cost += self.__train__(loss, optimizer, X_train[start:end], Y_train[start:end], mask_train[start:end])
+                cost += self.__train__(loss, optimizer, x_train[start:end], y_train[start:end], mask_train[start:end])
 
-            # Y_pred = self.__predict__(X_train, mask_train)
-            # train_loss = loss.forward(Y_pred, Variable(Y_train, requires_grad=False).squeeze(1))
+            # y_pred = self.__predict__(X_train, mask_train)
+            # train_loss = loss.forward(y_pred, Variable(Y_train, requires_grad=False).squeeze(1))
             # logging.debug('overall training loss: %f', train_loss)
             # lr_sched.step(train_loss)
 
             if self.env['verbose']:
                 # Compute and print accuracy at the end of epoch
-                grdt = Y_train.numpy().flatten()
-                Y_pred = self.__predict__(X_train, mask_train)
-                Y_assign = Y_pred.data.numpy().argmax(axis=1)
+                grdt = y_train.numpy().flatten()
+                y_pred = self.__predict__(x_train, mask_train)
+                y_assign = y_pred.data.numpy().argmax(axis=1)
                 logging.debug("Epoch %d, cost = %f, acc = %.2f%%",
-                        i + 1, cost / num_batches,
-                        100. * np.mean(Y_assign == grdt))
+                              i + 1, cost / num_batches,
+                              100. * np.mean(y_assign == grdt))
 
-
-    def infer_values(self, X_pred, mask_pred):
-        logging.info('inferring on %d examples (cells)', X_pred.shape[0])
-        output = self.__predict__(X_pred, mask_pred)
+    def infer_values(self, x_pred, mask_pred):
+        logging.info('Inferring on %d examples (cells)', x_pred.shape[0])
+        output = self.__predict__(x_pred, mask_pred)
         return output
 
-    def __train__(self, loss, optimizer, X_train, Y_train, mask_train):
-        X_var = Variable(X_train, requires_grad=False)
-        Y_var = Variable(Y_train, requires_grad=False)
+    # noinspection PyUnresolvedReferences,PyTypeChecker
+    def __train__(self, loss, optimizer, x_train, y_train, mask_train):
+        x_var = Variable(x_train, requires_grad=False)
+        y_var = Variable(y_train, requires_grad=False)
         mask_var = Variable(mask_train, requires_grad=False)
 
-        index = torch.LongTensor(range(X_var.size()[0]))
+        index = torch.LongTensor(range(x_var.size()[0]))
         index_var = Variable(index, requires_grad=False)
 
         optimizer.zero_grad()
@@ -143,23 +163,24 @@ class RepairModel:
         # for linear combination of input features.
         # Mask makes invalid output classes have a large negative value so
         # to zero out softmax probability.
-        fx = self.model.forward(X_var, index_var, mask_var)
+        fx = self.model.forward(x_var, index_var, mask_var)
         # loss is CrossEntropyLoss: combines log softmax + Negative log likelihood loss.
         # Y_Var is just a single 1D tensor with value (0 - 'class' - 1) i.e.
         # index of the correct class ('class' = max domain)
         # fx is a tensor of length 'class' the linear activation going in the softmax.
-        output = loss.forward(fx, Y_var.squeeze(1))
+        output = loss.forward(fx, y_var.squeeze(1))
         output.backward()
         optimizer.step()
         cost = output.item()
         return cost
 
-    def __predict__(self, X_pred, mask_pred):
-        X_var = Variable(X_pred, requires_grad=False)
-        index = torch.LongTensor(range(X_var.size()[0]))
+    # noinspection PyUnresolvedReferences,PyTypeChecker
+    def __predict__(self, x_pred, mask_pred):
+        x_var = Variable(x_pred, requires_grad=False)
+        index = torch.LongTensor(range(x_var.size()[0]))
         index_var = Variable(index, requires_grad=False)
         mask_var = Variable(mask_pred, requires_grad=False)
-        fx = self.model.forward(X_var, index_var, mask_var)
+        fx = self.model.forward(x_var, index_var, mask_var)
         output = softmax(fx, 1)
         return output
 
