@@ -12,12 +12,12 @@ import numpy as np
 
 class TiedLinear(torch.nn.Module):
     """
-    TiedLinear is a linear layer with shared parameters for features between
-    (output) classes that takes as input a tensor X with dimensions
-        (batch size) X (output_dim) X (in_features)
-        where:
-            output_dim is the desired output dimension/# of classes
-            in_features are the features with shared weights across the classes
+    TiedLinear is a linear layer with shared parameters for features between (output) classes
+    that takes as input a tensor with dimensions (cells) x (output_dim) x (in_features),
+    where:
+        'cells' is the number of cells selected either for training or to be inferred,
+        'output_dim' is the desired output dimension, i.e. the number of classes (maximum domain size), and
+        'in_features' is the number of features (from all featurizers used) with shared weights across the classes.
     """
 
     def __init__(self, env, feat_info, output_dim, bias=False):
@@ -86,10 +86,11 @@ class TiedLinear(torch.nn.Module):
         if self.bias_flag:
             output += self.b
 
+        # The cells are summed along the features' dimension, which yields a 2D output (cells, classes).
         output = output.sum(2)
 
         # Add our mask so that invalid domain classes for a given variable/_vid_ have a large negative value,
-        # resulting in a softmax probability of 0.
+        # resulting in a softmax probability of 0 for such invalid cells.
         output.index_add_(0, index, mask)
         return output
 
@@ -97,8 +98,10 @@ class TiedLinear(torch.nn.Module):
 class RepairModel:
     def __init__(self, env, feat_info, output_dim, bias=False):
         self.env = env
-        # A list of tuples (name, is_featurizer_learnable, featurizer_output_size, init_weight, feature_names (list))
+        # A list of tuples (name, number_of_features, is_learnable, init_weight, feature_names (list)),
+        # one for each featurizer.
         self.feat_info = feat_info
+        # Number of classes.
         self.output_dim = output_dim
         self.model = TiedLinear(self.env, feat_info, output_dim, bias)
         self.featurizer_weights = {}
@@ -119,33 +122,29 @@ class RepairModel:
                                    lr=self.env['learning_rate'],
                                    weight_decay=self.env['weight_decay'])
 
-        # lr_sched = ReduceLROnPlateau(optimizer, 'min', verbose=True, eps=1e-5, patience=5)
-
         batch_size = self.env['batch_size']
         epochs = self.env['epochs']
+
         for i in tqdm(range(epochs)):
             cost = 0.
             num_batches = n_examples // batch_size
+
             for k in range(num_batches):
                 start, end = k * batch_size, (k + 1) * batch_size
                 cost += self.__train__(loss, optimizer, x_train[start:end], y_train[start:end], mask_train[start:end])
 
-            # y_pred = self.__predict__(X_train, mask_train)
-            # train_loss = loss.forward(y_pred, Variable(Y_train, requires_grad=False).squeeze(1))
-            # logging.debug('overall training loss: %f', train_loss)
-            # lr_sched.step(train_loss)
-
             if self.env['verbose']:
-                # Compute and print accuracy at the end of epoch
+                # Compute and print accuracy at the end of epoch.
                 grdt = y_train.numpy().flatten()
                 y_pred = self.__predict__(x_train, mask_train)
                 y_assign = y_pred.data.numpy().argmax(axis=1)
-                logging.debug("Epoch %d, cost = %f, acc = %.2f%%",
-                              i + 1, cost / num_batches,
+                logging.debug("Epoch %d: Cost = %f, Accuracy = %.2f%%",
+                              i + 1,
+                              cost / num_batches,
                               100. * np.mean(y_assign == grdt))
 
     def infer_values(self, x_pred, mask_pred):
-        logging.info('Inferring on %d examples (cells)', x_pred.shape[0])
+        logging.info('Inferring %d examples (cells)', x_pred.shape[0])
         output = self.__predict__(x_pred, mask_pred)
         return output
 
