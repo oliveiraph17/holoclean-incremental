@@ -86,10 +86,10 @@ class TiedLinear(torch.nn.Module):
         if self.bias_flag:
             output += self.b
 
-        # The cells are summed along the features' dimension, which yields a 2D output (cells, classes).
+        # The cells are summed along the features' dimension, which yields a 2D output (# of cells, # of classes).
         output = output.sum(2)
 
-        # Add our mask so that invalid domain classes for a given variable/_vid_ have a large negative value,
+        # Adds our mask so that invalid domain classes for a given variable/_vid_ have a large negative value,
         # resulting in a softmax probability of 0 for such invalid cells.
         output.index_add_(0, index, mask)
         return output
@@ -158,15 +158,14 @@ class RepairModel:
         index_var = Variable(index, requires_grad=False)
 
         optimizer.zero_grad()
-        # Fully-connected layer with shared parameters between output classes
-        # for linear combination of input features.
-        # Mask makes invalid output classes have a large negative value so
-        # to zero out softmax probability.
+
+        # Fully-connected layer with shared parameters between output classes for linear combination of input features.
+        # Mask makes invalid output classes have a large negative value to zero out their softmax probabilities.
         fx = self.model.forward(x_var, index_var, mask_var)
-        # loss is CrossEntropyLoss: combines log softmax + Negative log likelihood loss.
-        # Y_Var is just a single 1D tensor with value (0 - 'class' - 1) i.e.
-        # index of the correct class ('class' = max domain)
-        # fx is a tensor of length 'class' the linear activation going in the softmax.
+
+        # 'loss': CrossEntropyLoss, which performs LogSoftmax followed by Negative Log-Likelihood Loss.
+        # 'fx': 2D tensor (# of cells, # of classes) representing a linear activation.
+        # 'y_var': 2D tensor (# of cells, 1) assigning the respective weak label (index of correct class) to each cell.
         output = loss.forward(fx, y_var.squeeze(1))
         output.backward()
         optimizer.step()
@@ -185,22 +184,27 @@ class RepairModel:
 
     def get_featurizer_weights(self, feat_info):
         report = ""
+
         for i, f in enumerate(feat_info):
             this_weight = self.model.weight_list[i].data.numpy()[0]
+
             weight_str = "\n".join("{name} {weight}".format(name=name, weight=weight)
                                    for name, weight in
                                    zip(f.feature_names, map(str, np.around(this_weight, 3))))
+
             feat_name = f.name
             feat_size = f.size
             max_w = max(this_weight)
             min_w = min(this_weight)
             mean_w = float(np.mean(this_weight))
             abs_mean_w = float(np.mean(np.absolute(this_weight)))
-            # Create report
-            report += "featurizer %s,size %d,max %.4f,min %.4f,avg %.4f,abs_avg %.4f,weights:\n%s\n" % (
+
+            # Creates report.
+            report += "featurizer %s,size %d,max %.4f,min %.4f,avg %.4f,abs_avg %.4f,weights:%s\n" % (
                 feat_name, feat_size, max_w, min_w, mean_w, abs_mean_w, weight_str
             )
-            # Wrap in a dictionary.
+
+            # Wraps the information in a dictionary.
             self.featurizer_weights[feat_name] = {
                 'max': max_w,
                 'min': min_w,
@@ -209,6 +213,7 @@ class RepairModel:
                 'weights': this_weight,
                 'size': feat_size
             }
+
         return report
 
     def save_model(self):
@@ -216,4 +221,3 @@ class RepairModel:
 
     def load_model(self):
         self.model.load_state_dict(torch.load('/tmp/model'))
-        # self.model.eval()
