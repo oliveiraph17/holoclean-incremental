@@ -106,6 +106,7 @@ class RepairModel:
         self.output_dim = output_dim
         self.model = TiedLinear(self.env, feat_info, output_dim, bias)
         self.featurizer_weights = {}
+        self.model_was_loaded = False
 
     def fit_model(self, x_train, y_train, mask_train):
         n_examples, n_classes, n_features = x_train.shape
@@ -126,6 +127,14 @@ class RepairModel:
         batch_size = self.env['batch_size']
         epochs = self.env['epochs']
 
+        try:
+            self.load_model(optimizer)
+            # Ensures the layers are in training mode.
+            self.model.train()
+            self.model_was_loaded = True
+        except OSError:
+            logging.debug('No existing model could be loaded.')
+
         for i in tqdm(range(epochs)):
             cost = 0.
             num_batches = n_examples // batch_size
@@ -135,7 +144,11 @@ class RepairModel:
                 cost += self.__train__(loss, optimizer, x_train[start:end], y_train[start:end], mask_train[start:end])
 
             if self.env['verbose']:
-                # Compute and print accuracy at the end of epoch.
+                if self.model_was_loaded:
+                    # Sets dropout and batch normalization layers to evaluation mode before running inference.
+                    self.model.eval()
+
+                # Computes and prints accuracy at the end of epoch.
                 grdt = y_train.numpy().flatten()
                 y_pred = self.__predict__(x_train, mask_train)
                 y_assign = y_pred.data.numpy().argmax(axis=1)
@@ -144,7 +157,17 @@ class RepairModel:
                               cost / num_batches,
                               100. * np.mean(y_assign == grdt))
 
+                if self.model_was_loaded:
+                    # Ensures the layers are in training mode.
+                    self.model.train()
+
+        self.save_model(optimizer)
+
     def infer_values(self, x_pred, mask_pred):
+        if self.model_was_loaded:
+            # Sets dropout and batch normalization layers to evaluation mode before running inference.
+            self.model.eval()
+
         logging.info('Inferring %d examples (cells)', x_pred.shape[0])
         output = self.__predict__(x_pred, mask_pred)
         return output
@@ -229,6 +252,3 @@ class RepairModel:
 
         self.model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        # Ensures the layers are in training mode.
-        self.model.train()
