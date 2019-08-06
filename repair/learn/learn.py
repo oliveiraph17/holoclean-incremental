@@ -98,7 +98,8 @@ class TiedLinear(torch.nn.Module):
 class RepairModel:
     def __init__(self, env, feat_info, output_dim, bias=False):
         self.env = env
-        # A list of tuples structured as '(name, number_of_features, is_learnable, init_weight, feature_names (list))',
+        # A list of tuples structured as
+        # '(name, number_of_features, is_learnable, init_weight, feature_names (list))',
         # one for each featurizer.
         self.feat_info = feat_info
         # Number of classes.
