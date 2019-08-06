@@ -218,12 +218,10 @@ class RepairModel:
 
         return report
 
-    def save_model(self, epoch, loss, optimizer, file_path='/tmp/checkpoint.tar'):
+    def save_model(self, optimizer, file_path='/tmp/checkpoint.tar'):
         torch.save({
-            'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss
+            'optimizer_state_dict': optimizer.state_dict()
         }, file_path)
 
     def load_model(self, optimizer, file_path='/tmp/checkpoint.tar'):
@@ -231,10 +229,6 @@ class RepairModel:
 
         self.model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        epoch = checkpoint['epoch']
-        loss = checkpoint['loss']
 
         # Ensures the layers are in training mode.
         self.model.train()
-
-        return epoch, loss
