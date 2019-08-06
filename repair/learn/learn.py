@@ -86,7 +86,7 @@ class TiedLinear(torch.nn.Module):
         if self.bias_flag:
             output += self.b
 
-        # The cells are summed along the features' dimension, which yields a 2D output (# of cells, # of classes).
+        # The cells are summed along the 'in_features' dimension, which yields a 2D output (# of cells, # of classes).
         output = output.sum(2)
 
         # Adds our mask so that invalid domain classes for a given variable/_vid_ have a large negative value,
@@ -98,7 +98,7 @@ class TiedLinear(torch.nn.Module):
 class RepairModel:
     def __init__(self, env, feat_info, output_dim, bias=False):
         self.env = env
-        # A list of tuples (name, number_of_features, is_learnable, init_weight, feature_names (list)),
+        # A list of tuples structured as '(name, number_of_features, is_learnable, init_weight, feature_names (list))',
         # one for each featurizer.
         self.feat_info = feat_info
         # Number of classes.
@@ -169,6 +169,7 @@ class RepairModel:
         output = loss.forward(fx, y_var.squeeze(1))
         output.backward()
         optimizer.step()
+
         cost = output.item()
         return cost
 
