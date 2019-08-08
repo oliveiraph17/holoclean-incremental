@@ -6,9 +6,8 @@ from repair.featurize import *
 sys.path.append('../')
 
 dataset_name = 'hospital'
-# batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
-#            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
-batches = ['0001-0100', '0101-0200']
+batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
+           '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
 
 # This line pauses the execution to drop the tables if needed.
 drop = None
@@ -26,7 +25,7 @@ for batch in batches:
         max_domain=10000,
         cor_strength=0.6,
         nb_cor_strength=0.8,
-        epochs=2,
+        epochs=10,
         weight_decay=0.01,
         learning_rate=0.001,
         threads=1,

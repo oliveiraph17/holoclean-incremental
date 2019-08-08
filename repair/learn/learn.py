@@ -42,13 +42,13 @@ class TiedLinear(torch.nn.Module):
             self.in_features += feat_size
 
             feat_weight = Parameter(init_weight * torch.ones(1, feat_size), requires_grad=learnable)
-            if learnable:
+            if learnable and not self.env['save_load_checkpoint']:
                 self.reset_parameters(feat_weight)
             self.weight_list.append(feat_weight)
 
             if bias:
                 feat_bias = Parameter(torch.zeros(1, feat_size), requires_grad=learnable)
-                if learnable:
+                if learnable and not self.env['save_load_checkpoint']:
                     self.reset_parameters(feat_bias)
                 self.bias_list.append(feat_bias)
 
@@ -97,43 +97,55 @@ class TiedLinear(torch.nn.Module):
 
 class RepairModel:
     def __init__(self, env, feat_info, output_dim, bias=False):
+        # Environment variable.
         self.env = env
-        # A list of tuples structured as
-        # '(name, number_of_features, is_learnable, init_weight, feature_names (list))',
-        # one for each featurizer.
+
+        # A list of tuples, one per featurizer, having the following information:
+        # name, number_of_features, is_learnable, init_weight, feature_names (list)
         self.feat_info = feat_info
+
         # Number of classes.
         self.output_dim = output_dim
+
+        # Instantiates the model.
         self.model = TiedLinear(self.env, feat_info, output_dim, bias)
+
+        # Instantiates the optimizer based on the model parameters.
+        trainable_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+        if self.env['optimizer'] == 'sgd':
+            self.optimizer = optim.SGD(trainable_parameters,
+                                       lr=self.env['learning_rate'],
+                                       momentum=self.env['momentum'],
+                                       weight_decay=self.env['weight_decay'])
+        else:
+            self.optimizer = optim.Adam(trainable_parameters,
+                                        lr=self.env['learning_rate'],
+                                        weight_decay=self.env['weight_decay'])
+
+        if self.env['save_load_checkpoint']:
+            # Loads from disk the model parameters, the optimizer state, and the loss function
+            # to continue updating them from the point at which they were previously saved.
+            try:
+                checkpoint = self.load_checkpoint()
+
+                self.model.load_state_dict(checkpoint['model_state_dict'])
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.loss = checkpoint['loss']
+            except OSError:
+                logging.debug('No existing checkpoint could be loaded.')
+                raise
+        else:
+            # Uses the default initial model parameters and instantiates the loss function.
+            self.loss = torch.nn.CrossEntropyLoss()
+
+        # Used for report.
         self.featurizer_weights = {}
-        self.model_was_loaded = False
 
     def fit_model(self, x_train, y_train, mask_train):
         n_examples, n_classes, n_features = x_train.shape
 
-        loss = torch.nn.CrossEntropyLoss()
-
-        trainable_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
-        if self.env['optimizer'] == 'sgd':
-            optimizer = optim.SGD(trainable_parameters,
-                                  lr=self.env['learning_rate'],
-                                  momentum=self.env['momentum'],
-                                  weight_decay=self.env['weight_decay'])
-        else:
-            optimizer = optim.Adam(trainable_parameters,
-                                   lr=self.env['learning_rate'],
-                                   weight_decay=self.env['weight_decay'])
-
         batch_size = self.env['batch_size']
         epochs = self.env['epochs']
-
-        try:
-            self.load_model(optimizer)
-            # Ensures the layers are in training mode.
-            self.model.train()
-            self.model_was_loaded = True
-        except OSError:
-            logging.debug('No existing model could be loaded.')
 
         for i in tqdm(range(epochs)):
             cost = 0.
@@ -141,13 +153,9 @@ class RepairModel:
 
             for k in range(num_batches):
                 start, end = k * batch_size, (k + 1) * batch_size
-                cost += self.__train__(loss, optimizer, x_train[start:end], y_train[start:end], mask_train[start:end])
+                cost += self.__train__(x_train[start:end], y_train[start:end], mask_train[start:end])
 
             if self.env['verbose']:
-                if self.model_was_loaded:
-                    # Sets dropout and batch normalization layers to evaluation mode before running inference.
-                    self.model.eval()
-
                 # Computes and prints accuracy at the end of epoch.
                 grdt = y_train.numpy().flatten()
                 y_pred = self.__predict__(x_train, mask_train)
@@ -157,23 +165,16 @@ class RepairModel:
                               cost / num_batches,
                               100. * np.mean(y_assign == grdt))
 
-                if self.model_was_loaded:
-                    # Ensures the layers are in training mode.
-                    self.model.train()
-
-        self.save_model(optimizer)
+        if self.env['save_load_model']:
+            self.save_checkpoint()
 
     def infer_values(self, x_pred, mask_pred):
-        if self.model_was_loaded:
-            # Sets dropout and batch normalization layers to evaluation mode before running inference.
-            self.model.eval()
-
         logging.info('Inferring %d examples (cells)', x_pred.shape[0])
         output = self.__predict__(x_pred, mask_pred)
         return output
 
     # noinspection PyUnresolvedReferences,PyTypeChecker
-    def __train__(self, loss, optimizer, x_train, y_train, mask_train):
+    def __train__(self, x_train, y_train, mask_train):
         x_var = Variable(x_train, requires_grad=False)
         y_var = Variable(y_train, requires_grad=False)
         mask_var = Variable(mask_train, requires_grad=False)
@@ -181,7 +182,7 @@ class RepairModel:
         index = torch.LongTensor(range(x_var.size()[0]))
         index_var = Variable(index, requires_grad=False)
 
-        optimizer.zero_grad()
+        self.optimizer.zero_grad()
 
         # Fully-connected layer with shared parameters between output classes for linear combination of input features.
         # Mask makes invalid output classes have a large negative value to zero out their softmax probabilities.
@@ -190,9 +191,9 @@ class RepairModel:
         # 'loss': CrossEntropyLoss, which performs LogSoftmax followed by Negative Log-Likelihood Loss.
         # 'fx': 2D tensor (# of cells, # of classes) representing a linear activation.
         # 'y_var': 2D tensor (# of cells, 1) assigning the respective weak label (index of correct class) to each cell.
-        output = loss.forward(fx, y_var.squeeze(1))
+        output = self.loss.forward(fx, y_var.squeeze(1))
         output.backward()
-        optimizer.step()
+        self.optimizer.step()
 
         cost = output.item()
         return cost
@@ -241,14 +242,13 @@ class RepairModel:
 
         return report
 
-    def save_model(self, optimizer, file_path='/tmp/checkpoint.tar'):
+    def save_checkpoint(self, file_path='/tmp/checkpoint.tar'):
         torch.save({
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict()
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': self.loss
         }, file_path)
 
-    def load_model(self, optimizer, file_path='/tmp/checkpoint.tar'):
-        checkpoint = torch.load(file_path)
-
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    @staticmethod
+    def load_checkpoint(file_path='/tmp/checkpoint.tar'):
+        return torch.load(file_path)

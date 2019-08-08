@@ -21,7 +21,7 @@ gensim_logger.setLevel(logging.WARNING)
 
 # Arguments for HoloClean.
 arguments = [
-    (('-u', '--db_user'),
+    (('-u', '--db-user'),
      {'metavar': 'DB_USER',
       'dest': 'db_user',
       'default': 'holocleanuser',
@@ -39,7 +39,7 @@ arguments = [
       'default': 'localhost',
       'type': str,
       'help': 'Host for DB used to persist state.'}),
-    (('-d', '--db_name'),
+    (('-d', '--db-name'),
      {'metavar': 'DB_NAME',
       'dest': 'db_name',
       'default': 'holo',
@@ -81,7 +81,7 @@ arguments = [
       'default': 20,
       'type': float,
       'help': 'Number of epochs used for training.'}),
-    (('-w', '--weight_decay'),
+    (('-w', '--weight-decay'),
      {'metavar': 'WEIGHT_DECAY',
       'dest':  'weight_decay',
       'default': 0.01,
@@ -105,7 +105,7 @@ arguments = [
       'default': 0.90,
       'type': float,
       'help': 'Threshold of posterior probability to assign weak labels.'}),
-    (('-dt1', '--domain_thresh_1'),
+    (('-dt1', '--domain-thresh-1'),
      {'metavar': 'DOMAIN_THRESH_1',
       'dest': 'domain_thresh_1',
       'default': 0.1,
@@ -143,19 +143,19 @@ arguments = [
       'default': True,
       'type': bool,
       'help': 'Normalize the features before training.'}),
-    (('-wn', '--weight_norm'),
+    (('-wn', '--weight-norm'),
      {'metavar': 'WEIGHT_NORM',
       'dest': 'weight_norm',
       'default': False,
       'type': bool,
       'help': 'Normalize the weights after every forward pass during training.'}),
-    (('-ee', '--estimator_epochs'),
+    (('-ee', '--estimator-epochs'),
      {'metavar': 'ESTIMATOR_EPOCHS',
       'dest': 'estimator_epochs',
       'default': 3,
       'type': int,
       'help': 'Number of epochs to run the weak labelling and domain generation estimator.'}),
-    (('-ebs', '--estimator_batch_size'),
+    (('-ebs', '--estimator-batch-size'),
      {'metavar': 'ESTIMATOR_BATCH_SIZE',
       'dest': 'estimator_batch_size',
       'default': 32,
@@ -167,19 +167,38 @@ arguments = [
       'default': False,
       'type': bool,
       'help': 'Run HoloClean over incoming data incrementally.'}),
-    (('-inc', '--incremental_entropy'),
+    (('-ie', '--incremental-entropy'),
      {'metavar': 'INCREMENTAL_ENTROPY',
       'dest': 'incremental_entropy',
       'default': False,
       'type': bool,
       'help': 'Compute conditional entropy using the incremental method. It requires incremental=True.'}),
     (('-rpe', '--repair-previous-errors'),
-     {'metavar': 'REPAIR PREVIOUS ERRORS',
+     {'metavar': 'REPAIR_PREVIOUS_ERRORS',
       'dest': 'repair_previous_errors',
       'default': False,
       'type': bool,
       'help': 'Try to repair again errors that were not repaired in previous iterations.' +
-              'It requires incremental=True.'})
+              'It requires incremental=True.'}),
+    (('-st', '--skip-training'),
+     {'metavar': 'SKIP_TRAINING',
+      'dest': 'skip_training',
+      'default': False,
+      'type': bool,
+      'help': 'Skip the training phase.'}),
+    (('-ipt', '--ignore-previous-tuples'),
+     {'metavar': 'IGNORE_PREVIOUS_TUPLES',
+      'dest': 'ignore_previous_tuples',
+      'default': False,
+      'type': bool,
+      'help': 'During the training phase, ignore tuples from previous batches that were already used for training.'}),
+    (('-slc', '--save-load-checkpoint'),
+     {'metavar': 'SAVE_LOAD_CHECKPOINT',
+      'dest': 'save_load_checkpoint',
+      'default': False,
+      'type': bool,
+      'help': 'Maintain model parameters and optimizer state incrementally,' +
+              'as well as keep track of the loss function used.'})
 ]
 
 # Flags for HoloClean mode.
@@ -334,21 +353,30 @@ class Session:
         status, feat_time = self.repair_engine.setup_featurized_ds(featurizers)
         logging.info(status)
         logging.debug('Time to featurize data: %.2f secs', feat_time)
+
         status, setup_time = self.repair_engine.setup_repair_model()
         logging.info(status)
         logging.debug('Time to setup repair model: %.2f secs', feat_time)
-        status, fit_time = self.repair_engine.fit_repair_model()
-        logging.info(status)
-        logging.debug('Time to fit repair model: %.2f secs', fit_time)
+
+        if self.env['skip_training']:
+            logging.debug('Skipping training phase...')
+        else:
+            status, fit_time = self.repair_engine.fit_repair_model()
+            logging.info(status)
+            logging.debug('Time to fit repair model: %.2f secs', fit_time)
+
         status, infer_time = self.repair_engine.infer_repairs()
         logging.info(status)
         logging.debug('Time to infer correct cell values: %.2f secs', infer_time)
+
         status, time = self.ds.get_inferred_values()
         logging.info(status)
         logging.debug('Time to collect inferred values: %.2f secs', time)
+
         status, time = self.ds.get_repaired_dataset()
         logging.info(status)
         logging.debug('Time to store repaired dataset: %.2f secs', time)
+
         if self.env['print_fw']:
             status, time = self.repair_engine.get_featurizer_weights()
             logging.info(status)
