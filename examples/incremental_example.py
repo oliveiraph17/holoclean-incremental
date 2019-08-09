@@ -18,13 +18,6 @@ while drop != 'y' and drop != 'n':
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
-
-    if batch == batches[0]:
-        checkpoint_flag = False
-    else:
-        # Set here the desired value for the save_load_checkpoint option.
-        checkpoint_flag = True
-
     # Setup a HoloClean session.
     hc = holoclean.HoloClean(
         db_name='holo',
@@ -47,7 +40,7 @@ for batch in batches:
         incremental=True,
         incremental_entropy=False,
         repair_previous_errors=True,
-        save_load_checkpoint=checkpoint_flag
+        save_load_checkpoint=True
     ).session
 
     if batch == batches[0]:

@@ -96,7 +96,7 @@ class TiedLinear(torch.nn.Module):
 
 
 class RepairModel:
-    def __init__(self, env, feat_info, output_dim):
+    def __init__(self, env, feat_info, output_dim, is_first_batch):
         # Environment variable.
         self.env = env
 
@@ -106,6 +106,8 @@ class RepairModel:
 
         # Number of classes.
         self.output_dim = output_dim
+
+        self.is_first_batch = is_first_batch
 
         # Instantiates the model: fully-connected layer with shared parameters between output classes for linear
         # combination of input features.
@@ -132,7 +134,7 @@ class RepairModel:
         else:
             raise Exception('Unexpected loss function.')
 
-        if self.env['save_load_checkpoint']:
+        if self.env['save_load_checkpoint'] and not self.is_first_batch:
             # Loads from disk the model parameters, the optimizer state, and the loss function
             # to continue using them from the point at which they were previously saved.
             try:
@@ -170,8 +172,12 @@ class RepairModel:
                               cost / num_batches,
                               100. * np.mean(y_assign == grdt))
 
-        if self.env['save_load_checkpoint']:
+        if self.is_first_batch:
+            # Always save at least one version of the model.
             self.save_checkpoint()
+        else:
+            if self.env['save_load_checkpoint']:
+                self.save_checkpoint()
 
     def infer_values(self, x_pred, mask_pred):
         logging.info('Inferring %d examples (cells)', x_pred.shape[0])
