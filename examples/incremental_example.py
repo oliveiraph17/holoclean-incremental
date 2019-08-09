@@ -1,6 +1,7 @@
 import holoclean
 import logging
 import sys
+import os
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 sys.path.append('../')
@@ -12,10 +13,18 @@ batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
 # This line pauses the execution to drop the tables if needed.
 drop = None
 while drop != 'y' and drop != 'n':
-    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats? (y/n) ')
+    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats, and the '
+                 'model checkpoint file? (y/n) ')
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
+
+    if batch == batches[0]:
+        checkpoint_flag = False
+    else:
+        # Set here the desired value for the save_load_checkpoint option.
+        checkpoint_flag = True
+
     # Setup a HoloClean session.
     hc = holoclean.HoloClean(
         db_name='holo',
@@ -25,7 +34,7 @@ for batch in batches:
         max_domain=10000,
         cor_strength=0.6,
         nb_cor_strength=0.8,
-        epochs=10,
+        epochs=2,
         weight_decay=0.01,
         learning_rate=0.001,
         threads=1,
@@ -37,12 +46,15 @@ for batch in batches:
         print_fw=False,
         incremental=True,
         incremental_entropy=False,
-        repair_previous_errors=True
+        repair_previous_errors=True,
+        save_load_checkpoint=checkpoint_flag
     ).session
 
     if batch == batches[0]:
         if drop == 'y':
             hc.ds.engine.drop_tables([dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats'])
+            if os.path.exists('/tmp/checkpoint.tar'):
+                os.remove('/tmp/checkpoint.tar')
 
     # Load existing data and Denial Constraints.
     hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + batch + '.csv')

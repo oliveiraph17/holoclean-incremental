@@ -63,6 +63,12 @@ arguments = [
       'default': 45,
       'type': int,
       'help': 'The seed to be used for torch.'}),
+    (('-lo', '--loss-function'),
+     {'metavar': 'LOSS_FUNCTION',
+      'dest': 'loss_function',
+      'default': 'cross_entropy',
+      'type': str,
+      'help': 'Loss function used during training.'}),
     (('-l', '--learning-rate'),
      {'metavar': 'LEARNING_RATE',
       'dest': 'learning_rate',
@@ -373,7 +379,10 @@ class Session:
         logging.info(status)
         logging.debug('Time to collect inferred values: %.2f secs', time)
 
-        status, time = self.ds.get_repaired_dataset()
+        if self.env['incremental']:
+            status, time = self.ds.get_repaired_dataset_incremental()
+        else:
+            status, time = self.ds.get_repaired_dataset()
         logging.info(status)
         logging.debug('Time to store repaired dataset: %.2f secs', time)
 
