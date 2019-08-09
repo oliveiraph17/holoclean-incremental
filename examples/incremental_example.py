@@ -13,8 +13,8 @@ batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
 # This line pauses the execution to drop the tables if needed.
 drop = None
 while drop != 'y' and drop != 'n':
-    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, and pair_attr_stats, and the '
-                 'model checkpoint file? (y/n) ')
+    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, pair_attr_stats, '
+                 'and the model checkpoint file? (y/n) ')
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
