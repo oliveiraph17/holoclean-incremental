@@ -68,7 +68,10 @@ class TiedLinear(torch.nn.Module):
         if self.weight_norm:
             self.w = self.w.div(self.w.norm(p=2))
 
-        # Expand so we can do matrix multiplication with each cell and their maximum domain size.
+        # Expands the tensor 'w' so we can do matrix multiplication with each cell and their maximum domain size.
+        # Such operation results in the paratemers being shared across the output classes.
+        # This is because it does not allocate more memory for the expanded version of the tensor.
+        # It only returns a view of the tensor 'w' where the first dimension is expanded to 'output_dim'.
         self.w = self.w.expand(self.output_dim, -1)
 
         if self.bias_flag:
@@ -79,7 +82,7 @@ class TiedLinear(torch.nn.Module):
         # Needs to be called every pass because the weights might have been updated in previous epochs.
         self.concat_weights()
 
-        # Although 'x' is 3D and 'w' is 2D, the tensors are broadcasted first so that both are 3D.
+        # Although 'x' is 3D and 'w' is 2D, the tensor 'w' is broadcasted first so that both tensors are 3D.
         # Then, each element in 'x' is multiplied by the corresponding element in 'w'.
         output = x.mul(self.w)
 
@@ -109,9 +112,8 @@ class RepairModel:
 
         self.is_first_batch = is_first_batch
 
-        # Instantiates the model: fully-connected layer with shared parameters between output classes for linear
-        # combination of input features.
-        # Uses the default initial model parameters and instantiates the loss function.
+        # Instantiates the model with default initial parameters.
+        # Fully connected layer with shared parameters between output classes for linear combination of input features.
         self.model = TiedLinear(feat_info, output_dim, env['bias'], env['weight_norm'])
 
         # Instantiates the optimizer based on the model parameters.
@@ -128,6 +130,7 @@ class RepairModel:
         else:
             raise Exception('Unexpected optimizer.')
 
+        # Instantiates the loss function.
         if self.env['loss_function'] == 'cross_entropy':
             # CrossEntropyLoss: performs Log-Softmax followed by Negative Log-Likelihood Loss.
             self.loss = torch.nn.CrossEntropyLoss()
@@ -173,7 +176,7 @@ class RepairModel:
                               100. * np.mean(y_assign == grdt))
 
         if self.is_first_batch:
-            # Always save at least one version of the model.
+            # Always saves at least one version of the model.
             self.save_checkpoint()
         else:
             if self.env['save_load_checkpoint']:
@@ -186,7 +189,7 @@ class RepairModel:
 
     # noinspection PyUnresolvedReferences,PyTypeChecker
     def __train__(self, x_train, y_train, mask_train):
-        # Tensor with the features
+        # Tensor with the features.
         x_var = Variable(x_train, requires_grad=False)
 
         # 2D tensor (# of cells, 1) assigning the respective weak label (index of correct class) to each cell.
@@ -217,6 +220,7 @@ class RepairModel:
 
         # Mask makes invalid output classes have a large negative value to zero out their Softmax probabilities.
         mask_var = Variable(mask_pred, requires_grad=False)
+
         index = torch.LongTensor(range(x_var.size()[0]))
         index_var = Variable(index, requires_grad=False)
 
@@ -264,9 +268,7 @@ class RepairModel:
     def save_checkpoint(self, file_path='/tmp/checkpoint.tar'):
         torch.save({
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            # 'loss': self.loss
-            # TODO: Check if it is possible and useful to save the loss function.
+            'optimizer_state_dict': self.optimizer.state_dict()
         }, file_path)
 
     @staticmethod

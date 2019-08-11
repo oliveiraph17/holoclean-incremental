@@ -509,6 +509,7 @@ class Dataset:
 
             # Converts the index into a regular attribute.
             df_by_tid.reset_index(level=0, inplace=True)
+
             # Creates a dictionary which maps each '_tid_' to its respective 'idx'.
             tid_to_idx = df_by_tid[['index', '_tid_']].set_index('_tid_').to_dict()
 
@@ -524,10 +525,11 @@ class Dataset:
             for attr in repaired_vals[tid]:
                 # Checks if the value was repaired.
                 if init_records[idx][attr] != repaired_vals[tid][attr]:
-
-                    # Updates the statistics regarding the repaired value. This must be done before replacing the old
-                    # value with the repaired one.
-                    self.update_value_stats(init_records[idx], attr, init_records[idx][attr],
+                    # Updates the statistics regarding the repaired value.
+                    # This must be done before replacing the old value with the repaired one.
+                    self.update_value_stats(init_records[idx],
+                                            attr,
+                                            init_records[idx][attr],
                                             repaired_vals[tid][attr])
 
                     # Updates the record.
@@ -536,7 +538,7 @@ class Dataset:
         repaired_df = pd.DataFrame.from_records(init_records)
         name = self.raw_data.name + '_repaired'
 
-        # TODO: Update the repaired dataset with re-repaired tuples instead of replacing it entirely.
+        # TODO: Persist the repaired dataset by updating the re-repaired tuples instead of replacing it entirely.
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
         self.repaired_data.store_to_db(self.engine.engine)
 
