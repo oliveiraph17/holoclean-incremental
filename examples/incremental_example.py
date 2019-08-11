@@ -33,19 +33,22 @@ for batch in batches:
         threads=1,
         batch_size=1,
         verbose=False,
-        timeout=3 * 60000,
+        timeout=3*60000,
         feature_norm=False,
         weight_norm=False,
         print_fw=False,
         incremental=True,
         incremental_entropy=False,
         repair_previous_errors=True,
+        skip_training=False,
+        ignore_previous_cells=True,
         save_load_checkpoint=True
     ).session
 
     if batch == batches[0]:
         if drop == 'y':
-            hc.ds.engine.drop_tables([dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats'])
+            table_list = [dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats', 'cell_training']
+            hc.ds.engine.drop_tables(table_list)
             if os.path.exists('/tmp/checkpoint.tar'):
                 os.remove('/tmp/checkpoint.tar')
 

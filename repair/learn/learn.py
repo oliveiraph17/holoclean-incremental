@@ -80,10 +80,13 @@ class TiedLinear(torch.nn.Module):
     def forward(self, x, index, mask):
         # Concatenates different featurizer weights.
         # Needs to be called every pass because the weights might have been updated in previous epochs.
+        # By doing so, the tensor 'w' keeps up-to-date.
         self.concat_weights()
 
         # Although 'x' is 3D and 'w' is 2D, the tensor 'w' is broadcasted first so that both tensors are 3D.
-        # Then, each element in 'x' is multiplied by the corresponding element in 'w'.
+        # This occurs first by making the 2 existing dimensions of 'w' the 2nd and 3rd ones.
+        # Then, each slice from such dimensions is copied along the newly-created 1st dimension.
+        # Now that both tensors are 3D, each element in 'x' is multiplied by the corresponding element in 'w'.
         output = x.mul(self.w)
 
         if self.bias_flag:
@@ -110,6 +113,7 @@ class RepairModel:
         # Number of classes.
         self.output_dim = output_dim
 
+        # Flag for first batch.
         self.is_first_batch = is_first_batch
 
         # Instantiates the model with default initial parameters.
@@ -138,7 +142,7 @@ class RepairModel:
             raise Exception('Unexpected loss function.')
 
         if self.env['save_load_checkpoint'] and not self.is_first_batch:
-            # Loads from disk the model parameters, the optimizer state, and the loss function
+            # Loads from disk the model parameters and the optimizer state
             # to continue using them from the point at which they were previously saved.
             try:
                 checkpoint = self.load_checkpoint()

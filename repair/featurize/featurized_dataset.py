@@ -5,7 +5,7 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as F
+import torch.nn.functional
 
 from dataset import AuxTables, CellStatus
 from utils import NULL_REPR
@@ -68,7 +68,7 @@ class FeaturizedDataset:
             # n_cells, n_classes, n_feats = self.tensor.shape
 
             # Normalize the features within each cell.
-            self.tensor = F.normalize(self.tensor, p=2, dim=1)
+            self.tensor = functional.normalize(self.tensor, p=2, dim=1)
             logging.debug("DONE feature normalization")
 
     # noinspection PyUnresolvedReferences
@@ -135,6 +135,7 @@ class FeaturizedDataset:
     def get_tensor(self):
         return self.tensor
 
+    # noinspection PyUnresolvedReferences
     def get_training_data(self):
         """
         Returns the tensors 'x_train', 'y_train', and 'mask_train', where each row of each tensor is a variable/_vid_.
@@ -144,11 +145,26 @@ class FeaturizedDataset:
         This assumes that we have a larger proportion of correct initial values and only
         a small amount of incorrect initial values, which allows us to train for convergence.
         """
-        train_idx = (self.weak_labels != -1).nonzero()[:, 0]
+        if self.env['ignore_previous_cells'] and not self.ds.is_first_batch():
+            # Indexes of weak-labelled cells converted to a NumPy array.
+            weak_labelled_cells = (self.weak_labels != -1).nonzero()[:, 0].numpy()
+
+            # NumPy array containing indexes (_vid_'s) of cells previously used in training.
+            previous_cells = self.ds.load_cell_training()
+
+            # Removes cells previously used in training from the 'train_idx' NumPy array.
+            np.delete(weak_labelled_cells, previous_cells, 0)
+
+            # Finally, converts 'train_idx' back to a tensor.
+            train_idx = torch.from_numpy(weak_labelled_cells)
+        else:
+            train_idx = (self.weak_labels != -1).nonzero()[:, 0]
+
         x_train = self.tensor.index_select(0, train_idx)
         y_train = self.weak_labels.index_select(0, train_idx)
         mask_train = self.var_class_mask.index_select(0, train_idx)
-        return x_train, y_train, mask_train
+
+        return x_train, y_train, mask_train, train_idx
 
     def get_infer_data(self):
         """

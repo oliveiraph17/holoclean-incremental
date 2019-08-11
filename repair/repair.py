@@ -35,12 +35,22 @@ class RepairEngine:
 
     def fit_repair_model(self):
         tic = time.clock()
-        x_train, y_train, mask_train = self.feat_dataset.get_training_data()
+
+        x_train, y_train, mask_train, train_idx = self.feat_dataset.get_training_data()
         logging.info('Training with %d training examples (cells)', x_train.shape[0])
+
         self.repair_model.fit_model(x_train, y_train, mask_train)
+
+        if self.env['ignore_previous_cells']:
+            # Generates table 'cell_training'.
+            cell_training = [{'_vid_': train_idx[i][0]} for i in range(train_idx.shape[0])]
+            self.ds.generate_aux_table(AuxTables.cell_training, pd.DataFrame(data=cell_training), store=True)
+
         toc = time.clock()
+
         status = "DONE training repair model"
         train_time = toc - tic
+
         return status, train_time
 
     def infer_repairs(self):

@@ -192,19 +192,18 @@ arguments = [
       'default': False,
       'type': bool,
       'help': 'Skip the training phase.'}),
-    (('-ipt', '--ignore-previous-tuples'),
-     {'metavar': 'IGNORE_PREVIOUS_TUPLES',
-      'dest': 'ignore_previous_tuples',
+    (('-ipt', '--ignore-previous-cells'),
+     {'metavar': 'IGNORE_PREVIOUS_CELLS',
+      'dest': 'ignore_previous_cells',
       'default': False,
       'type': bool,
-      'help': 'During the training phase, ignore tuples from previous batches that were already used for training.'}),
+      'help': 'During the training phase, ignore cells from previous batches that were already used for training.'}),
     (('-slc', '--save-load-checkpoint'),
      {'metavar': 'SAVE_LOAD_CHECKPOINT',
       'dest': 'save_load_checkpoint',
       'default': False,
       'type': bool,
-      'help': 'Maintain model parameters and optimizer state incrementally,' +
-              'as well as keep track of the loss function used.'})
+      'help': 'Maintain model parameters and optimizer state incrementally.'})
 ]
 
 # Flags for HoloClean mode.

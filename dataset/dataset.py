@@ -25,6 +25,7 @@ class AuxTables(Enum):
     inf_values_dom = 7
     single_attr_stats = 8
     pair_attr_stats = 9
+    cell_training = 10
 
 
 class CellStatus(Enum):
@@ -926,4 +927,12 @@ class Dataset:
     def get_previous_dirty_rows(self):
         if self.previous_dirty_rows is None:
             raise Exception('ERROR Potentially dirty rows from the previous dataset could not be loaded')
+
         return self.previous_dirty_rows
+
+    def load_cell_training(self):
+        self.aux_table[AuxTables.cell_training] = Table(AuxTables.cell_training.name,
+                                                        Source.DB,
+                                                        db_engine=self.engine)
+
+        return self.aux_table[AuxTables.cell_training].df.to_numpy()
