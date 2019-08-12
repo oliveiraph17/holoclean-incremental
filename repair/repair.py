@@ -46,7 +46,12 @@ class RepairEngine:
             training_cells = []
             for i in range(len(train_cid)):
                 training_cells.append({'_cid_': train_cid[i]})
-            self.ds.generate_aux_table(AuxTables.training_cells, pd.DataFrame(data=training_cells), store=True)
+
+            self.ds.generate_aux_table(AuxTables.training_cells,
+                                       pd.DataFrame(data=training_cells),
+                                       store=True,
+                                       index_attrs=False,
+                                       append=True)
 
         toc = time.clock()
 

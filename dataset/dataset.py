@@ -151,19 +151,20 @@ class Dataset:
     def set_constraints(self, constraints):
         self.constraints = constraints
 
-    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False):
+    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False, append=False):
         """
         generate_aux_table writes/overwrites the auxiliary table specified by 'aux_table'.
 
         It does the following:
-          1. stores/replaces the specified aux_table in PostgreSQL (store=True), AND/OR
+          1. stores/replaces (store=True) or appends (append=True) the specified aux_table in PostgreSQL, AND/OR
           2. sets an index on the aux_table's internal pandas.DataFrame (index_attrs=[<columns>]), AND/OR
           3. creates PostgreSQL indexes on aux_table (store=True and index_attrs=[<columns>]).
 
         :param aux_table: (AuxTable) auxiliary table to generate.
         :param df: (DataFrame) dataframe used for memoizing and storing this auxiliary table.
-        :param store: (bool) if True, creates/replaces PostgreSQL table with this auxiliary table.
+        :param store: (bool) if True, creates PostgreSQL table or replaces it with this auxiliary table.
         :param index_attrs: (list[str]) list of attributes to create indexes on.
+        :param append: (bool) if True, appends this auxiliary table to the PostgreSQL table.
         """
         try:
             self.aux_table[aux_table] = Table(aux_table.name,
@@ -171,7 +172,10 @@ class Dataset:
                                               df=df)
 
             if store:
-                self.aux_table[aux_table].store_to_db(self.engine.engine)
+                if append:
+                    self.aux_table[aux_table].store_to_db(self.engine.engine, if_exists='append')
+                else:
+                    self.aux_table[aux_table].store_to_db(self.engine.engine)
             if index_attrs:
                 self.aux_table[aux_table].create_df_index(index_attrs)
             if store and index_attrs:
