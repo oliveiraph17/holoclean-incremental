@@ -44,7 +44,7 @@ class RepairEngine:
         if self.env['ignore_previous_training_cells']:
             # Generates table 'training_cells'.
             training_cells = []
-            for i in range(train_cid.shape[0]):
+            for i in range(len(train_cid)):
                 training_cells.append({'_cid_': train_cid[i]})
             self.ds.generate_aux_table(AuxTables.training_cells, pd.DataFrame(data=training_cells), store=True)
 
