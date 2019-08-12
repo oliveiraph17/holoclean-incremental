@@ -57,8 +57,7 @@ class FeaturizedDataset:
 
         logging.debug("Generating weak labels...")
         if not self.env['ignore_previous_training_cells'] or self.ds.is_first_batch():
-            self.weak_labels, self.is_clean = self.generate_weak_labels()
-            self.train_cid = None
+            self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels()
         else:
             self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels_with_reduced_cells()
         logging.debug("DONE weak label generation")
@@ -87,9 +86,10 @@ class FeaturizedDataset:
         """
         # Generates weak labels for clean cells and for potentially dirty cells that have been weak-labelled.
         # Also returns True or False depending on whether each cell is clean or potentially dirty, respectively.
+        # Finally, returns t1._cid_ in order to keep track of what cells have been used in training so far.
         # Cells with NULL weak labels (i.e. NULL init values that were not weak-labelled) are ignored.
         query = """
-            SELECT _vid_, weak_label_idx, (t2._cid_ IS NULL) AS clean
+            SELECT _vid_, weak_label_idx, (t2._cid_ IS NULL) AS clean, t1._cid_
             FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
             WHERE weak_label != '{null_repr}' AND (t2._cid_ IS NULL OR t1.fixed != {cell_status});
         """.format(cell_domain=AuxTables.cell_domain.name,
@@ -107,15 +107,20 @@ class FeaturizedDataset:
         labels = -1 * torch.ones(self.total_vars, 1).type(torch.LongTensor)
         is_clean = torch.zeros(self.total_vars, 1).type(torch.LongTensor)
 
+        # Instantiates list.
+        current_training_cells = []
+
         for tup in tqdm(res):
             vid = int(tup[0])
             label = int(tup[1])
             clean = int(tup[2])
+            cid = int(tup[3])
 
             labels[vid] = label
             is_clean[vid] = clean
+            current_training_cells.append(cid)
 
-        return labels, is_clean
+        return labels, is_clean, current_training_cells
 
     # noinspection PyUnresolvedReferences
     def generate_weak_labels_with_reduced_cells(self):
