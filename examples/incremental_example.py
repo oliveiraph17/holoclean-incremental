@@ -14,7 +14,7 @@ batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
 drop = None
 while drop != 'y' and drop != 'n':
     drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, pair_attr_stats, '
-                 'and the model checkpoint file? (y/n) ')
+                 'training_cells, and the model checkpoint file? (y/n) ')
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
@@ -41,13 +41,13 @@ for batch in batches:
         incremental_entropy=False,
         repair_previous_errors=True,
         skip_training=False,
-        ignore_previous_cells=True,
+        ignore_previous_training_cells=True,
         save_load_checkpoint=True
     ).session
 
     if batch == batches[0]:
         if drop == 'y':
-            table_list = [dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats', 'cell_training']
+            table_list = [dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats', 'training_cells']
             hc.ds.engine.drop_tables(table_list)
             if os.path.exists('/tmp/checkpoint.tar'):
                 os.remove('/tmp/checkpoint.tar')
