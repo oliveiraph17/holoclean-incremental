@@ -56,7 +56,7 @@ class FeaturizedDataset:
         self.in_features = self.tensor.shape[2]
 
         logging.debug("Generating weak labels...")
-        if not self.env['ignore_previous_training_cells']:
+        if not self.env['ignore_previous_training_cells'] or self.ds.is_first_batch():
             self.weak_labels, self.is_clean = self.generate_weak_labels()
             self.train_cid = None
         else:
