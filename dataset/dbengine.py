@@ -14,7 +14,7 @@ create_table_template = Template('CREATE TABLE "$table" AS ($stmt)')
 
 class DBengine:
     """
-    A wrapper class for postgresql engine.
+    A wrapper class for PostgreSQL engine.
     Maintains connections and executes queries.
     """
     def __init__(self, user, pwd, db, host='localhost', port=5432, pool_size=20, timeout=60000):
@@ -28,25 +28,38 @@ class DBengine:
         self.conn_args = con
         self.engine = sql.create_engine(url, client_encoding='utf8', pool_size=pool_size)
 
+    def execute_updates(self, updates):
+        """
+        Executes :param updates: in parallel.
+
+        :param updates: (list[str]) list of SQL updates to be executed.
+        """
+        logging.debug('Preparing to execute %d updates.', len(updates))
+        tic = time.clock()
+        self._apply_func(partial(_execute_update, conn_args=self.conn_args),
+                         [(idx, q) for idx, q in enumerate(updates)])
+        toc = time.clock()
+        logging.debug('Time to execute %d updates: %.2f secs.', len(updates), toc - tic)
+
     def execute_queries(self, queries):
         """
         Executes :param queries: in parallel.
 
-        :param queries: (list[str]) list of SQL queries to be executed
+        :param queries: (list[str]) list of SQL queries to be executed.
         """
         logging.debug('Preparing to execute %d queries.', len(queries))
         tic = time.clock()
         results = self._apply_func(partial(_execute_query, conn_args=self.conn_args),
                                    [(idx, q) for idx, q in enumerate(queries)])
         toc = time.clock()
-        logging.debug('Time to execute %d queries: %.2f secs', len(queries), toc - tic)
+        logging.debug('Time to execute %d queries: %.2f secs.', len(queries), toc - tic)
         return results
 
     def execute_queries_w_backup(self, queries):
         """
         Executes :param queries: that have backups in parallel. Used in featurization.
 
-        :param queries: (list[str]) list of SQL queries to be executed
+        :param queries: (list[str]) list of SQL queries to be executed.
         """
         logging.debug('Preparing to execute %d queries.', len(queries))
         tic = time.clock()
@@ -54,21 +67,21 @@ class DBengine:
             partial(_execute_query_w_backup, conn_args=self.conn_args, timeout=self.timeout),
             [(idx, q) for idx, q in enumerate(queries)])
         toc = time.clock()
-        logging.debug('Time to execute %d queries: %.2f secs', len(queries), toc - tic)
+        logging.debug('Time to execute %d queries: %.2f secs.', len(queries), toc - tic)
         return results
 
     def execute_query(self, query):
         """
         Executes a single :param query: using current connection.
 
-        :param query: (str) SQL query to be executed
+        :param query: (str) SQL query to be executed.
         """
         tic = time.clock()
         conn = self.engine.connect()
         result = conn.execute(query).fetchall()
         conn.close()
         toc = time.clock()
-        logging.debug('Time to execute query: %.2f secs', toc - tic)
+        logging.debug('Time to execute query: %.2f secs.', toc - tic)
         return result
 
     def create_db_table_from_query(self, name, query):
@@ -80,7 +93,7 @@ class DBengine:
         conn.execute(create)
         conn.close()
         toc = time.clock()
-        logging.debug('Time to create table: %.2f secs', toc - tic)
+        logging.debug('Time to create table: %.2f secs.', toc - tic)
         return True
 
     def create_db_index(self, name, table, attr_list):
@@ -88,9 +101,9 @@ class DBengine:
         create_db_index creates a (multi-column) index on the columns/attributes
         specified in :param attr_list: with the given :param name: on :param table:.
 
-        :param name: (str) name of index
-        :param table: (str) name of table
-        :param attr_list: (list[str]) list of attributes/columns to create index on
+        :param name: (str) name of index.
+        :param table: (str) name of table.
+        :param attr_list: (list[str]) list of attributes/columns to create index on.
         """
         # We need to quote each attribute since PostgreSQL auto-downcases unquoted column references.
         quoted_attrs = map(lambda attr: '"{}"'.format(attr), attr_list)
@@ -100,7 +113,7 @@ class DBengine:
         result = conn.execute(stmt)
         conn.close()
         toc = time.clock()
-        logging.debug('Time to create index: %.2f secs', toc - tic)
+        logging.debug('Time to create index: %.2f secs.', toc - tic)
         return result
 
     def drop_tables(self, table_list):
@@ -110,7 +123,7 @@ class DBengine:
             conn.execute(drop_table_template.substitute(table=table))
         conn.close()
         toc = time.clock()
-        logging.debug('Time to drop %d tables: %.2f secs', len(table_list), toc - tic)
+        logging.debug('Time to drop %d tables: %.2f secs.', len(table_list), toc - tic)
         return True
 
     def _apply_func(self, func, collection):
@@ -119,10 +132,23 @@ class DBengine:
         return self._pool.map(func, collection)
 
 
+def _execute_update(args, conn_args):
+    update_id = args[0]
+    update = args[1]
+    logging.debug("Starting to execute update %s with id %s.", update, update_id)
+    tic = time.clock()
+    con = psycopg2.connect(conn_args)
+    cur = con.cursor()
+    cur.execute(update)
+    con.close()
+    toc = time.clock()
+    logging.debug('Time to execute update with id %d: %.2f secs.', update_id, (toc - tic))
+
+
 def _execute_query(args, conn_args):
     query_id = args[0]
     query = args[1]
-    logging.debug("Starting to execute query %s with id %s", query, query_id)
+    logging.debug("Starting to execute query %s with id %s.", query, query_id)
     tic = time.clock()
     con = psycopg2.connect(conn_args)
     cur = con.cursor()
@@ -130,7 +156,7 @@ def _execute_query(args, conn_args):
     res = cur.fetchall()
     con.close()
     toc = time.clock()
-    logging.debug('Time to execute query with id %d: %.2f secs', query_id, (toc - tic))
+    logging.debug('Time to execute query with id %d: %.2f secs.', query_id, (toc - tic))
     return res
 
 
@@ -138,11 +164,12 @@ def _execute_query_w_backup(args, conn_args, timeout):
     query_id = args[0]
     query = args[1][0]
     query_backup = args[1][1]
-    logging.debug("Starting to execute query %s with id %s", query, query_id)
+    logging.debug("Starting to execute query %s with id %s.", query, query_id)
     tic = time.clock()
     con = psycopg2.connect(conn_args)
     cur = con.cursor()
     cur.execute("SET statement_timeout to %d;" % timeout)
+
     # noinspection PyUnresolvedReferences
     try:
         cur.execute(query)
@@ -150,12 +177,11 @@ def _execute_query_w_backup(args, conn_args, timeout):
     except psycopg2.extensions.QueryCanceledError:
         logging.debug("Failed to execute query %s with id %s. Timeout reached.", query, query_id)
 
-        # No backup query, simply return empty result
         if not query_backup:
-            logging.warning("no backup query to execute, returning empty query results")
+            logging.warning("No backup query to execute. Returning empty query results.")
             return []
 
-        logging.debug("Starting to execute backup query %s with id %s", query_backup, query_id)
+        logging.debug("Starting to execute backup query %s with id %s.", query_backup, query_id)
         con.close()
         con = psycopg2.connect(conn_args)
         cur = con.cursor()
@@ -163,5 +189,5 @@ def _execute_query_w_backup(args, conn_args, timeout):
         res = cur.fetchall()
         con.close()
     toc = time.clock()
-    logging.debug('Time to execute query with id %d: %.2f secs', query_id, toc - tic)
+    logging.debug('Time to execute query with id %d: %.2f secs.', query_id, toc - tic)
     return res
