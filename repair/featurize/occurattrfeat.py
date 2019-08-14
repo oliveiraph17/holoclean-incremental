@@ -22,7 +22,7 @@ class OccurAttrFeaturizer(Featurizer):
     def specific_setup(self):
         self.name = 'OccurAttrFeaturizer'
         if not self.setup_done:
-            raise Exception('Featurizer {} is not properly setup.'.format(self.name))
+            raise Exception('Featurizer {} was not properly set up.'.format(self.name))
         self.all_attrs = self.ds.get_attributes()
         self.attrs_number = len(self.ds.attr_to_idx)
         self.raw_data_dict = {}
@@ -32,12 +32,12 @@ class OccurAttrFeaturizer(Featurizer):
         self.setup_stats()
 
     def setup_stats(self):
-        if not self.repair_previous_errors or self.ds.is_first_batch():
-            self.raw_data_dict = self.ds.get_raw_data().set_index('_tid_').to_dict('index')
-        else:
+        if not self.ds.is_first_batch() and self.repair_previous_errors:
             df = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()])
             df.reset_index(drop=True, inplace=True)
             self.raw_data_dict = df.set_index('_tid_').to_dict('index')
+        else:
+            self.raw_data_dict = self.ds.get_raw_data().set_index('_tid_').to_dict('index')
 
         total, single_stats, pair_stats = self.ds.get_statistics()
         self.total = float(total)
@@ -46,7 +46,7 @@ class OccurAttrFeaturizer(Featurizer):
 
     # noinspection PyShadowingBuiltins,PyTypeChecker
     def create_tensor(self):
-        # Iterate over tuples in domain.
+        # Iterates over tuples in domain.
         tensors = []
         t = self.ds.aux_table[AuxTables.cell_domain]
         sorted_domain = t.df.reset_index().sort_values(by=['_vid_'])[['_tid_', 'attribute', '_vid_', 'domain']]
@@ -76,7 +76,7 @@ class OccurAttrFeaturizer(Featurizer):
         for attr in self.all_attrs:
             val = tuple[attr]
 
-            # Ignore co-occurrence with the same attribute, when the value is NULL,
+            # Ignores co-occurrence with the same attribute, when the value is NULL,
             # as well as when the value only co-occurs with NULL values.
             if attr == rv_attr \
                     or val == NULL_REPR \

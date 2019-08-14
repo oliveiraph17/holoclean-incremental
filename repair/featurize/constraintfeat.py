@@ -81,7 +81,7 @@ class ConstraintFeaturizer(Featurizer):
     def generate_relaxed_sql(self):
         query_list = []
         for c in self.constraints:
-            # Check tuples in constraint.
+            # Checks tuples in constraint.
             unary = (len(c.tuple_names) == 1)
             if unary:
                 queries = self.gen_unary_queries(c)
@@ -104,7 +104,7 @@ class ConstraintFeaturizer(Featurizer):
         attr = predicate.components[0][1]
         op = predicate.operation
         comp = predicate.components[1]
-        # Do not quote literals/constants in comparison.
+        # Does not quote literals/constants in comparison.
         const = comp if comp.startswith('\'') else '"{}"'.format(comp)
         return attr, op, const
 
@@ -137,12 +137,12 @@ class ConstraintFeaturizer(Featurizer):
             return False, ['t2'], None
 
     def gen_unary_queries(self, constraint):
-        # Iterate over predicates and relax one predicate at a time.
+        # Iterates over predicates and relax one predicate at a time.
         queries = []
         predicates = constraint.predicates
         for k in range(len(predicates)):
             orig_cnf = self._orig_cnf(predicates, k)
-            # If there are no other predicates in the constraint, append TRUE to the WHERE condition.
+            # If there are no other predicates in the constraint, appends TRUE to the WHERE condition.
             # This avoids having multiple SQL templates.
             if len(orig_cnf) == 0:
                 orig_cnf = 'TRUE'
@@ -161,7 +161,7 @@ class ConstraintFeaturizer(Featurizer):
         predicates = constraint.predicates
         for k in range(len(predicates)):
             orig_cnf = self._orig_cnf(predicates, k)
-            # If there are no other predicates in the constraint, append TRUE to the WHERE condition.
+            # If there are no other predicates in the constraint, appends TRUE to the WHERE condition.
             # This avoids having multiple SQL templates.
             if len(orig_cnf) == 0:
                 orig_cnf = 'TRUE'
@@ -179,7 +179,7 @@ class ConstraintFeaturizer(Featurizer):
             else:
                 for idx, rel in enumerate(join_rel):
                     rv_attr, op, rv_val = self.relax_binary_predicate(predicates[k], idx)
-                    # Count number of queries.
+                    # Counts number of queries.
                     query = binary_template.substitute(init_table=self.init_table_name,
                                                        pos_values=AuxTables.pos_values.name,
                                                        join_rel=rel,

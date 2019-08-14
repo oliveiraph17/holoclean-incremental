@@ -41,6 +41,7 @@ for batch in batches:
         incremental_entropy=False,
         default_entropy=False,
         repair_previous_errors=True,
+        recompute_from_scratch=False,
         skip_training=False,
         ignore_previous_training_cells=True,
         save_load_checkpoint=True

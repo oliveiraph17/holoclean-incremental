@@ -19,7 +19,7 @@ class RepairEngine:
         tic = time.clock()
         self.feat_dataset = FeaturizedDataset(self.ds, self.env, featurizers)
         toc = time.clock()
-        status = "DONE setting up featurized dataset"
+        status = "DONE setting up featurized dataset."
         feat_time = toc - tic
         return status, feat_time
 
@@ -29,7 +29,7 @@ class RepairEngine:
         output_dim = self.feat_dataset.classes
         self.repair_model = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch())
         toc = time.clock()
-        status = "DONE setting up repair model"
+        status = "DONE setting up repair model."
         setup_time = toc - tic
         return status, setup_time
 
@@ -37,7 +37,7 @@ class RepairEngine:
         tic = time.clock()
 
         x_train, y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
-        logging.info('Training with %d training examples (cells)', x_train.shape[0])
+        logging.info('Training with %d training examples (cells).', x_train.shape[0])
 
         self.repair_model.fit_model(x_train, y_train, mask_train)
 
@@ -55,7 +55,7 @@ class RepairEngine:
 
         toc = time.clock()
 
-        status = "DONE training repair model"
+        status = "DONE training repair model."
         train_time = toc - tic
 
         return status, train_time
@@ -68,7 +68,7 @@ class RepairEngine:
         self.ds.generate_aux_table(AuxTables.cell_distr, distr_df, store=True, index_attrs=['_vid_'])
         self.ds.generate_aux_table(AuxTables.inf_values_idx, infer_val_df, store=True, index_attrs=['_vid_'])
         toc = time.clock()
-        status = "DONE inferring repairs"
+        status = "DONE inferring repairs."
         infer_time = toc - tic
         return status, infer_time
 

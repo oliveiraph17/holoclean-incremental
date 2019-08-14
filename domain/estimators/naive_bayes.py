@@ -26,7 +26,7 @@ class NaiveBayes(Estimator):
         # Rows indexed by _tid_.
         self.records_by_tid = {}
 
-        if self.env['repair_previous_errors'] and not self.ds.is_first_batch():
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
             records = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()]).to_records(index=False)
         else:
             records = self.ds.get_raw_data().to_records(index=False)

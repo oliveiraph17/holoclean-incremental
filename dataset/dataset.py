@@ -40,8 +40,14 @@ class Dataset:
     """
     def __init__(self, name, env):
         self.id = name
+        # Incoming data.
         self.raw_data = None
+        # DataFrame with the incoming data appended to previous repaired data.
+        self.raw_data_with_previous_repaired_data_df = None
+        # Data right after being repaired in the current execution of HoloClean.
         self.repaired_data = None
+        # DataFrame with the rows from the previous dataset that are involved in violations.
+        self.previous_dirty_rows_df = None
         self.constraints = None
         self.aux_table = {}
         # Starts DBengine.
@@ -68,18 +74,18 @@ class Dataset:
         self.cond_entropies_base_2 = {}
         # Correlations between attributes.
         self.correlations = None
+        # First _tid_ to be loaded.
+        self.first_tid = None
         # Boolean flag for incremental behavior.
         self.incremental = env['incremental']
         # Boolean flag for computing entropy using the incremental algorithm.
         self.incremental_entropy = env['incremental_entropy']
         # Boolean flag for computing entropy using the method implemented in pyitlib.
         self.default_entropy = env['default_entropy']
-        # First _tid_ to be loaded.
-        self.first_tid = None
-        # Boolean flag of repairing previous errors.
+        # Boolean flag for repairing previous errors.
         self.repair_previous_errors = env['repair_previous_errors']
-        # DataFrame with the rows from the previous dataset that are involved in violations.
-        self.previous_dirty_rows_df = None
+        # Boolean flag for recomputing statistics and retraining model from scratch in incremental scenarios.
+        self.recompute_from_scratch = env['recompute_from_scratch']
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
@@ -128,12 +134,12 @@ class Dataset:
             # Uses NULL_REPR to represent NULL values.
             df.fillna(NULL_REPR, inplace=True)
 
-            logging.info("Loaded %d rows with %d cells",
+            logging.info("Loaded %d rows with %d cells.",
                          len(df.index),
                          len(df.index) * len(df.columns))
 
             self.raw_data.store_to_db(self.engine.engine)
-            status = 'DONE Loading {fname}'.format(fname=os.path.basename(fpath))
+            status = 'DONE loading {fname}.'.format(fname=os.path.basename(fpath))
 
             # Generates indexes on attribute columns for faster queries.
             for attr in self.raw_data.get_attributes():
@@ -144,7 +150,7 @@ class Dataset:
             self.attr_to_idx = {attr: idx for idx, attr in enumerate(self.raw_data.get_attributes())}
             self.attr_count = len(self.attr_to_idx)
         except Exception:
-            logging.error('Loading data for table %s', name)
+            logging.error('Loading data for table %s.', name)
             raise
         toc = time.clock()
         load_time = toc - tic
@@ -183,7 +189,7 @@ class Dataset:
             if store and index_attrs:
                 self.aux_table[aux_table].create_db_index(self.engine, index_attrs)
         except Exception:
-            logging.error('Generating aux_table %s', aux_table.name)
+            logging.error('Generating aux_table %s.', aux_table.name)
             raise
 
     def generate_aux_table_sql(self, aux_table, query, index_attrs=None):
@@ -210,7 +216,7 @@ class Dataset:
         get_raw_data returns a pandas.DataFrame containing the raw data as it was initially loaded.
         """
         if self.raw_data is None:
-            raise Exception('ERROR No dataset loaded')
+            raise Exception('ERROR: No dataset loaded.')
         return self.raw_data.df
 
     def get_attributes(self):
@@ -218,7 +224,7 @@ class Dataset:
         get_attributes returns the trainable/learnable attributes (i.e. excluding meta-columns such as '_tid_').
         """
         if self.raw_data is None:
-            raise Exception('ERROR No dataset loaded')
+            raise Exception('ERROR: No dataset loaded.')
         return self.raw_data.get_attributes()
 
     def get_cell_id(self, tuple_id, attr_name):
@@ -270,21 +276,34 @@ class Dataset:
             Also known as co-occurrence count.
         """
 
+        # These combinations of parameters should never happen, since they are conflicting.
+        if not self.incremental and self.recompute_from_scratch:
+            raise Exception('Inconsistent parameters: incremental=%r, recompute_from_scratch=%r.' %
+                            (self.incremental, self.recompute_from_scratch))
+        elif self.incremental_entropy and self.recompute_from_scratch:
+            raise Exception('Inconsistent parameters: incremental_entropy=%r, recompute_from_scratch=%r.' %
+                            (self.incremental_entropy, self.recompute_from_scratch))
+
         total_tuples_loaded = None
         single_attr_stats_loaded = None
         pair_attr_stats_loaded = None
 
-        logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data')
+        logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data.')
 
-        if self.incremental:
+        if self.incremental and not self.recompute_from_scratch:
             tic = time.clock()
             total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded = self.load_stats()
-            logging.debug('DONE loading existing statistics from the database in %.2f secs', time.clock() - tic)
+            logging.debug('DONE loading existing statistics from the database in %.2f secs.', time.clock() - tic)
 
         tic = time.clock()
 
-        # We get the statistics from the incoming data.
-        data_df = self.get_raw_data()
+        if not self.is_first_batch() and self.recompute_from_scratch:
+            # We get the statistics both from previous and incoming data.
+            self.load_previous_repaired_data()
+            data_df = self.raw_data_with_previous_repaired_data_df
+        else:
+            # We get the statistics from the incoming data.
+            data_df = self.raw_data.df
 
         # Total number of tuples.
         self.total_tuples = len(data_df.index)
@@ -308,7 +327,6 @@ class Dataset:
         entropy_tic = time.clock()
 
         if not self.incremental or single_attr_stats_loaded is None:
-            # If any of the '*_loaded' variables is None, it means there were no previous statistics in the database.
             self.correlations = self.compute_norm_cond_entropy_corr()
         else:
             if self.incremental_entropy:
@@ -325,26 +343,30 @@ class Dataset:
                 self.single_attr_stats = stats1.single_attr_stats
                 self.pair_attr_stats = stats1.pair_attr_stats
             else:
-                # Merges statistics from incoming data to the loaded statistics before computing entropy.
-                self.merge_stats(stats1, stats2)
+                if not self.recompute_from_scratch:
+                    # Merges statistics from incoming data to the loaded statistics before computing entropy.
+                    self.merge_stats(stats1, stats2)
 
-                # Memoizes merged statistics in class variables.
-                self.total_tuples = stats1.total_tuples
-                self.single_attr_stats = stats1.single_attr_stats
-                self.pair_attr_stats = stats1.pair_attr_stats
+                    # Memoizes merged statistics in class variables.
+                    self.total_tuples = stats1.total_tuples
+                    self.single_attr_stats = stats1.single_attr_stats
+                    self.pair_attr_stats = stats1.pair_attr_stats
 
                 self.correlations = self.compute_norm_cond_entropy_corr()
 
-        logging.debug('DONE computing entropy in %.2f secs', time.clock() - entropy_tic)
-        logging.debug('DONE computing statistics from incoming data in %.2f secs', time.clock() - tic)
+        logging.debug('DONE computing entropy in %.2f secs.', time.clock() - entropy_tic)
+        logging.debug('DONE computing statistics from incoming data in %.2f secs.', time.clock() - tic)
 
     def get_stats_single(self, attr):
         """
-        Returns a dictionary where the keys are domain values for :param attr: and
-        the values contain the frequency count of that value for this attribute.
+        Returns a dictionary where the keys are domain values for :param attr:
+        and the values contain the frequency count of that value for this attribute.
         """
-        # Need to decode values as unicode strings since we do lookups via unicode strings from PostgreSQL.
-        data_df = self.get_raw_data()
+        # Values must be decoded as unicode strings since we do lookups via unicode strings from PostgreSQL.
+        if not self.is_first_batch() and self.recompute_from_scratch:
+            data_df = self.raw_data_with_previous_repaired_data_df
+        else:
+            data_df = self.raw_data.df
 
         return data_df[[attr]].groupby([attr]).size().to_dict()
 
@@ -355,7 +377,10 @@ class Dataset:
             <second_val>: a possible value of 'second_attr' that appears at least once with <first_val>
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
         """
-        data_df = self.get_raw_data()
+        if not self.is_first_batch() and self.recompute_from_scratch:
+            data_df = self.raw_data_with_previous_repaired_data_df
+        else:
+            data_df = self.raw_data.df
 
         tmp_df = data_df[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
@@ -426,7 +451,7 @@ class Dataset:
         self.generate_aux_table_sql(AuxTables.inf_values_dom, query, index_attrs=['_tid_'])
         self.aux_table[AuxTables.inf_values_dom].create_db_index(self.engine, ['attribute'])
 
-        status = "DONE collecting the inferred values"
+        status = "DONE collecting the inferred values."
 
         toc = time.clock()
         total_time = toc - tic
@@ -452,7 +477,7 @@ class Dataset:
         self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_df)
         self.repaired_data.store_to_db(self.engine.engine)
 
-        status = "DONE generating repaired dataset"
+        status = "DONE generating repaired dataset."
 
         toc = time.clock()
         total_time = toc - tic
@@ -507,12 +532,13 @@ class Dataset:
             for attr in inferred_values[tid]:
                 # Checks if the value was repaired.
                 if init_records[idx][attr] != inferred_values[tid][attr]:
-                    # Updates the statistics regarding the repaired value.
-                    # This must be done before replacing the old value with the repaired one.
-                    self.update_value_stats(init_records[idx],
-                                            attr,
-                                            init_records[idx][attr],
-                                            inferred_values[tid][attr])
+                    if not self.recompute_from_scratch:
+                        # Updates the statistics regarding the repaired value.
+                        # This must be done before replacing the old value with the repaired one.
+                        self.update_value_stats(init_records[idx],
+                                                attr,
+                                                init_records[idx][attr],
+                                                inferred_values[tid][attr])
 
                     # Updates the record.
                     init_records[idx][attr] = inferred_values[tid][attr]
@@ -536,18 +562,19 @@ class Dataset:
             self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_df)
             self.repaired_data.store_to_db(self.engine.engine)
 
-        # Persists the up-to-date statistics in the database.
-        tic_inc = time.clock()
-        self.save_stats()
-        logging.debug('DONE storing computed statistics in the database in %.2f secs', time.clock() - tic_inc)
+        if not self.recompute_from_scratch:
+            # Persists the up-to-date statistics in the database.
+            tic_inc = time.clock()
+            self.save_stats()
+            logging.debug('DONE storing computed statistics in the database in %.2f secs.', time.clock() - tic_inc)
 
         if self.is_first_batch():
             # This index is useful for querying the maximum _tid_ value in get_first_tid().
             tic_inc = time.clock()
             self.repaired_data.create_db_index(self.engine, ['_tid_'])
-            logging.debug('DONE indexing `_tid_` column on repaired table in %.2f secs', time.clock() - tic_inc)
+            logging.debug('DONE indexing `_tid_` column on repaired table in %.2f secs.', time.clock() - tic_inc)
 
-        status = "DONE generating repaired dataset"
+        status = "DONE generating repaired dataset."
 
         toc = time.clock()
         total_time = toc - tic
@@ -877,6 +904,17 @@ class Dataset:
 
         return first_tid
 
+    def load_previous_repaired_data(self):
+        try:
+            previous_repaired_data = Table(self.id + "_repaired",
+                                           Source.DB,
+                                           db_engine=self.engine)
+
+            self.raw_data_with_previous_repaired_data_df = pd.concat([previous_repaired_data.df,
+                                                                      self.raw_data.df])
+        except OSError:
+            raise Exception('ERROR while trying to load previous repaired data from the database.')
+
     # noinspection PyUnresolvedReferences,PyBroadException
     def load_stats(self):
         num_tuples = None
@@ -901,7 +939,7 @@ class Dataset:
             result = self.engine.execute_query(query)
             num_tuples = result[0][0]
         except Exception:
-            logging.debug('No statistics to be loaded from the database')
+            logging.debug('No statistics to be loaded from the database.')
 
         return num_tuples, single_attr_stats, pair_attr_stats
 
@@ -944,6 +982,6 @@ class Dataset:
 
     def get_previous_dirty_rows(self):
         if self.previous_dirty_rows_df is None:
-            raise Exception('ERROR Potentially dirty rows from the previous dataset could not be loaded')
+            raise Exception('ERROR: Potentially dirty rows from the previous dataset could not be loaded.')
 
         return self.previous_dirty_rows_df

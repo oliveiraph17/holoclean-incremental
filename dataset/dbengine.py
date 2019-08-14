@@ -14,7 +14,7 @@ create_table_template = Template('CREATE TABLE "$table" AS ($stmt)')
 
 class DBengine:
     """
-    A wrapper class for PostgreSQL engine.
+    A wrapper class for the PostgreSQL engine.
     Maintains connections and executes queries.
     """
     def __init__(self, user, pwd, db, host='localhost', port=5432, pool_size=20, timeout=60000):

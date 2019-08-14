@@ -44,7 +44,7 @@ class DomainEngine:
         self.setup_attributes()
         domain = self.generate_domain()
         self.store_domains(domain)
-        status = "DONE with domain preparation"
+        status = "DONE with domain preparation."
         toc = time.time()
         return status, toc - tic
 
@@ -205,10 +205,10 @@ class DomainEngine:
         cells = []
         vid = 0
 
-        if self.ds.is_first_batch() or not self.env['repair_previous_errors']:
-            records = self.ds.get_raw_data().to_records(index=False)
-        else:
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
             records = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()]).to_records(index=False)
+        else:
+            records = self.ds.get_raw_data().to_records(index=False)
 
         self.all_attrs = list(records.dtype.names)
 

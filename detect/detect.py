@@ -12,7 +12,7 @@ class DetectEngine:
         self.ds = dataset
 
         if env['repair_previous_errors'] and not env['incremental']:
-            raise Exception('Inconsistent parameters: repair_previous_errors=%r and incremental=%r' %
+            raise Exception('Inconsistent parameters: repair_previous_errors=%r, incremental=%r.' %
                             (env['repair_previous_errors'], env['incremental']))
 
     def detect_errors(self, detectors):
@@ -32,29 +32,29 @@ class DetectEngine:
             tic = time.clock()
             error_df = detector.detect_noisy_cells()
             toc = time.clock()
-            logging.debug("DONE with %s in %.2f secs", detector.name, toc - tic)
+            logging.debug("DONE with %s in %.2f secs.", detector.name, toc - tic)
             errors.append(error_df)
 
         # Get unique errors only, which might have been detected by multiple detectors.
         errors_df = pd.concat(errors, ignore_index=True).drop_duplicates().reset_index(drop=True)
         errors_df['_cid_'] = errors_df.apply(lambda x: self.ds.get_cell_id(x['_tid_'], x['attribute']), axis=1)
-        logging.info("Detected %d potentially erroneous cells", errors_df.shape[0])
+        logging.info("Detected %d potentially erroneous cells.", errors_df.shape[0])
 
         # Store errors in 'dk_cells' table of database.
         # If there is a previous version of this table, it will be replaced with a new one.
         self.store_detected_errors(errors_df)
 
-        if self.env['repair_previous_errors'] and not self.ds.is_first_batch():
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
             self.set_previous_dirty_rows()
 
-        status = "DONE with error detection"
+        status = "DONE with error detection."
         toc_total = time.clock()
         detect_time = toc_total - tic_total
         return status, detect_time
 
     def store_detected_errors(self, errors_df):
         if errors_df.empty:
-            raise Exception("ERROR while trying to create \'dk_cells\' table: DataFrame \'errors_df\' is empty")
+            raise Exception("ERROR while trying to create \'dk_cells\' table: DataFrame \'errors_df\' is empty.")
 
         self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
         self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])

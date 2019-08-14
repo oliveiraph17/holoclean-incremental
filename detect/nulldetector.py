@@ -32,7 +32,7 @@ class NullDetector(Detector):
         attributes = self.ds.get_attributes()
         errors = []
 
-        if self.repair_previous_errors and not self.ds.is_first_batch():
+        if not self.ds.is_first_batch() and self.repair_previous_errors:
             table_repaired_name = self.ds.raw_data.name + '_repaired'
 
             for attr in attributes:

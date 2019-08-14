@@ -45,7 +45,7 @@ class InitAttrFeaturizer(Featurizer):
         self.attr_to_idx = self.ds.attr_to_idx
         self.total_attrs = len(self.ds.attr_to_idx)
 
-        # Make sure that the size of 'init_weight' is equal to the number of attributes in the dataset.
+        # Makes sure that the size of 'init_weight' is equal to the number of attributes in the dataset.
         if isinstance(self.init_weight, torch.FloatTensor):
             if self.init_weight.shape[0] != len(self.all_attrs):
                 raise ValueError(

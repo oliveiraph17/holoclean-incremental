@@ -109,7 +109,7 @@ class EvalEngine:
                            self.correct_repairs, self.total_repairs, self.total_repairs_grdt,
                            self.total_repairs_grdt_correct, self.total_repairs_grdt_incorrect)
         except Exception as e:
-            logging.error("ERROR generating evaluation report %s" % e)
+            logging.error("ERROR generating evaluation report %s." % e)
             raise
 
         toc = time.clock()
