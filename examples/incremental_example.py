@@ -39,9 +39,9 @@ for batch in batches:
         print_fw=False,
         incremental=True,
         incremental_entropy=False,
-        default_entropy=False,
+        default_entropy=True,
         repair_previous_errors=True,
-        recompute_from_scratch=False,
+        recompute_from_scratch=True,
         skip_training=False,
         ignore_previous_training_cells=False,
         save_load_checkpoint=False

@@ -734,11 +734,6 @@ class Dataset:
                 # Computes the conditional entropy H(x|y).
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
                 if self.default_entropy:
-                    if self.incremental:
-                        raise Exception('Check environment variables.'
-                                        'The conditional entropy calculation of pyitlib'
-                                        'should not be used in incremental scenarios.')
-
                     # Uses the implementation of pyitlib.
                     corr[x][y] = 1.0 - drv.entropy_conditional(self.raw_data.df[x],
                                                                self.raw_data.df[y],
@@ -916,13 +911,13 @@ class Dataset:
 
     def load_previous_repaired_data(self):
         try:
-            previous_repaired_data = Table(self.id + "_repaired",
+            previous_repaired_data = Table(self.raw_data.name + "_repaired",
                                            Source.DB,
                                            db_engine=self.engine)
 
             self.raw_data_with_previous_repaired_data_df = pd.concat([previous_repaired_data.df,
                                                                       self.raw_data.df])
-        except OSError:
+        except ValueError:
             raise Exception('ERROR while trying to load previous repaired data from the database.')
 
     # noinspection PyUnresolvedReferences,PyBroadException
