@@ -79,4 +79,4 @@ for batch in batches:
                 attr_col='attribute',
                 val_col='correct_val')
 
-    logging.info('Batch %s finished', batch)
+    logging.info('Batch %s finished.', batch)
