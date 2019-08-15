@@ -911,7 +911,7 @@ class Dataset:
 
     def load_previous_repaired_data(self):
         try:
-            previous_repaired_data = Table(self.raw_data.name + "_repaired",
+            previous_repaired_data = Table(self.raw_data.name + '_repaired',
                                            Source.DB,
                                            db_engine=self.engine)
 

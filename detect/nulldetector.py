@@ -25,8 +25,8 @@ class NullDetector(Detector):
         detect_noisy_cells returns a pandas.DataFrame containing all cells with NULL values.
 
         :return: pandas.DataFrame with columns:
-            _tid_: entity ID
-            attribute: attribute with NULL value for this entity
+            _tid_: entity ID.
+            attribute: attribute with NULL value for this entity.
         """
         raw_data_df = self.ds.get_raw_data()
         attributes = self.ds.get_attributes()

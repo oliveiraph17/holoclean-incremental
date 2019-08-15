@@ -4,24 +4,24 @@ import pandas as pd
 
 from .detector import Detector
 
-unary_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
+unary_template = Template('SELECT t1._tid_ FROM "$table" AS t1 WHERE $cond')
 
-unary_template_inc_repair_previous = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE $cond ' +
+unary_template_inc_repair_previous = Template('SELECT t1._tid_ FROM "$table_repaired" AS t1 WHERE $cond ' +
                                               'UNION ' +
-                                              'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
+                                              'SELECT t1._tid_ FROM "$table" AS t1 WHERE $cond')
 
-multi_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
-                          'EXISTS (SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2)')
+multi_template = Template('SELECT t1._tid_ FROM "$table" AS t1 WHERE $cond1 $c ' +
+                          'EXISTS (SELECT t2._tid_ FROM "$table" AS t2 WHERE $cond2)')
 
 multi_template_inc = Template('WITH all_rows AS ' +
                               '(SELECT * FROM "$table" UNION SELECT * FROM "$table_repaired") ' +
-                              'SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c ' +
-                              'EXISTS (SELECT t2._tid_ FROM all_rows as t2 WHERE $cond2)')
+                              'SELECT t1._tid_ FROM "$table" AS t1 WHERE $cond1 $c ' +
+                              'EXISTS (SELECT t2._tid_ FROM all_rows AS t2 WHERE $cond2)')
 
 multi_template_inc_repair_previous = Template('WITH all_rows AS ' +
                                               '(SELECT * FROM "$table" UNION SELECT * FROM "$table_repaired") ' +
-                                              'SELECT t1._tid_ FROM all_rows as t1 WHERE $cond1 $c ' +
-                                              'EXISTS (SELECT t2._tid_ FROM all_rows as t2 WHERE $cond2)')
+                                              'SELECT t1._tid_ FROM all_rows AS t1 WHERE $cond1 $c ' +
+                                              'EXISTS (SELECT t2._tid_ FROM all_rows AS t2 WHERE $cond2)')
 
 
 class ViolationDetector(Detector):
@@ -41,8 +41,8 @@ class ViolationDetector(Detector):
         Returns a pandas.DataFrame containing all cells that violate Denial Constraints in the data previously loaded.
 
         :return: pandas.DataFrame with columns:
-            _tid_: entity ID
-            attribute: attribute violating any Denial Constraint
+            _tid_: entity ID.
+            attribute: attribute violating any Denial Constraint.
         """
 
         constraints = self.ds.constraints
