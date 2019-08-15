@@ -137,10 +137,12 @@ def _execute_update(args, conn_args):
     update = args[1]
     logging.debug("Starting to execute update %s with id %s.", update, update_id)
     tic = time.clock()
-    con = psycopg2.connect(conn_args)
-    cur = con.cursor()
+    conn = psycopg2.connect(conn_args)
+    cur = conn.cursor()
     cur.execute(update)
-    con.close()
+    conn.commit()
+    cur.close()
+    conn.close()
     toc = time.clock()
     logging.debug('Time to execute update with id %d: %.2f secs.', update_id, (toc - tic))
 
@@ -150,11 +152,11 @@ def _execute_query(args, conn_args):
     query = args[1]
     logging.debug("Starting to execute query %s with id %s.", query, query_id)
     tic = time.clock()
-    con = psycopg2.connect(conn_args)
-    cur = con.cursor()
+    conn = psycopg2.connect(conn_args)
+    cur = conn.cursor()
     cur.execute(query)
     res = cur.fetchall()
-    con.close()
+    conn.close()
     toc = time.clock()
     logging.debug('Time to execute query with id %d: %.2f secs.', query_id, (toc - tic))
     return res
@@ -166,8 +168,8 @@ def _execute_query_w_backup(args, conn_args, timeout):
     query_backup = args[1][1]
     logging.debug("Starting to execute query %s with id %s.", query, query_id)
     tic = time.clock()
-    con = psycopg2.connect(conn_args)
-    cur = con.cursor()
+    conn = psycopg2.connect(conn_args)
+    cur = conn.cursor()
     cur.execute("SET statement_timeout to %d;" % timeout)
 
     # noinspection PyUnresolvedReferences
@@ -182,12 +184,12 @@ def _execute_query_w_backup(args, conn_args, timeout):
             return []
 
         logging.debug("Starting to execute backup query %s with id %s.", query_backup, query_id)
-        con.close()
-        con = psycopg2.connect(conn_args)
-        cur = con.cursor()
+        conn.close()
+        conn = psycopg2.connect(conn_args)
+        cur = conn.cursor()
         cur.execute(query_backup)
         res = cur.fetchall()
-        con.close()
+        conn.close()
     toc = time.clock()
     logging.debug('Time to execute query with id %d: %.2f secs.', query_id, toc - tic)
     return res

@@ -102,7 +102,7 @@ class DomainEngine:
         tic = time.clock()
         self.pair_stats = self._pruned_pair_stats(pair_stats)
         toc = time.clock()
-        logging.debug("DONE with pruned co-occurring statistics in %.2f secs", toc - tic)
+        logging.debug("DONE with pruned co-occurring statistics in %.2f secs.", toc - tic)
 
         self.setup_complete = True
 
@@ -270,7 +270,7 @@ class DomainEngine:
                 vid += 1
 
         domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
-        logging.debug('DONE generating initial set of domain values in %.2f secs', time.clock() - tic)
+        logging.debug('DONE generating initial set of domain values in %.2f secs.', time.clock() - tic)
 
         if self.env['weak_label_thresh'] == 1 and self.env['domain_thresh_2'] == 0:
             # Skip estimator if we require no weak labelling nor domain pruning based on posterior probabilities.
@@ -280,7 +280,7 @@ class DomainEngine:
         logging.debug('Training posterior model for estimating domain value probabilities...')
         tic = time.clock()
         estimator = NaiveBayes(self.env, self.ds, domain_df, self.correlations)
-        logging.debug('DONE training posterior model in %.2f secs', time.clock() - tic)
+        logging.debug('DONE training posterior model in %.2f secs.', time.clock() - tic)
 
         # Predict probabilities for all pruned domain values.
         logging.debug('Predicting domain value probabilities from posterior model...')
@@ -346,11 +346,11 @@ class DomainEngine:
             .drop('index', axis=1)\
             .sort_values('_vid_')
 
-        logging.debug('DONE assembling \'cell_domain\' table in %.2f secs', time.clock() - tic)
+        logging.debug('DONE assembling \'cell_domain\' table in %.2f secs.', time.clock() - tic)
 
-        logging.info('Number of (additional) weak labels assigned from posterior model: %d', num_weak_labels)
+        logging.info('Number of (additional) weak labels assigned from posterior model: %d.', num_weak_labels)
 
-        logging.debug('DONE generating domain and weak labels')
+        logging.debug('DONE generating domain and weak labels.')
         return domain_df
 
     def get_domain_cell(self, attr, row):
@@ -385,7 +385,7 @@ class DomainEngine:
                 continue
 
             if not self.pair_stats[cond_attr][attr]:
-                logging.warning("There are no pair statistics between attributes: {}, {}".format(cond_attr, attr))
+                logging.warning("There are no pair statistics between attributes: {}, {}.".format(cond_attr, attr))
                 continue
 
             cond_val = row[cond_attr]

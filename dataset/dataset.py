@@ -519,6 +519,10 @@ class Dataset:
 
         # Dictionary to keep track of previous dirty values that had their values changed after inference.
         updated_previous_values = {}
+        max_previous_tid = None
+
+        if not self.is_first_batch():
+            max_previous_tid = self.previous_dirty_rows_df['_tid_'].max(axis=0)
 
         for tid in inferred_values:
             if self.is_first_batch():
@@ -526,8 +530,8 @@ class Dataset:
             else:
                 idx = tid_to_idx['index'][tid]
 
-                if self.repair_previous_errors:
-                    updated_previous_values[tid] = {}
+                if self.repair_previous_errors and tid <= max_previous_tid:
+                    updated_previous_values[tid] = []
 
             for attr in inferred_values[tid]:
                 # Checks if the value was repaired.
@@ -544,17 +548,19 @@ class Dataset:
                     init_records[idx][attr] = inferred_values[tid][attr]
 
                     # Keeps track of cell that was changed.
-                    if self.repair_previous_errors:
-                        updated_previous_values[tid] = {attr: inferred_values[tid][attr]}
+                    if not self.is_first_batch() and self.repair_previous_errors and tid <= max_previous_tid:
+                        updated_previous_values[tid].append([attr, inferred_values[tid][attr]])
 
         repaired_df = pd.DataFrame.from_records(init_records)
         repaired_table_name = self.raw_data.name + '_repaired'
 
         if not self.is_first_batch() and self.repair_previous_errors:
-            repaired_incoming_rows_df = repaired_df.iloc[len(self.previous_dirty_rows_df):len(self.raw_data.df)]
-
-            # Updates previous rows in database.
+            # Updates previous rows in the database.
             self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
+
+            beginning = len(self.previous_dirty_rows_df)
+            end = beginning + len(self.raw_data.df)
+            repaired_incoming_rows_df = repaired_df.iloc[beginning:end]
 
             self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_incoming_rows_df)
             self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
@@ -585,18 +591,22 @@ class Dataset:
         sql_commands = []
 
         for tid in updated_previous_values:
-            command = "UPDATE {} AS r SET".format(repaired_table_name)
+            # Checks if the list of updates for the current _tid_ is not empty.
+            if updated_previous_values[tid]:
+                command = "UPDATE {} SET".format(repaired_table_name)
 
-            assignments = []
-            for attr in updated_previous_values[tid]:
-                assignments.append(" r.{} = {}".format(attr, updated_previous_values[tid][attr]))
-            command += ",".join(assignments)
+                assignments = []
+                for pair in updated_previous_values[tid]:
+                    assignments.append(" \"{}\" = '{}'".format(pair[0], pair[1]))
+                command += ",".join(assignments)
 
-            command += " WHERE r._tid_ = {}".format(tid)
+                command += " WHERE _tid_ = {}".format(tid)
 
-            sql_commands.append(command)
+                sql_commands.append(command)
 
-        self.engine.execute_updates(sql_commands)
+        # Checks if the list of SQL commands is not empty.
+        if sql_commands:
+            self.engine.execute_updates(sql_commands)
 
     def update_value_stats(self, row, attr, old_attr_val, new_attr_val):
         # This if-else block removes/decrements the frequency of 'old_attr_val'.

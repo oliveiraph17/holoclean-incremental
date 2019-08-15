@@ -27,7 +27,7 @@ for batch in batches:
         max_domain=10000,
         cor_strength=0.6,
         nb_cor_strength=0.8,
-        epochs=2,
+        epochs=10,
         weight_decay=0.01,
         learning_rate=0.001,
         threads=1,
@@ -43,8 +43,8 @@ for batch in batches:
         repair_previous_errors=True,
         recompute_from_scratch=False,
         skip_training=False,
-        ignore_previous_training_cells=True,
-        save_load_checkpoint=True
+        ignore_previous_training_cells=False,
+        save_load_checkpoint=False
     ).session
 
     if batch == batches[0]:
