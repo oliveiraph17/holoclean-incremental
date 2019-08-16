@@ -342,7 +342,7 @@ class Session:
                                               entity_col=entity_col,
                                               src_col=src_col)
         logging.info(status)
-        logging.debug('Time to load dataset: %.2f secs', load_time)
+        logging.debug('[EXECUTION_TIME_1] Time to load dataset: %.2f secs', load_time)
 
     def load_dcs(self, fpath):
         """
@@ -352,7 +352,7 @@ class Session:
         """
         status, load_time = self.dc_parser.load_denial_constraints(fpath)
         logging.info(status)
-        logging.debug('Time to load dirty data: %.2f secs', load_time)
+        logging.debug('[EXECUTION_TIME_2] Time to load dirty data: %.2f secs', load_time)
 
     def get_dcs(self):
         return self.dc_parser.get_dcs()
@@ -360,43 +360,43 @@ class Session:
     def detect_errors(self, detect_list):
         status, detect_time = self.detect_engine.detect_errors(detect_list)
         logging.info(status)
-        logging.debug('Time to detect errors: %.2f secs', detect_time)
+        logging.debug('[EXECUTION_TIME_3] Time to detect errors: %.2f secs', detect_time)
 
     def setup_domain(self):
         status, domain_time = self.domain_engine.setup()
         logging.info(status)
-        logging.debug('Time to setup the domain: %.2f secs', domain_time)
+        logging.debug('[EXECUTION_TIME_4] Time to setup the domain: %.2f secs', domain_time)
 
     def repair_errors(self, featurizers):
         status, feat_time = self.repair_engine.setup_featurized_ds(featurizers)
         logging.info(status)
-        logging.debug('Time to featurize data: %.2f secs', feat_time)
+        logging.debug('[EXECUTION_TIME_5] Time to featurize data: %.2f secs', feat_time)
 
         status, setup_time = self.repair_engine.setup_repair_model()
         logging.info(status)
-        logging.debug('Time to setup repair model: %.2f secs', feat_time)
+        logging.debug('[EXECUTION_TIME_6] Time to setup repair model: %.2f secs', feat_time)
 
         if self.env['skip_training']:
             logging.debug('Skipping training phase...')
         else:
             status, fit_time = self.repair_engine.fit_repair_model()
             logging.info(status)
-            logging.debug('Time to fit repair model: %.2f secs', fit_time)
+            logging.debug('[EXECUTION_TIME_7] Time to fit repair model: %.2f secs', fit_time)
 
         status, infer_time = self.repair_engine.infer_repairs()
         logging.info(status)
-        logging.debug('Time to infer correct cell values: %.2f secs', infer_time)
+        logging.debug('[EXECUTION_TIME_8] Time to infer correct cell values: %.2f secs', infer_time)
 
         status, time = self.ds.get_inferred_values()
         logging.info(status)
-        logging.debug('Time to collect inferred values: %.2f secs', time)
+        logging.debug('[EXECUTION_TIME_9] Time to collect inferred values: %.2f secs', time)
 
         if self.env['incremental']:
             status, time = self.ds.get_repaired_dataset_incremental()
         else:
             status, time = self.ds.get_repaired_dataset()
         logging.info(status)
-        logging.debug('Time to store repaired dataset: %.2f secs', time)
+        logging.debug('[EXECUTION_TIME_10] Time to store repaired dataset: %.2f secs', time)
 
         if self.env['print_fw']:
             status, time = self.repair_engine.get_featurizer_weights()
