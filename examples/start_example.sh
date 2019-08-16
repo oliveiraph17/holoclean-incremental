@@ -2,20 +2,37 @@
 source ../set_env.sh
 
 script="baseline_2.py"
-python $script 2>&1 >/dev/null | grep 'EXPERIMENT' >> ../experiments/hospital_2_batches/baseline_2.txt
+for i in {1..10}
+do
+    python $script 2>&1 >/dev/null | grep '[EXECUTION_TIME' > ../experiments/hospital_10_batches/execution_time/baseline_2.txt
+done
 
 script="proposal_3.py"
-python $script 2>&1 >/dev/null | grep 'EXPERIMENT' >> ../experiments/hospital_2_batches/proposal_3.txt
+for i in {1..10}
+do
+    python $script 2>&1 >/dev/null | grep '[EXECUTION_TIME' > ../experiments/hospital_10_batches/execution_time/proposal_3.txt
+done
 
 script="proposal_4.py"
-python $script 2>&1 >/dev/null | grep 'EXPERIMENT' >> ../experiments/hospital_2_batches/proposal_4.txt
+for i in {1..10}
+do
+    python $script 2>&1 >/dev/null | grep '[EXECUTION_TIME' > ../experiments/hospital_10_batches/execution_time/proposal_4.txt
+done
 
 script="proposal_5.py"
-python $script 2>&1 >/dev/null | grep 'EXPERIMENT' >> ../experiments/hospital_2_batches/proposal_5.txt
+for i in {1..10}
+do
+    python $script 2>&1 >/dev/null | grep '[EXECUTION_TIME' > ../experiments/hospital_10_batches/execution_time/proposal_5.txt
+done
 
 script="proposal_6.py"
-python $script 2>&1 >/dev/null | grep 'EXPERIMENT' >> ../experiments/hospital_2_batches/proposal_6.txt
+for i in {1..10}
+do
+    python $script 2>&1 >/dev/null | grep '[EXECUTION_TIME' > ../experiments/hospital_10_batches/execution_time/proposal_6.txt
+done
 
 script="proposal_7.py"
-python $script 2>&1 >/dev/null | grep 'EXPERIMENT' >> ../experiments/hospital_2_batches/proposal_7.txt
-
+for i in {1..10}
+do
+    python $script 2>&1 >/dev/null | grep '[EXECUTION_TIME' > ../experiments/hospital_10_batches/execution_time/proposal_7.txt
+done
