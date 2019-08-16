@@ -149,7 +149,7 @@ class EvalEngine:
         try:
             prec, rec, rep_recall, f1, rep_f1 = self.evaluate_repairs()
 
-            report = "EXPERIMENT3: PRECISION = %.2f, RECALL = %.2f, REPAIRING RECALL = %.2f, " \
+            report = "PRECISION = %.2f, RECALL = %.2f, REPAIRING RECALL = %.2f, " \
                      "F1 = %.2f, REPAIRING F1 = %.2f, DETECTED ERRORS = %d, TOTAL ERRORS = %d, " \
                      "CORRECT REPAIRS = %d, TOTAL REPAIRS = %d, " \
                      "TOTAL REPAIRS on correct cells (ground-truth present) = %d, " \

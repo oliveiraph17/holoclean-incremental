@@ -18,6 +18,7 @@ gensim_logger = logging.getLogger('gensim')
 root_logger.setLevel(logging.INFO)
 gensim_logger.setLevel(logging.WARNING)
 
+experiment_logger_formatter = logging.Formatter('%(message)s')
 
 # Arguments for HoloClean.
 arguments = [
@@ -167,6 +168,24 @@ arguments = [
       'default': 32,
       'type': int,
       'help': 'Size of batch used in SGD in the weak labelling and domain generation estimator.'}),
+    (('-ci', '--current-iteration'),
+     {'metavar': 'CURRENT_ITERATION',
+      'dest': 'current_iteration',
+      'default': 0,
+      'type': int,
+      'help': 'Current iteration in experiments.'}),
+    (('-q', '--log-repair-quality'),
+     {'metavar': 'LOG_REPAIR_QUALITY',
+      'dest': 'log_repair_quality',
+      'default': False,
+      'type': bool,
+      'help': 'Logs results regarding repair quality in experiments.'}),
+    (('-et', '--log-execution-time'),
+     {'metavar': 'LOG_EXECUTION_TIME',
+      'dest': 'log_execution_time',
+      'default': False,
+      'type': bool,
+      'help': 'Logs results regarding execution time in experiments.'}),
     (('-inc', '--incremental'),
      {'metavar': 'INCREMENTAL',
       'dest': 'incremental',
@@ -256,7 +275,7 @@ class HoloClean:
         :param kwargs: arguments for HoloClean.
         """
 
-        # Initialize default execution arguments.
+        # Initializes default execution arguments.
         arg_defaults = {}
         for arg, opts in arguments:
             if 'directory' in arg[0]:
@@ -264,28 +283,28 @@ class HoloClean:
             else:
                 arg_defaults[opts['dest']] = opts['default']
 
-        # Initialize default execution flags.
+        # Initializes default execution flags.
         for arg, opts in flags:
             arg_defaults[opts['dest']] = opts['default']
 
-        # Check environment variables.
+        # Checks environment variables.
         for arg, opts in arguments:
-            # If environment variable is set, use that.
+            # Uses environment variable if it is set.
             if opts["metavar"] and opts["metavar"] in os.environ.keys():
                 logging.debug("Overriding {} with env varible {} set to {}".format(opts['dest'],
                                                                                    opts["metavar"],
                                                                                    os.environ[opts["metavar"]]))
                 arg_defaults[opts['dest']] = os.environ[opts["metavar"]]
 
-        # Override default values with manual flags.
+        # Overrides default values with manual flags.
         for key in kwargs:
             arg_defaults[key] = kwargs[key]
 
-        # Initialize additional arguments.
+        # Initializes additional arguments.
         for (arg, default) in arg_defaults.items():
             setattr(self, arg, kwargs.get(arg, default))
 
-        # Initialize empty session collection.
+        # Initializes empty session collection.
         self.session = Session(arg_defaults)
 
 
@@ -296,32 +315,45 @@ class Session:
 
     def __init__(self, env, name="session"):
         """
-        Constructor for Holoclean session.
+        Constructor for HoloClean session.
 
         :param env: HoloClean environment.
         :param name: Name for the HoloClean session.
         """
-        # Use DEBUG logging level if verbose is enabled.
+        if env['log_repair_quality'] and env['log_execution_time']:
+            raise Exception('Inconsistent parameters: log_repair_quality=%r, log_execution_time=%r.' %
+                            (env['log_repair_quality'], env['log_execution_time']))
+
+        # Uses DEBUG logging level if verbose is enabled.
         if env['verbose']:
             root_logger.setLevel(logging.DEBUG)
             gensim_logger.setLevel(logging.DEBUG)
 
         logging.debug('Initiating session with parameters: %s', env)
 
-        # Initialize random seeds.
+        # Initializes random seeds.
         random.seed(env['seed'])
         torch.manual_seed(env['seed'])
         np.random.seed(seed=env['seed'])
 
-        # Initialize members.
+        # Initializes members.
         self.name = name
         self.env = env
+        self.experiment_logger = None
         self.ds = Dataset(name, env)
         self.dc_parser = Parser(env, self.ds)
         self.domain_engine = DomainEngine(env, self.ds)
         self.detect_engine = DetectEngine(env, self.ds)
         self.repair_engine = RepairEngine(env, self.ds)
         self.eval_engine = EvalEngine(env, self.ds)
+
+    def setup_experiment_logger(self, name, log_fpath, level=logging.INFO):
+        handler = logging.FileHandler(log_fpath)
+        handler.setFormatter(experiment_logger_formatter)
+
+        self.experiment_logger = logging.getLogger(name)
+        self.experiment_logger.setLevel(level)
+        self.experiment_logger.addHandler(handler)
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None):
         """
@@ -342,7 +374,7 @@ class Session:
                                               entity_col=entity_col,
                                               src_col=src_col)
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_1] Time to load dataset: %.2f secs', load_time)
+        logging.debug('Time to load dataset: %.2f secs', load_time)
 
     def load_dcs(self, fpath):
         """
@@ -352,7 +384,7 @@ class Session:
         """
         status, load_time = self.dc_parser.load_denial_constraints(fpath)
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_2] Time to load dirty data: %.2f secs', load_time)
+        logging.debug('Time to load dirty data: %.2f secs', load_time)
 
     def get_dcs(self):
         return self.dc_parser.get_dcs()
@@ -360,43 +392,43 @@ class Session:
     def detect_errors(self, detect_list):
         status, detect_time = self.detect_engine.detect_errors(detect_list)
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_3] Time to detect errors: %.2f secs', detect_time)
+        logging.debug('Time to detect errors: %.2f secs', detect_time)
 
     def setup_domain(self):
         status, domain_time = self.domain_engine.setup()
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_4] Time to setup the domain: %.2f secs', domain_time)
+        logging.debug('Time to setup the domain: %.2f secs', domain_time)
 
     def repair_errors(self, featurizers):
         status, feat_time = self.repair_engine.setup_featurized_ds(featurizers)
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_5] Time to featurize data: %.2f secs', feat_time)
+        logging.debug('Time to featurize data: %.2f secs', feat_time)
 
         status, setup_time = self.repair_engine.setup_repair_model()
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_6] Time to setup repair model: %.2f secs', feat_time)
+        logging.debug('Time to setup repair model: %.2f secs', feat_time)
 
         if self.env['skip_training']:
             logging.debug('Skipping training phase...')
         else:
             status, fit_time = self.repair_engine.fit_repair_model()
             logging.info(status)
-            logging.debug('[EXECUTION_TIME_7] Time to fit repair model: %.2f secs', fit_time)
+            logging.debug('Time to fit repair model: %.2f secs', fit_time)
 
         status, infer_time = self.repair_engine.infer_repairs()
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_8] Time to infer correct cell values: %.2f secs', infer_time)
+        logging.debug('Time to infer correct cell values: %.2f secs', infer_time)
 
         status, time = self.ds.get_inferred_values()
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_9] Time to collect inferred values: %.2f secs', time)
+        logging.debug('Time to collect inferred values: %.2f secs', time)
 
         if self.env['incremental']:
             status, time = self.ds.get_repaired_dataset_incremental()
         else:
             status, time = self.ds.get_repaired_dataset()
         logging.info(status)
-        logging.debug('[EXECUTION_TIME_10] Time to store repaired dataset: %.2f secs', time)
+        logging.debug('Time to store repaired dataset: %.2f secs', time)
 
         if self.env['print_fw']:
             status, time = self.repair_engine.get_featurizer_weights()
@@ -406,7 +438,7 @@ class Session:
 
     def evaluate(self, fpath, tid_col, attr_col, val_col, na_values=None):
         """
-        evaluate generates an evaluation report with metrics (e.g. precision, recall) given a test set.
+        Generates an evaluation report with metrics (e.g. precision, recall) given a test set.
 
         :param fpath: (str) filepath to test set (ground-truth) CSV file.
         :param tid_col: (str) column in CSV that corresponds to the TID.
