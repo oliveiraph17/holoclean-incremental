@@ -37,7 +37,7 @@ class RepairEngine:
         tic = time.clock()
 
         x_train, y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
-        logging.info('Training with %d training examples (cells).', x_train.shape[0])
+        logging.info('EXPERIMENT2: Training with %d training examples (cells).', x_train.shape[0])
 
         self.repair_model.fit_model(x_train, y_train, mask_train)
 

@@ -38,7 +38,7 @@ class DetectEngine:
         # Gets unique errors only, which might have been detected by multiple detectors.
         errors_df = pd.concat(errors, ignore_index=True).drop_duplicates().reset_index(drop=True)
         errors_df['_cid_'] = errors_df.apply(lambda x: self.ds.get_cell_id(x['_tid_'], x['attribute']), axis=1)
-        logging.info("Detected %d potentially erroneous cells.", errors_df.shape[0])
+        logging.info("EXPERIMENT1: Detected %d potentially erroneous cells.", errors_df.shape[0])
 
         # Stores errors in 'dk_cells' table of database.
         # If there is a previous version of this table, it will be replaced with a new one.

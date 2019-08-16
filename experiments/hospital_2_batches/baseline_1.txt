@@ -1,0 +1,3 @@
+17:24:04 - [ INFO] - EXPERIMENT1: detected 11265 potentially erroneous cells
+17:24:38 - [ INFO] - EXPERIMENT2: training with 6592 training examples (cells)
+17:25:08 - [ INFO] - EXPERIMENT3: Precision = 1.00, Recall = 0.46, Repairing Recall = 0.53, F1 = 0.63, Repairing F1 = 0.70, Detected Errors = 435, Total Errors = 509, Correct Repairs = 232, Total Repairs = 232, Total Repairs on correct cells (Grdth present) = 0, Total Repairs on incorrect cells (Grdth present) = 232

@@ -7,18 +7,15 @@ from repair.featurize import *
 sys.path.append('../')
 
 dataset_name = 'hospital'
-batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
-           '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
+# batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
+#            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
+batches = ['0001-0500', '0501-1000']
 
-# This line pauses the execution to drop the tables if needed.
-drop = None
-while drop != 'y' and drop != 'n':
-    drop = input('Do you want to drop tables <dataset>_repaired, single_attr_stats, pair_attr_stats, '
-                 'training_cells, and the model checkpoint file? (y/n) ')
+drop = 'y'
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
-    # Setup a HoloClean session.
+    # Sets up a HoloClean session.
     hc = holoclean.HoloClean(
         db_name='holo',
         domain_thresh_1=0,
@@ -41,10 +38,10 @@ for batch in batches:
         incremental_entropy=False,
         default_entropy=False,
         repair_previous_errors=True,
-        recompute_from_scratch=True,
+        recompute_from_scratch=False,
         skip_training=False,
         ignore_previous_training_cells=False,
-        save_load_checkpoint=False
+        save_load_checkpoint=True
     ).session
 
     if batch == batches[0]:

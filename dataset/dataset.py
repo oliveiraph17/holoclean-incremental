@@ -519,9 +519,9 @@ class Dataset:
 
         # Dictionary to keep track of previous dirty values that had their values changed after inference.
         updated_previous_values = {}
-        max_previous_tid = None
+        max_previous_tid = 0
 
-        if not self.is_first_batch():
+        if not self.is_first_batch() and self.repair_previous_errors:
             max_previous_tid = self.previous_dirty_rows_df['_tid_'].max(axis=0)
 
         for tid in inferred_values:
