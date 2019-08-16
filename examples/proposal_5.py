@@ -35,7 +35,7 @@ for batch in batches:
         learning_rate=0.001,
         threads=1,
         batch_size=1,
-        verbose=False,
+        verbose=True,
         timeout=3*60000,
         feature_norm=False,
         weight_norm=False,
