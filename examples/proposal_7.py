@@ -15,7 +15,7 @@ drop = 'y'
 
 # We may run out of memory if HoloClean is not reinstantiated at each loading step.
 for batch in batches:
-    # Setup a HoloClean session.
+    # Sets up a HoloClean session.
     hc = holoclean.HoloClean(
         db_name='holo',
         domain_thresh_1=0,

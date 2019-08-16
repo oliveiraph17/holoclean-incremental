@@ -21,7 +21,7 @@ for batch in batches:
     if batch_idx == 7:
         skip = True
 
-    # Setup a HoloClean session.
+    # Sets up a HoloClean session.
     hc = holoclean.HoloClean(
         db_name='holo',
         domain_thresh_1=0,
