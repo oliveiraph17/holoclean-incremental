@@ -1,0 +1,100 @@
+01:50:22 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.16 secs
+01:50:22 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+01:50:23 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.91 secs
+01:50:38 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.11 secs
+01:51:13 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 34.29 secs
+01:51:13 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 34.29 secs
+01:52:02 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.96 secs
+01:52:06 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.04 secs
+01:52:06 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+01:52:06 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.16 secs
+01:52:11 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.17 secs
+01:52:11 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+01:52:13 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.92 secs
+01:52:27 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.24 secs
+01:53:02 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 34.04 secs
+01:53:02 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 34.04 secs
+01:53:51 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 56.11 secs
+01:53:55 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 3.97 secs
+01:53:55 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+01:53:55 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.17 secs
+01:54:00 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.16 secs
+01:54:00 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+01:54:02 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.91 secs
+01:54:16 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.09 secs
+01:54:50 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 33.76 secs
+01:54:50 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 33.76 secs
+01:55:39 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.80 secs
+01:55:43 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 3.96 secs
+01:55:43 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+01:55:43 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.16 secs
+01:55:48 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.17 secs
+01:55:48 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+01:55:50 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.91 secs
+01:56:04 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.25 secs
+01:56:39 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 34.20 secs
+01:56:39 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 34.20 secs
+01:57:27 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.80 secs
+01:57:31 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.05 secs
+01:57:32 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+01:57:32 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.17 secs
+01:57:37 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.16 secs
+01:57:37 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+01:57:38 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.91 secs
+01:57:53 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.29 secs
+01:58:28 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 33.70 secs
+01:58:28 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 33.70 secs
+01:59:16 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.86 secs
+01:59:20 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.06 secs
+01:59:20 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+01:59:21 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.16 secs
+01:59:25 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.16 secs
+01:59:25 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+01:59:27 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.90 secs
+01:59:41 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.07 secs
+02:00:17 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 34.62 secs
+02:00:17 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 34.62 secs
+02:01:06 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.78 secs
+02:01:10 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.05 secs
+02:01:10 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+02:01:10 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.16 secs
+02:01:15 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.16 secs
+02:01:15 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+02:01:17 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.92 secs
+02:01:31 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.32 secs
+02:02:06 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 34.06 secs
+02:02:06 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 34.06 secs
+02:02:55 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.94 secs
+02:02:58 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.05 secs
+02:02:59 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+02:02:59 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.17 secs
+02:03:04 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.17 secs
+02:03:04 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+02:03:06 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.93 secs
+02:03:20 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.17 secs
+02:03:54 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 33.79 secs
+02:03:54 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 33.79 secs
+02:04:43 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 56.01 secs
+02:04:47 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.06 secs
+02:04:47 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+02:04:48 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.16 secs
+02:04:53 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.16 secs
+02:04:53 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+02:04:54 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.91 secs
+02:05:08 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.07 secs
+02:05:43 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 34.37 secs
+02:05:43 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 34.37 secs
+02:06:32 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.87 secs
+02:06:36 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.05 secs
+02:06:36 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+02:06:36 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.16 secs
+02:06:41 - [DEBUG] - [EXECUTION_TIME_1] Time to load dataset: 0.16 secs
+02:06:41 - [DEBUG] - [EXECUTION_TIME_2] Time to load dirty data: 0.00 secs
+02:06:43 - [DEBUG] - [EXECUTION_TIME_3] Time to detect errors: 0.90 secs
+02:06:57 - [DEBUG] - [EXECUTION_TIME_4] Time to setup the domain: 14.05 secs
+02:07:32 - [DEBUG] - [EXECUTION_TIME_5] Time to featurize data: 34.56 secs
+02:07:32 - [DEBUG] - [EXECUTION_TIME_6] Time to setup repair model: 34.56 secs
+02:08:21 - [DEBUG] - [EXECUTION_TIME_7] Time to fit repair model: 55.89 secs
+02:08:25 - [DEBUG] - [EXECUTION_TIME_8] Time to infer correct cell values: 4.06 secs
+02:08:25 - [DEBUG] - [EXECUTION_TIME_9] Time to collect inferred values: 0.04 secs
+02:08:25 - [DEBUG] - [EXECUTION_TIME_10] Time to store repaired dataset: 0.16 secs
