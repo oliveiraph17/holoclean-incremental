@@ -58,7 +58,7 @@ class RepairEngine:
         status = "DONE training repair model."
         train_time = toc - tic
 
-        return status, train_time
+        return status, train_time, x_train.shape[0]
 
     def infer_repairs(self):
         tic = time.clock()

@@ -50,7 +50,7 @@ class DetectEngine:
         status = "DONE with error detection."
         toc_total = time.clock()
         detect_time = toc_total - tic_total
-        return status, detect_time
+        return status, detect_time, errors_df.shape[0]
 
     def store_detected_errors(self, errors_df):
         if errors_df.empty:

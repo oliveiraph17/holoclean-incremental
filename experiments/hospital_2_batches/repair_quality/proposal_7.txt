@@ -1,6 +1,0 @@
-00:25:19 - [ INFO] - EXPERIMENT1: Detected 5311 potentially erroneous cells.
-00:25:34 - [ INFO] - EXPERIMENT2: Training with 3656 training examples (cells).
-00:25:55 - [ INFO] - EXPERIMENT3: PRECISION = 0.97, RECALL = 0.44, REPAIRING RECALL = 0.51, F1 = 0.60, REPAIRING F1 = 0.67, DETECTED ERRORS = 226, TOTAL ERRORS = 264, CORRECT REPAIRS = 116, TOTAL REPAIRS = 120, TOTAL REPAIRS on correct cells (ground-truth present) = 4, TOTAL REPAIRS on incorrect cells (ground-truth present) = 116
-00:25:56 - [ INFO] - EXPERIMENT1: Detected 5292 potentially erroneous cells.
-00:26:12 - [ INFO] - EXPERIMENT2: Training with 3590 training examples (cells).
-00:26:38 - [ INFO] - EXPERIMENT3: PRECISION = 1.00, RECALL = 0.49, REPAIRING RECALL = 0.58, F1 = 0.66, REPAIRING F1 = 0.73, DETECTED ERRORS = 209, TOTAL ERRORS = 245, CORRECT REPAIRS = 121, TOTAL REPAIRS = 121, TOTAL REPAIRS on correct cells (ground-truth present) = 0, TOTAL REPAIRS on incorrect cells (ground-truth present) = 121

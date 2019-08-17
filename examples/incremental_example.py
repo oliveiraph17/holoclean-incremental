@@ -12,13 +12,20 @@ batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
 
 number_of_iterations = 1
 
-log_repair_quality = True
-log_execution_time = False
-log_fpath = '/home/ph/Git/HoloClean/experiments/hospital_10_batches/repair_quality/incremental_example.log'
+log_repairing_quality = True
+log_execution_times = False
+
+if log_repairing_quality:
+    log_fpath = '/home/ph/Git/HoloClean/experiments/hospital_10_batches/repairing_quality/incremental_example.csv'
+
+if log_execution_times:
+    log_fpath = '/home/ph/Git/HoloClean/experiments/hospital_10_batches/execution_times/incremental_example.csv'
 
 for current_iteration in range(number_of_iterations):
+    current_batch_number = 0
+
     # We may run out of memory if HoloClean is not reinstantiated at each loading step.
-    for batch in batches:
+    for current_batch in batches:
         # Sets up a HoloClean session.
         hc = holoclean.HoloClean(
             db_name='holo',
@@ -38,34 +45,35 @@ for current_iteration in range(number_of_iterations):
             feature_norm=False,
             weight_norm=False,
             print_fw=False,
+            current_batch_number=current_batch_number,
             current_iteration=current_iteration,
-            log_repair_quality=log_repair_quality,
-            log_execution_time=log_execution_time,
+            log_repairing_quality=log_repairing_quality,
+            log_execution_times=log_execution_times,
             incremental=True,
             incremental_entropy=False,
             default_entropy=False,
-            repair_previous_errors=True,
-            recompute_from_scratch=True,
+            repair_previous_errors=False,
+            recompute_from_scratch=False,
             skip_training=False,
             ignore_previous_training_cells=False,
             save_load_checkpoint=False
         ).session
 
         # Drops tables and model checkpoint in the first batch.
-        if batch == batches[0]:
+        if current_batch == batches[0]:
             table_list = [dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats', 'training_cells']
             hc.ds.engine.drop_tables(table_list)
             if os.path.exists('/tmp/checkpoint.tar'):
                 os.remove('/tmp/checkpoint.tar')
 
         # Sets up logger for the experiments.
-        if log_repair_quality:
-            hc.setup_experiment_logger('repair_quality_logger', log_fpath)
-        elif log_execution_time:
+        if log_repairing_quality:
+            hc.setup_experiment_logger('repairing_quality_logger', log_fpath)
+        elif log_execution_times:
             hc.setup_experiment_logger('execution_time_logger', log_fpath)
 
         # Loads existing data and Denial Constraints.
-        hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + batch + '.csv')
+        hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + current_batch + '.csv')
         hc.load_dcs('../testdata/' + dataset_name + '_constraints.txt')
         hc.ds.set_constraints(hc.get_dcs())
 
@@ -89,4 +97,5 @@ for current_iteration in range(number_of_iterations):
                     attr_col='attribute',
                     val_col='correct_val')
 
-        logging.info('Batch %s finished.', batch)
+        logging.info('Batch %s finished.', current_batch)
+        current_batch_number += 1
