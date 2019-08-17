@@ -12,10 +12,10 @@ batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
 batch_stopping_training = 7
 skip_training = False
 
-number_of_iterations = 1
+number_of_iterations = 10
 
-log_repairing_quality = True
-log_execution_times = False
+log_repairing_quality = False
+log_execution_times = True
 log_fpath = ''
 
 if log_repairing_quality:

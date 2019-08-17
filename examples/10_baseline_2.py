@@ -10,10 +10,10 @@ dataset_name = 'hospital'
 batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
 
-number_of_iterations = 1
+number_of_iterations = 10
 
-log_repairing_quality = True
-log_execution_times = False
+log_repairing_quality = False
+log_execution_times = True
 log_fpath = ''
 
 if log_repairing_quality:
