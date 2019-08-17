@@ -26,6 +26,7 @@ class AuxTables(Enum):
     single_attr_stats = 8
     pair_attr_stats = 9
     training_cells = 10
+    repaired_table_copy = 11
 
 
 class CellStatus(Enum):
@@ -554,7 +555,15 @@ class Dataset:
         repaired_df = pd.DataFrame.from_records(init_records)
         repaired_table_name = self.raw_data.name + '_repaired'
 
+        # Keeps track of the time spent to generate a copy of the current repaired table, if needed.
+        repaired_table_generation_time = 0
         if not self.is_first_batch() and self.repair_previous_errors:
+            tic_repaired_table_copy = time.clock()
+            # Makes a copy of the current repaired table in order to properly compute the evaluation metrics later on.
+            repaired_table_copy_sql = "SELECT * FROM %s" % (self.raw_data.name + "_repaired")
+            self.generate_aux_table_sql(AuxTables.repaired_table_copy, repaired_table_copy_sql)
+            repaired_table_generation_time = time.clock() - tic_repaired_table_copy
+
             # Updates previous rows in the database.
             self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
 
@@ -583,7 +592,7 @@ class Dataset:
         status = "DONE generating repaired dataset."
 
         toc = time.clock()
-        total_time = toc - tic
+        total_time = toc - tic - repaired_table_generation_time
 
         return status, total_time
 

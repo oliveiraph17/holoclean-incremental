@@ -30,7 +30,7 @@ errors_template_previous = Template('SELECT COUNT(*) FROM ( '
                                     '     AND t1."$attr" != t2._value_ '
                                     '   UNION '
                                     '  SELECT t3._tid_ '
-                                    '    FROM $rep_table AS t3, $grdt_table AS t2 '
+                                    '    FROM $rep_table_copy AS t3, $grdt_table AS t2 '
                                     '   WHERE t3._tid_ = t2._tid_ '
                                     '     AND t2._attribute_ = \'$attr\' '
                                     '     AND t3."$attr" != t2._value_ '
@@ -64,7 +64,7 @@ correct_repairs_template_previous = Template('SELECT COUNT(*) FROM '
                                              '      AND t1."$attr" != t2._value_ '
                                              '    UNION '
                                              '   SELECT t2._tid_, t2._attribute_, t2._value_ '
-                                             '     FROM $rep_table as t3, $grdt_table as t2 '
+                                             '     FROM $rep_table_copy as t3, $grdt_table as t2 '
                                              '    WHERE t3._tid_ = t2._tid_ '
                                              '      AND t2._attribute_ = \'$attr\' '
                                              '      AND t3."$attr" != t2._value_) AS errors, $inf_dom AS repairs '
@@ -196,7 +196,7 @@ class EvalEngine:
         """
         queries = []
         total_errors = 0.0
-        if not self.env['repair_previous_errors']:
+        if self.ds.is_first_batch() or not self.env['repair_previous_errors']:
             for attr in self.ds.get_attributes():
                 query = errors_template.substitute(init_table=self.ds.raw_data.name,
                                                    grdt_table=self.clean_data.name,
@@ -207,7 +207,7 @@ class EvalEngine:
                 query = errors_template_previous.substitute(init_table=self.ds.raw_data.name,
                                                             grdt_table=self.clean_data.name,
                                                             attr=attr,
-                                                            rep_table=self.ds.raw_data.name + '_repaired')
+                                                            rep_table_copy=AuxTables.repaired_table_copy.name)
                 queries.append(query)
         results = self.ds.engine.execute_queries(queries)
         for res in results:
@@ -222,7 +222,7 @@ class EvalEngine:
         """
         queries = []
         correct_repairs = 0.0
-        if not self.env['repair_previous_errors']:
+        if self.ds.is_first_batch() or not self.env['repair_previous_errors']:
             for attr in self.ds.get_attributes():
                 query = correct_repairs_template.substitute(init_table=self.ds.raw_data.name,
                                                             grdt_table=self.clean_data.name,
@@ -235,7 +235,7 @@ class EvalEngine:
                                                                      grdt_table=self.clean_data.name,
                                                                      attr=attr,
                                                                      inf_dom=AuxTables.inf_values_dom.name,
-                                                                     rep_table=self.ds.raw_data.name + '_repaired')
+                                                                     rep_table_copy=AuxTables.repaired_table_copy.name)
                 queries.append(query)
         results = self.ds.engine.execute_queries(queries)
         for res in results:

@@ -61,7 +61,11 @@ for current_iteration in range(number_of_iterations):
 
         # Drops tables and model checkpoint in the first batch.
         if current_batch == batches[0]:
-            table_list = [dataset_name + '_repaired', 'single_attr_stats', 'pair_attr_stats', 'training_cells']
+            table_list = [dataset_name + '_repaired',
+                          'single_attr_stats',
+                          'pair_attr_stats',
+                          'training_cells',
+                          'repaired_table_copy']
             hc.ds.engine.drop_tables(table_list)
             if os.path.exists('/tmp/checkpoint.tar'):
                 os.remove('/tmp/checkpoint.tar')
