@@ -11,9 +11,9 @@ from dataset.table import Table, Source
 from utils import NULL_REPR
 
 EvalReport = namedtuple('EvalReport',
-                        ['precision', 'recall', 'repair_recall',
-                         'f1', 'repair_f1', 'detected_errors', 'total_errors', 'correct_repairs',
-                         'total_repairs',
+                        ['clean_dataset_ratio',
+                         'precision', 'recall', 'repair_recall', 'f1', 'repair_f1',
+                         'detected_errors', 'total_errors', 'correct_repairs', 'total_repairs',
                          'total_repairs_grdt', 'total_repairs_grdt_correct', 'total_repairs_grdt_incorrect'])
 
 errors_template = Template('SELECT COUNT(*) '
@@ -134,11 +134,12 @@ class EvalEngine:
         rep_recall = self.compute_repairing_recall()
         f1 = self.compute_f1()
         rep_f1 = self.compute_repairing_f1()
+        clean_dataset_ratio = self.compute_clean_dataset_ratio()
 
         if self.env['verbose']:
             self.log_weak_label_stats()
 
-        return prec, rec, rep_recall, f1, rep_f1
+        return prec, rec, rep_recall, f1, rep_f1, clean_dataset_ratio
 
     def eval_report(self):
         """
@@ -147,7 +148,7 @@ class EvalEngine:
         tic = time.clock()
 
         try:
-            prec, rec, rep_recall, f1, rep_f1 = self.evaluate_repairs()
+            prec, rec, rep_recall, f1, rep_f1, clean_dataset_ratio = self.evaluate_repairs()
 
             report = "PRECISION = %.2f, RECALL = %.2f, REPAIRING RECALL = %.2f, " \
                      "F1 = %.2f, REPAIRING F1 = %.2f, DETECTED ERRORS = %d, TOTAL ERRORS = %d, " \
@@ -159,9 +160,11 @@ class EvalEngine:
                       self.correct_repairs, self.total_repairs,
                       self.total_repairs_grdt_correct, self.total_repairs_grdt_incorrect)
 
-            eval_report = EvalReport(prec, rec, rep_recall,
-                                     f1, rep_f1, self.detected_errors, self.total_errors,
-                                     self.correct_repairs, self.total_repairs, self.total_repairs_grdt,
+            eval_report = EvalReport(clean_dataset_ratio,
+                                     prec, rec, rep_recall, f1, rep_f1,
+                                     self.detected_errors, self.total_errors,
+                                     self.correct_repairs, self.total_repairs,
+                                     self.total_repairs_grdt,
                                      self.total_repairs_grdt_correct, self.total_repairs_grdt_incorrect)
         except Exception as e:
             logging.error("ERROR generating evaluation report: %s." % e)
@@ -347,6 +350,27 @@ class EvalEngine:
         f1 = 2 * (prec * rec) / (prec + rec)
 
         return f1
+
+    def compute_clean_dataset_ratio(self):
+        """
+        Computes the ratio of clean cells over the total number of cells in the repaired dataset.
+        Requires ground-truth data.
+        """
+        queries = []
+        dirty_cells = 0.0
+        for attr in self.ds.get_attributes():
+            query = errors_template.substitute(init_table=self.ds.raw_data.name + '_repaired',
+                                               grdt_table=self.clean_data.name,
+                                               attr=attr)
+            queries.append(query)
+        results = self.ds.engine.execute_queries(queries)
+        for res in results:
+            dirty_cells += float(res[0][0])
+
+        total_cells = float(self.ds.total_tuples) * float(len(self.ds.get_attributes()))
+        clean_cells = total_cells - dirty_cells
+
+        return clean_cells / total_cells
 
     def log_weak_label_stats(self):
         query = """

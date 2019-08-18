@@ -187,7 +187,7 @@ class RepairModel:
                 self.save_checkpoint()
 
     def infer_values(self, x_pred, mask_pred):
-        logging.info('Inferring %d examples (cells)', x_pred.shape[0])
+        logging.info('Inferring %d examples (cells).', x_pred.shape[0])
         output = self.__predict__(x_pred, mask_pred)
         return output
 
