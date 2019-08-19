@@ -8,10 +8,10 @@ sys.path.append('../')
 
 dataset_name = 'hospital'
 
-number_of_iterations = 1
+number_of_iterations = 10
 
-log_repairing_quality = True
-log_execution_times = False
+log_repairing_quality = False
+log_execution_times = True
 log_fpath = ''
 
 if log_repairing_quality:
