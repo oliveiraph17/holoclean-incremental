@@ -6,10 +6,8 @@ from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 sys.path.append('../')
 
-dataset_name = 'hospital'
-# batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
-#            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
-batches = ['0001-0500', '0501-1000']
+dataset_name = 'adult'
+batches = ['00001-25000', '25001-50000', '50001-75000', '75001-97685']
 
 number_of_iterations = 1
 
@@ -18,10 +16,10 @@ log_execution_times = False
 log_fpath = ''
 
 if log_repairing_quality:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_2_batches/repairing_quality/baseline_2.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/4_batches/repairing_quality/baseline_2.csv'
 
 if log_execution_times:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_2_batches/execution_times/baseline_2.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/4_batches/execution_times/baseline_2.csv'
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0

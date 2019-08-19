@@ -1,12 +1,10 @@
 import holoclean
-import logging
 import sys
-import os
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 sys.path.append('../')
 
-dataset_name = 'hospital'
+dataset_name = 'adult'
 
 number_of_iterations = 10
 
@@ -15,10 +13,10 @@ log_execution_times = True
 log_fpath = ''
 
 if log_repairing_quality:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_one_shot/repairing_quality/baseline_1.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/one_shot/repairing_quality/baseline_1.csv'
 
 if log_execution_times:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_one_shot/execution_times/baseline_1.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/one_shot/execution_times/baseline_1.csv'
 
 for current_iteration in range(number_of_iterations):
     # Sets up a HoloClean session.

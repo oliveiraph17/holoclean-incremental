@@ -18,10 +18,10 @@ log_execution_times = False
 log_fpath = ''
 
 if log_repairing_quality:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_2_batches/repairing_quality/proposal_6.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/2_batches/repairing_quality/proposal_6.csv'
 
 if log_execution_times:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_2_batches/execution_times/proposal_6.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/2_batches/execution_times/proposal_6.csv'
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0

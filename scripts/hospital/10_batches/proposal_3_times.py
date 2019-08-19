@@ -10,17 +10,17 @@ dataset_name = 'hospital'
 batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
 
-number_of_iterations = 1
+number_of_iterations = 10
 
-log_repairing_quality = True
-log_execution_times = False
+log_repairing_quality = False
+log_execution_times = True
 log_fpath = ''
 
 if log_repairing_quality:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_10_batches/repairing_quality/proposal_6.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/10_batches/repairing_quality/proposal_3.csv'
 
 if log_execution_times:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital_10_batches/execution_times/proposal_6.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/10_batches/execution_times/proposal_3.csv'
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0
@@ -56,8 +56,8 @@ for current_iteration in range(number_of_iterations):
             repair_previous_errors=True,
             recompute_from_scratch=False,
             skip_training=False,
-            ignore_previous_training_cells=True,
-            save_load_checkpoint=True
+            ignore_previous_training_cells=False,
+            save_load_checkpoint=False
         ).session
 
         # Drops tables and model checkpoint in the first batch.
