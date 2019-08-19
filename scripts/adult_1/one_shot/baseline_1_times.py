@@ -4,12 +4,13 @@ from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 sys.path.append('../')
 
-dataset_name = 'adult'
+dataset_dir = '../testdata/confidential/'
+dataset_name = 'adult_1'
 
-number_of_iterations = 1
+number_of_iterations = 10
 
-log_repairing_quality = True
-log_execution_times = False
+log_repairing_quality = False
+log_execution_times = True
 log_fpath = ''
 
 if log_repairing_quality:
@@ -59,8 +60,8 @@ for current_iteration in range(number_of_iterations):
         hc.setup_experiment_logger('execution_time_logger', log_fpath)
 
     # Loads existing data and Denial Constraints.
-    hc.load_data(dataset_name, '../testdata/' + dataset_name + '.csv')
-    hc.load_dcs('../testdata/' + dataset_name + '_constraints.txt')
+    hc.load_data(dataset_name, dataset_dir + dataset_name + '.csv')
+    hc.load_dcs(dataset_dir + dataset_name + '_constraints.txt')
     hc.ds.set_constraints(hc.get_dcs())
 
     # Detects erroneous cells using these two detectors.
@@ -78,7 +79,7 @@ for current_iteration in range(number_of_iterations):
     hc.repair_errors(featurizers)
 
     # Evaluates the correctness of the results.
-    hc.evaluate(fpath='../testdata/' + dataset_name + '_clean.csv',
+    hc.evaluate(fpath=dataset_dir + dataset_name + '_clean.csv',
                 tid_col='tid',
                 attr_col='attribute',
                 val_col='correct_val')

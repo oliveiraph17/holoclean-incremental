@@ -6,20 +6,21 @@ from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 sys.path.append('../')
 
-dataset_name = 'adult'
+dataset_dir = '../testdata/confidential/'
+dataset_name = 'adult_1'
 batches = ['00001-25000', '25001-50000', '50001-75000', '75001-97685']
 
-number_of_iterations = 10
+number_of_iterations = 1
 
-log_repairing_quality = False
-log_execution_times = True
+log_repairing_quality = True
+log_execution_times = False
 log_fpath = ''
 
 if log_repairing_quality:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/4_batches/repairing_quality/baseline_2.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/4_batches/repairing_quality/proposal_3.csv'
 
 if log_execution_times:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/4_batches/execution_times/baseline_2.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/4_batches/execution_times/proposal_3.csv'
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0
@@ -53,7 +54,7 @@ for current_iteration in range(number_of_iterations):
             incremental_entropy=False,
             default_entropy=False,
             repair_previous_errors=True,
-            recompute_from_scratch=True,
+            recompute_from_scratch=False,
             skip_training=False,
             ignore_previous_training_cells=False,
             save_load_checkpoint=False
@@ -79,8 +80,8 @@ for current_iteration in range(number_of_iterations):
             hc.setup_experiment_logger('execution_time_logger', log_fpath)
 
         # Loads existing data and Denial Constraints.
-        hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + current_batch + '.csv')
-        hc.load_dcs('../testdata/' + dataset_name + '_constraints.txt')
+        hc.load_data(dataset_name, dataset_dir + dataset_name + '_' + current_batch + '.csv')
+        hc.load_dcs(dataset_dir + dataset_name + '_constraints.txt')
         hc.ds.set_constraints(hc.get_dcs())
 
         # Detects erroneous cells using these two detectors.
@@ -98,7 +99,7 @@ for current_iteration in range(number_of_iterations):
         hc.repair_errors(featurizers)
 
         # Evaluates the correctness of the results.
-        hc.evaluate(fpath='../testdata/' + dataset_name + '_clean.csv',
+        hc.evaluate(fpath=dataset_dir + dataset_name + '_clean.csv',
                     tid_col='tid',
                     attr_col='attribute',
                     val_col='correct_val')
