@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 source ../set_env.sh
 
-script="10_proposal_6_times.py"
+script="baseline_1.py"
 python $script 2>/dev/null
 
-script="10_proposal_7_times.py"
+script="baseline_1_times.py"
 python $script 2>/dev/null
 
