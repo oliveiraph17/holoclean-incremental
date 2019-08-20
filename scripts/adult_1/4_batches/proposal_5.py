@@ -8,7 +8,6 @@ dataset_dir = '../../../testdata/confidential/'
 dataset_name = 'adult_1'
 batches = ['00001-25000', '25001-50000', '50001-75000', '75001-97685']
 batch_stopping_training = 7
-skip_training = False
 
 number_of_iterations = 1
 
@@ -24,6 +23,7 @@ if log_execution_times:
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0
+    skip_training = False
 
     # We may run out of memory if HoloClean is not reinstantiated at each loading step.
     for current_batch in batches:

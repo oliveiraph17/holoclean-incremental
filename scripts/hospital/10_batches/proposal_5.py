@@ -9,7 +9,6 @@ dataset_name = 'hospital'
 batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
 batch_stopping_training = 7
-skip_training = False
 
 number_of_iterations = 1
 
@@ -25,6 +24,7 @@ if log_execution_times:
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0
+    skip_training = False
 
     # We may run out of memory if HoloClean is not reinstantiated at each loading step.
     for current_batch in batches:

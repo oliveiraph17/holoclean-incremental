@@ -468,7 +468,7 @@ class Session:
             if self.env['log_repairing_quality']:
                 self.repairing_quality_metrics.append(str(0))
             if self.env['log_execution_times']:
-                self.execution_times.append('')
+                self.execution_times.append(str(0))
         else:
             status, fit_time, training_cells_count = self.repair_engine.fit_repair_model()
             logging.info(status)

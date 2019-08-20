@@ -6,9 +6,9 @@ from repair.featurize import *
 
 dataset_dir = '../../../testdata/confidential/'
 dataset_name = 'adult_1'
+constraints_name = 'adult'
 batches = ['00001-25000', '25001-50000', '50001-75000', '75001-97685']
 batch_stopping_training = 7
-skip_training = False
 
 number_of_iterations = 10
 
@@ -24,6 +24,7 @@ if log_execution_times:
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0
+    skip_training = False
 
     # We may run out of memory if HoloClean is not reinstantiated at each loading step.
     for current_batch in batches:
@@ -84,7 +85,7 @@ for current_iteration in range(number_of_iterations):
 
         # Loads existing data and Denial Constraints.
         hc.load_data(dataset_name, dataset_dir + dataset_name + '_' + current_batch + '.csv')
-        hc.load_dcs(dataset_dir + dataset_name + '_constraints.txt')
+        hc.load_dcs(dataset_dir + constraints_name + '_constraints.txt')
         hc.ds.set_constraints(hc.get_dcs())
 
         # Detects erroneous cells using these two detectors.
