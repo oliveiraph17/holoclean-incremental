@@ -1,12 +1,10 @@
 import holoclean
 import logging
-import sys
 import os
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
-sys.path.append('../')
 
-dataset_dir = '../testdata/confidential/'
+dataset_dir = '../../../testdata/confidential/'
 dataset_name = 'adult_1'
 batches = ['00001-25000', '25001-50000', '50001-75000', '75001-97685']
 batch_stopping_training = 7

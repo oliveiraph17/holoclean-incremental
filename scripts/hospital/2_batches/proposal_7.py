@@ -1,11 +1,10 @@
 import holoclean
 import logging
-import sys
 import os
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
-sys.path.append('../')
 
+dataset_dir = '../../../testdata/hospital/'
 dataset_name = 'hospital'
 # batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
 #            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']
@@ -18,10 +17,10 @@ log_execution_times = False
 log_fpath = ''
 
 if log_repairing_quality:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/2_batches/repairing_quality/proposal_7.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/2_batches/repairing_quality/proposal_7.csv'
 
 if log_execution_times:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/2_batches/execution_times/proposal_7.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/2_batches/execution_times/proposal_7.csv'
 
 for current_iteration in range(number_of_iterations):
     current_batch_number = 0
@@ -81,8 +80,8 @@ for current_iteration in range(number_of_iterations):
             hc.setup_experiment_logger('execution_time_logger', log_fpath)
 
         # Loads existing data and Denial Constraints.
-        hc.load_data(dataset_name, '../testdata/' + dataset_name + '_' + current_batch + '.csv')
-        hc.load_dcs('../testdata/' + dataset_name + '_constraints.txt')
+        hc.load_data(dataset_name, dataset_dir + dataset_name + '_' + current_batch + '.csv')
+        hc.load_dcs(dataset_dir + dataset_name + '_constraints.txt')
         hc.ds.set_constraints(hc.get_dcs())
 
         # Detects erroneous cells using these two detectors.
@@ -100,7 +99,7 @@ for current_iteration in range(number_of_iterations):
         hc.repair_errors(featurizers)
 
         # Evaluates the correctness of the results.
-        hc.evaluate(fpath='../testdata/' + dataset_name + '_clean.csv',
+        hc.evaluate(fpath=dataset_dir + dataset_name + '_clean.csv',
                     tid_col='tid',
                     attr_col='attribute',
                     val_col='correct_val')

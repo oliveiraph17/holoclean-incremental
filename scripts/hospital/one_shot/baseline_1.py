@@ -1,9 +1,8 @@
 import holoclean
-import sys
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
-sys.path.append('../')
 
+dataset_dir = '../../../testdata/hospital/'
 dataset_name = 'hospital'
 
 number_of_iterations = 1
@@ -13,10 +12,10 @@ log_execution_times = False
 log_fpath = ''
 
 if log_repairing_quality:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/one_shot/repairing_quality/baseline_1.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/one_shot/repairing_quality/baseline_1.csv'
 
 if log_execution_times:
-    log_fpath += '/home/ph/Git/HoloClean/experiments/hospital/one_shot/execution_times/baseline_1.csv'
+    log_fpath += '/home/ph/Git/HoloClean/experiments/' + dataset_name + '/one_shot/execution_times/baseline_1.csv'
 
 for current_iteration in range(number_of_iterations):
     # Sets up a HoloClean session.
@@ -59,8 +58,8 @@ for current_iteration in range(number_of_iterations):
         hc.setup_experiment_logger('execution_time_logger', log_fpath)
 
     # Loads existing data and Denial Constraints.
-    hc.load_data(dataset_name, '../testdata/' + dataset_name + '.csv')
-    hc.load_dcs('../testdata/' + dataset_name + '_constraints.txt')
+    hc.load_data(dataset_name, dataset_dir + dataset_name + '.csv')
+    hc.load_dcs(dataset_dir + dataset_name + '_constraints.txt')
     hc.ds.set_constraints(hc.get_dcs())
 
     # Detects erroneous cells using these two detectors.
@@ -78,7 +77,7 @@ for current_iteration in range(number_of_iterations):
     hc.repair_errors(featurizers)
 
     # Evaluates the correctness of the results.
-    hc.evaluate(fpath='../testdata/' + dataset_name + '_clean.csv',
+    hc.evaluate(fpath=dataset_dir + dataset_name + '_clean.csv',
                 tid_col='tid',
                 attr_col='attribute',
                 val_col='correct_val')

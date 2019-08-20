@@ -1,10 +1,8 @@
 import holoclean
-import sys
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
-sys.path.append('../')
 
-dataset_dir = '../testdata/confidential/'
+dataset_dir = '../../../testdata/confidential/'
 dataset_name = 'adult_1'
 
 number_of_iterations = 1
