@@ -4,7 +4,7 @@ import os
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 
-dataset_dir = '../testdata/hospital/'
+dataset_dir = '/home/ph/Git/HoloClean/testdata/hospital/'
 dataset_name = 'hospital'
 batches = ['0001-0100', '0101-0200', '0201-0300', '0301-0400', '0401-0500',
            '0501-0600', '0601-0700', '0701-0800', '0801-0900', '0901-1000']

@@ -2,8 +2,9 @@ import holoclean
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 
-dataset_dir = '../testdata/confidential/'
+dataset_dir = '/home/ph/Git/HoloClean/testdata/confidential/'
 dataset_name = 'adult_1'
+constraints_name = 'adult'
 
 number_of_iterations = 10
 
@@ -59,7 +60,7 @@ for current_iteration in range(number_of_iterations):
 
     # Loads existing data and Denial Constraints.
     hc.load_data(dataset_name, dataset_dir + dataset_name + '.csv')
-    hc.load_dcs(dataset_dir + dataset_name + '_constraints.txt')
+    hc.load_dcs(dataset_dir + constraints_name + '_constraints.txt')
     hc.ds.set_constraints(hc.get_dcs())
 
     # Detects erroneous cells using these two detectors.
