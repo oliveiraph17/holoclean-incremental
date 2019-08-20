@@ -4,7 +4,7 @@ import os
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 
-dataset_dir = '../../../testdata/confidential/'
+dataset_dir = '../testdata/confidential/'
 dataset_name = 'adult_1'
 batches = ['00001-25000', '25001-50000', '50001-75000', '75001-97685']
 

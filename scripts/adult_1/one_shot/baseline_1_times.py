@@ -2,7 +2,7 @@ import holoclean
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 
-dataset_dir = '../../../testdata/confidential/'
+dataset_dir = '../testdata/confidential/'
 dataset_name = 'adult_1'
 
 number_of_iterations = 10

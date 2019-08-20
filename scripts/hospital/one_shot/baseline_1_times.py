@@ -2,7 +2,7 @@ import holoclean
 from detect import NullDetector, ViolationDetector
 from repair.featurize import *
 
-dataset_dir = '../../../testdata/hospital/'
+dataset_dir = '../testdata/hospital/'
 dataset_name = 'hospital'
 
 number_of_iterations = 10
