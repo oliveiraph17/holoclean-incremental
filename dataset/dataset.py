@@ -291,7 +291,7 @@ class Dataset:
 
         logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data.')
 
-        if self.incremental and not self.recompute_from_scratch:
+        if self.incremental and not self.is_first_batch() and not self.recompute_from_scratch:
             tic = time.clock()
             total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded = self.load_stats()
             logging.debug('DONE loading existing statistics from the database in %.2f secs.', time.clock() - tic)
@@ -327,7 +327,7 @@ class Dataset:
 
         entropy_tic = time.clock()
 
-        if not self.incremental or single_attr_stats_loaded is None:
+        if not self.incremental or self.is_first_batch():
             self.correlations = self.compute_norm_cond_entropy_corr()
         else:
             if self.incremental_entropy:
@@ -952,8 +952,8 @@ class Dataset:
             query = 'SELECT COUNT(*) FROM {}'.format(table_repaired_name)
             result = self.engine.execute_query(query)
             num_tuples = result[0][0]
-        except Exception:
-            logging.debug('No statistics to be loaded from the database.')
+        except ValueError:
+            raise Exception('ERROR while trying to load statistics from the database.')
 
         return num_tuples, single_attr_stats, pair_attr_stats
 
