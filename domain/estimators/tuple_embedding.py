@@ -109,6 +109,10 @@ class LookupDataset(Dataset):
         # Attributes to derive context from
         self._init_cat_attrs, self._init_num_attrs = self._split_cat_num_attrs(self._all_attrs)
         self._n_init_cat_attrs, self._n_init_num_attrs = len(self._init_cat_attrs), len(self._init_num_attrs)
+# <<<<<<< HEAD
+# =======
+        self._n_init_attrs = len(self._all_attrs)
+# >>>>>>> hcq-embedding-3
         logging.debug('%s: init categorical attributes: %s',
                 type(self).__name__,
                 self._init_cat_attrs)
@@ -129,7 +133,19 @@ class LookupDataset(Dataset):
                 self._train_num_attrs)
 
         # Make copy of raw data
+# <<<<<<< HEAD
+#         self._raw_data = self.ds.get_raw_data().copy()
+# =======
+        # Quantized data is used for co-occurrence statistics in the last layer
+        # for categorical targets.
         self._raw_data = self.ds.get_raw_data().copy()
+        self._qtized_raw_data = self.ds.get_quantized_data() if self.ds.do_quantization else self._raw_data
+        self._qtized_raw_data_dict = self._qtized_raw_data.set_index('_tid_').to_dict('index')
+
+        # Statistics for cooccurrences.
+        _, self._single_stats, self._pair_stats = self.ds.get_statistics()
+
+# >>>>>>> hcq-embedding-3
         # Keep track of mean + std to un-normalize during prediction
         self._num_attrs_mean = {}
         self._num_attrs_std = {}
@@ -143,8 +159,17 @@ class LookupDataset(Dataset):
                     - self._num_attrs_mean[num_attr]) \
                     / (self._num_attrs_std[num_attr] or 1.)).astype(str)
             self._raw_data[num_attr] = temp
+# <<<<<<< HEAD
+# 
+#         # Indexes assigned to attributes: first categorical then numerical.
+# =======
+        # This MUST go after the mean-0 variance 1 normalization above since
+        # this is looked up subsequently during training.
+        self._raw_data_dict = self._raw_data.set_index('_tid_').to_dict('index')
 
-        # Indexes assigned to attributes: first categorical then numerical.
+        # Indexes assigned to attributes: FIRST categorical THEN numerical.
+        # (this order is important since we shift the numerical idxs).
+# >>>>>>> hcq-embedding-3
         self._init_attr_idxs = {attr: idx for idx, attr in enumerate(self._init_cat_attrs + self._init_num_attrs)}
         self._train_attr_idxs = {attr: idx for idx, attr in enumerate(self._train_cat_attrs + self._train_num_attrs)}
 
@@ -155,6 +180,14 @@ class LookupDataset(Dataset):
         # Assign index for every unique value-attr (train/possible values, target)
         self._train_val_idxs = {attr: {} for attr in self._train_cat_attrs}
 
+# <<<<<<< HEAD
+# =======
+        # Initial categorical values we've seen during training. Otherwise
+        # we need to zero out the associated embedding since un-seen initial
+        # values will have garbage embeddings.
+        self._seen_init_cat_vals = {attr: set() for attr in self._init_cat_attrs}
+
+# >>>>>>> hcq-embedding-3
         # Reserve the 0th index as placeholder for padding in domain_idx and
         # for NULL values.
         cur_init_idx = 1
@@ -210,8 +243,11 @@ class LookupDataset(Dataset):
         self.n_init_vals = cur_init_idx
         self.n_train_vals = cur_train_idx
 
-        self._raw_data_dict = self._raw_data.set_index('_tid_').to_dict('index')
-
+# <<<<<<< HEAD
+#         self._raw_data_dict = self._raw_data.set_index('_tid_').to_dict('index')
+# 
+# =======
+# >>>>>>> hcq-embedding-3
         self._vid_to_idx = {vid: idx for idx, vid in enumerate(domain_df['_vid_'].values)}
         self._train_records = domain_df[['_vid_', '_tid_', 'attribute', 'init_value',
                                          'init_index',
@@ -236,6 +272,11 @@ class LookupDataset(Dataset):
                                               dtype=torch.float)
         self._dummy_domain_idxs = torch.zeros(self.max_cat_domain,
                                               dtype=torch.long)
+# <<<<<<< HEAD
+# =======
+        self._dummy_domain_cooccur = torch.zeros(self.max_cat_domain, self._n_init_attrs,
+                                              dtype=torch.float)
+# >>>>>>> hcq-embedding-3
         self._dummy_target_numvals = torch.zeros(self._max_num_dim,
                                                  dtype=torch.float)
         self._dummy_cat_target = torch.LongTensor([-1])
@@ -298,6 +339,36 @@ class LookupDataset(Dataset):
 
         return self._domain_idxs[idx]
 
+# <<<<<<< HEAD
+# =======
+    def _get_domain_cooccur_probs(self, idx):
+        """
+        Returns co-occurrence probability for every domain value with every
+        initial context value (categorical and numerical (quantized)).
+
+        Returns (max_cat_domain, # of init attrs) tensor.
+        """
+        cur = self._train_records[idx]
+
+        cooccur_probs = torch.zeros(self.max_cat_domain,
+                self._n_init_attrs,
+                dtype=torch.float)
+
+        # Compute co-occurrence statistics.
+        for attr_idx, attr in enumerate(self._all_attrs):
+            ctx_val = self._qtized_raw_data_dict[cur['_tid_']][attr]
+            if attr == cur['attribute'] or ctx_val == NULL_REPR or \
+                    ctx_val not in self._pair_stats[attr][cur['attribute']]:
+                continue
+
+            denom = self._single_stats[attr][ctx_val]
+            for dom_idx, dom_val in enumerate(cur['domain']):
+                numer = self._pair_stats[attr][cur['attribute']][ctx_val].get(dom_val, 0.)
+                cooccur_probs[dom_idx,attr_idx] = numer / denom
+
+        return cooccur_probs
+
+# >>>>>>> hcq-embedding-3
     def _get_target_numvals(self, idx):
         if not self.memoize or idx not in self._target_numvals:
             cur = self._train_records[idx]
@@ -338,9 +409,27 @@ class LookupDataset(Dataset):
         if not self.memoize or idx not in self._init_cat_idxs:
             cur = self._train_records[idx]
 
-            init_cat_idxs = torch.LongTensor([self._init_val_idxs[attr][self._raw_data_dict[cur['_tid_']][attr]]
-                if attr != cur['attribute'] else 0
-                for attr in self._init_cat_attrs])
+# <<<<<<< HEAD
+#             init_cat_idxs = torch.LongTensor([self._init_val_idxs[attr][self._raw_data_dict[cur['_tid_']][attr]]
+#                 if attr != cur['attribute'] else 0
+#                 for attr in self._init_cat_attrs])
+# =======
+            init_cat_idxs = []
+            for attr in self._init_cat_attrs:
+                ctx_val = self._raw_data_dict[cur['_tid_']][attr]
+                # If the context attribute is the current target attribute
+                # we use the 0-vector.
+                # If we are in inference mode, we need to ensure we've seen
+                # the context value before, otherwise we assign the 0-vector.
+                if attr == cur['attribute'] or \
+                        (self.inference_mode and \
+                        ctx_val not in self._seen_init_cat_vals[attr]):
+                    init_cat_idxs.append(0)
+                    continue
+                self._seen_init_cat_vals[attr].add(ctx_val)
+                init_cat_idxs.append(self._init_val_idxs[attr][ctx_val])
+            init_cat_idxs = torch.LongTensor(init_cat_idxs)
+# >>>>>>> hcq-embedding-3
 
             if not self.memoize:
                 return init_cat_idxs
@@ -460,6 +549,11 @@ class LookupDataset(Dataset):
         # Categorical VID
         if cur['attribute'] in self._train_cat_attrs:
             domain_idxs, domain_mask, target = self._get_cat_domain_target(idx)
+# <<<<<<< HEAD
+# =======
+            # TODO(richardwu): decide if we care about co-occurrence probabilities or not.
+            # domain_cooccur = self._get_domain_cooccur_probs(idx)
+# >>>>>>> hcq-embedding-3
             return vid, \
                 is_categorical, \
                 attr_idx, \
@@ -498,6 +592,12 @@ class LookupDataset(Dataset):
         return ['_vid_to_idx',
                 '_train_records',
                 '_raw_data_dict',
+# <<<<<<< HEAD
+# =======
+                # '_qtized_raw_data_dict',
+                # '_single_stats',
+                # '_pair_stats',
+# >>>>>>> hcq-embedding-3
                 'max_cat_domain',
                 '_max_num_dim',
                 '_init_val_idxs',
@@ -537,10 +637,17 @@ class IterSampler(Sampler):
         return len(self.iter)
 
 class VidSampler(Sampler):
-    def __init__(self, domain_df, raw_df, numerical_attr_groups,
+# <<<<<<< HEAD
+#     def __init__(self, domain_df, raw_df, numerical_attr_groups,
+#             shuffle=True, train_only_clean=False):
+#         # No NULL targets
+#         domain_df = domain_df[domain_df['weak_label'] != NULL_REPR]
+# =======
+    def __init__(self, domain_df, raw_df, num_attrs, numerical_attr_groups,
             shuffle=True, train_only_clean=False):
-        # No NULL targets
-        domain_df = domain_df[domain_df['weak_label'] != NULL_REPR]
+        # No NULL categorical targets
+        domain_df = domain_df[domain_df['attribute'].isin(num_attrs) | (domain_df['weak_label'] != NULL_REPR)]
+# >>>>>>> hcq-embedding-3
 
         # No NULL values in each cell's numerical group (all must be non-null
         # since target_numvals requires all numerical values.
@@ -557,7 +664,11 @@ class VidSampler(Sampler):
                 return all(raw_data_dict[tid][attr] != NULL_REPR
                         for attr in attr_to_group[cur_attr])
             fil_notnull = domain_df.apply(group_notnull, axis=1)
-            if sum(fil_notnull) < domain_df.shape[0]:
+# <<<<<<< HEAD
+#             if sum(fil_notnull) < domain_df.shape[0]:
+# =======
+            if domain_df.shape[0] and sum(fil_notnull) < domain_df.shape[0]:
+# >>>>>>> hcq-embedding-3
                 logging.warning('dropping %d targets where target\'s numerical group contain NULLs',
                         domain_df.shape[0] - sum(fil_notnull))
                 domain_df = domain_df[fil_notnull]
@@ -646,7 +757,11 @@ class TupleEmbedding(Estimator, torch.nn.Module):
         fil_numattr = self.domain_df['attribute'].isin(self._numerical_attrs)
 
         # Memoize max domain size for numerical attribue for padding later.
-        self.max_domain = self.domain_df['domain_size'].max()
+# <<<<<<< HEAD
+#         self.max_domain = self.domain_df['domain_size'].max()
+# =======
+        self.max_domain = int(self.domain_df['domain_size'].max())
+# >>>>>>> hcq-embedding-3
         self.domain_df.loc[fil_numattr, 'domain'] = ''
         self.domain_df.loc[fil_numattr, 'domain_size'] = 0
         # Remove categorical domain/training cells without a domain
@@ -691,7 +806,11 @@ class TupleEmbedding(Estimator, torch.nn.Module):
 
         self._n_init_cat_attrs = self._dataset._n_init_cat_attrs
         self._n_init_num_attrs = self._dataset._n_init_num_attrs
-        self._n_init_attrs = self._n_init_cat_attrs + self._n_init_num_attrs
+# <<<<<<< HEAD
+#         self._n_init_attrs = self._n_init_cat_attrs + self._n_init_num_attrs
+# =======
+        self._n_init_attrs = self._dataset._n_init_attrs
+# >>>>>>> hcq-embedding-3
 
         self._n_train_cat_attrs = self._dataset._n_train_cat_attrs
         self._n_train_num_attrs = self._dataset._n_train_num_attrs
@@ -756,6 +875,14 @@ class TupleEmbedding(Estimator, torch.nn.Module):
         self.attr_W = torch.nn.Parameter(torch.zeros(self._n_train_attrs,
             self._n_init_cat_attrs + self._n_num_attr_groups))
 
+# <<<<<<< HEAD
+# =======
+        # Weights for 1) embedding score and 2) co-occurrence probabilities
+        # for categorical domain values.
+        self.cat_feat_W = torch.nn.Parameter(torch.zeros(self._n_train_attrs,
+            1 + self._n_init_attrs, 1))
+
+# >>>>>>> hcq-embedding-3
         # Initialize all but the first 0th vector embedding (reserved).
         torch.nn.init.xavier_uniform_(self.in_W[1:])
         torch.nn.init.xavier_uniform_(self.out_W[1:])
@@ -773,6 +900,10 @@ class TupleEmbedding(Estimator, torch.nn.Module):
             torch.nn.init.xavier_uniform_(self.out_num_bias1)
 
         torch.nn.init.xavier_uniform_(self.attr_W)
+# <<<<<<< HEAD
+# =======
+        torch.nn.init.xavier_uniform_(self.cat_feat_W)
+# >>>>>>> hcq-embedding-3
 
         self._cat_loss = CrossEntropyLoss()
         # TODO: we use MSE loss for all numerical attributes for now.
@@ -914,24 +1045,51 @@ class TupleEmbedding(Estimator, torch.nn.Module):
     def _cat_forward(self, combined_init, domain_idxs, domain_masks):
         """
         combined_init: (batch, embed size, 1)
+# <<<<<<< HEAD
+#         domain_idxs: (batch, max domain)
+#         domain_masks: (batch, max domain)
+# =======
+        cat_attr_idxs: (batch, 1)
         domain_idxs: (batch, max domain)
         domain_masks: (batch, max domain)
+        domain_cooccur: (batch, max domain, # of init attrs)
+# >>>>>>> hcq-embedding-3
 
         Returns logits: (batch, max domain)
         """
         # (batch, max domain, embed size)
         domain_vecs = self.out_W.index_select(0, domain_idxs.view(-1)).view(*domain_idxs.shape, self._embed_size)
-
+# <<<<<<< HEAD
+# 
+#         # (batch, max domain, 1)
+#         logits = domain_vecs.matmul(combined_init)
+# 
+#         # (batch, max domain, 1)
+#         domain_biases = self.out_B.index_select(0, domain_idxs.view(-1)).view(*domain_idxs.shape, 1)
+# 
+#         # (batch, max domain, 1)
+#         logits.add_(domain_biases)
+#         # (batch, max domain)
+#         logits = logits.squeeze(-1)
+# =======
         # (batch, max domain, 1)
-        logits = domain_vecs.matmul(combined_init)
-
+        embed_prods = domain_vecs.matmul(combined_init)
         # (batch, max domain, 1)
         domain_biases = self.out_B.index_select(0, domain_idxs.view(-1)).view(*domain_idxs.shape, 1)
-
         # (batch, max domain, 1)
-        logits.add_(domain_biases)
-        # (batch, max domain)
-        logits = logits.squeeze(-1)
+        embed_prods.add_(domain_biases)
+
+        logits = embed_prods.squeeze(-1)
+
+        # # (batch, max domain, 1 + # of init attrs)
+        # domain_feats = torch.cat([embed_prods, domain_cooccur], dim=-1)
+
+        # # (batch, 1 + # of init attrs, 1)
+        # cat_feat_W = self.cat_feat_W.index_select(0, cat_attr_idxs.view(-1)).view(domain_feats.shape[0],
+        #         *self.cat_feat_W.shape[1:])
+        # # (batch, max domain)
+        # logits = domain_feats.matmul(cat_feat_W).squeeze(-1)
+# >>>>>>> hcq-embedding-3
 
         # Add mask to void out-of-domain indexes
         # (batch, max domain)
@@ -992,9 +1150,12 @@ class TupleEmbedding(Estimator, torch.nn.Module):
                 domain_idxs, domain_masks):
         """
         Performs one forward pass.
-
-        is_categorical: (batch, 1)
-        attr_idxs: (batch, 1)
+# <<<<<<< HEAD
+# 
+#         is_categorical: (batch, 1)
+#         attr_idxs: (batch, 1)
+# =======
+# >>>>>>> hcq-embedding-3
         """
         # (batch, embed size, 1)
         combined_init = self._get_combined_init_vec(init_cat_idxs, init_numvals,
@@ -1010,7 +1171,12 @@ class TupleEmbedding(Estimator, torch.nn.Module):
                     domain_idxs[cat_mask], \
                     domain_masks[cat_mask]
             # (# of cat VIDs, max_cat_domain)
-            cat_logits = self._cat_forward(cat_combined_init, domain_idxs, domain_masks)
+# <<<<<<< HEAD
+#             cat_logits = self._cat_forward(cat_combined_init, domain_idxs, domain_masks)
+# =======
+            cat_logits = self._cat_forward(cat_combined_init, domain_idxs,
+                    domain_masks)
+# >>>>>>> hcq-embedding-3
 
         pred_numvals = torch.empty(0, self._max_num_dim)
         if len(num_mask):
@@ -1064,7 +1230,11 @@ class TupleEmbedding(Estimator, torch.nn.Module):
 
         # Returns VIDs to train on.
         sampler = VidSampler(self.domain_df, self.ds.get_raw_data(),
-                self._numerical_attr_groups,
+# <<<<<<< HEAD
+#                 self._numerical_attr_groups,
+# =======
+                self._numerical_attrs, self._numerical_attr_groups,
+# >>>>>>> hcq-embedding-3
                 shuffle=shuffle, train_only_clean=train_only_clean)
 
         logging.debug("%s: training (lambda = %f) on %d cells (%d cells in total) in:\n1) %d categorical columns: %s\n2) %d numerical columns: %s",
@@ -1375,7 +1545,11 @@ class TupleEmbedding(Estimator, torch.nn.Module):
         def calc_rmse(df_filter):
             if df_filter.sum() == 0:
                 return 0
-            X_cor = df_res.loc[df_filter, '_value_'].apply(lambda arr: arr[0]).values.astype(np.float)
+# <<<<<<< HEAD
+#             X_cor = df_res.loc[df_filter, '_value_'].apply(lambda arr: arr[0]).values.astype(np.float)
+# =======
+            X_cor = df_res.loc[df_filter, '_value_'].apply(lambda arr: arr[0] if arr[0] != '_nan_' else 0.).values.astype(np.float)
+# >>>>>>> hcq-embedding-3
             X_inferred = df_res.loc[df_filter, 'inferred_val'].values.astype(np.float)
             assert X_cor.shape == X_inferred.shape
             return np.sqrt(np.mean((X_cor - X_inferred) ** 2))
