@@ -27,12 +27,10 @@ class Featurizer:
         raise NotImplementedError
 
     @abstractmethod
-    def create_tensor(self):
+    def gen_feat_tensor(self, vid):
         """
-         This method creates a tensor which has shape
-         (# of cells/rvs, max size of domain, # of features for this featurizer)
-
-        :return: PyTorch Tensor
+        Generates a torch.Tensor(max_domain, num_features) by featurizing the cell
+        with vid == :param vid:.
         """
         raise NotImplementedError
 
@@ -44,8 +42,5 @@ class Featurizer:
         """
         raise NotImplementedError
 
-    def _apply_func(self, func, collection):
-        if self._pool is None:
-            return list(map(func, collection))
-        return self._pool.map(func, collection, min(self._batch_size, len(collection)))
-
+    def num_features(self):
+        return len(self.feature_names())

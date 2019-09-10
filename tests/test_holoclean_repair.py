@@ -28,6 +28,9 @@ def template(featurizers, estimator_type):
             timeout=3 * 60000,
             print_fw=True,
             estimator_type=estimator_type,
+            feature_norm=False,
+            weight_norm=False,
+            featurization_batch_size=1000
         ).session
 
         # 2. Load training data and denial constraints.

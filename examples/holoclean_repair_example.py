@@ -18,6 +18,9 @@ hc = holoclean.HoloClean(
     verbose=True,
     timeout=3 * 60000,
     print_fw=True,
+    feature_norm=False,
+    weight_norm=False,
+    featurization_batch_size=1000
 ).session
 
 # 2. Load training data and denial constraints.

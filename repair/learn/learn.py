@@ -4,6 +4,7 @@ import torch
 from torch import optim
 from torch.nn import Parameter, ParameterList, ReLU
 from torch.nn.functional import softmax
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 
@@ -137,7 +138,7 @@ class RepairModel:
                                    lr=self.env['learning_rate'],
                                    weight_decay=self.env['weight_decay'])
 
-    def fit_model(self, X_train, Y_train, mask_train, epochs):
+    def fit_model(self, training_data, epochs):
         """
         X_train: (batch, # of classes (domain size), total # of features)
         Y_train: (batch, 1)
@@ -146,26 +147,33 @@ class RepairModel:
         batch_size = self.env['batch_size']
         for epoch_idx in tqdm(range(1, epochs + 1)):
             cost = 0.
-            num_batches = (X_train.shape[0] + batch_size - 1) // batch_size
-            for k in range(num_batches):
-                start, end = k * batch_size, (k + 1) * batch_size
-                cost += self.__train__(X_train[start:end],
-                                       Y_train[start:end],
-                                       mask_train[start:end])
+            # Each iteration of training_data_iterator will return env['featurization_batch_size'] examples
+            for batch_X, batch_Y, batch_var_mask in tqdm(DataLoader(training_data, batch_size=self.env['featurization_batch_size'], num_workers=self.env['threads'] - 1)):
+                num_batches = len(batch_X) // batch_size
+                for k in range(num_batches):
+                    start, end = k * batch_size, (k + 1) * batch_size
+                    cost += self.__train__(batch_X[start:end],
+                                           batch_Y[start:end],
+                                           batch_var_mask[start:end])
 
-            if self.env['verbose']:
-                # Compute and print accuracy at the end of epoch
-                grdt = Y_train.numpy().flatten()
-                Y_pred = self.__predict__(X_train, mask_train)
-                Y_assign = Y_pred.data.numpy().argmax(axis=1)
-                logging.debug("Epoch %d, cost = %f, acc = %.2f%%",
-                              epoch_idx, cost / max(num_batches, 1),
-                              100. * np.mean(Y_assign == grdt))
+                # This is commented out because it requires featurizing the dataset again.
+                # if self.env['verbose']:
+                #     batch_grdt = []
+                #     batch_Y_assign = []
+                #     # Compute and print accuracy at the end of epoch
+                #     for j, (batch_X, batch_Y, batch_var_mask) in enumerate(tqdm(DataLoader(training_data, batch_size=self.env['featurization_batch_size'], num_workers=self.env['threads'] - 1))):
+                #         batch_grdt.append(batch_Y.numpy().flatten())
+                #         batch_Y_assign.append(self.__predict__(batch_X, batch_var_mask).data.numpy().argmax(axis=1))
+                #     grdt = np.concatenate(batch_grdt)
+                #     Y_assign = np.concatenate(batch_Y_assign)
+                #     logging.debug("Epoch %d, cost = %f, acc = %.2f%%",
+                #                   epoch_idx, cost / j,
+                #                   100. * np.mean(Y_assign == grdt))
 
-    def infer_values(self, X_pred, mask_pred):
-        logging.info('inferring on %d examples (cells)', X_pred.shape[0])
-        output = self.__predict__(X_pred, mask_pred)
-        return output
+    def infer_values(self, infer_data):
+        logging.info('inferring on %d examples (cells)', infer_data.num_examples)
+        Y_preds = [self.__predict__(batch_X, batch_var_mask) for batch_X, _, batch_var_mask in tqdm(DataLoader(infer_data, batch_size=self.env['featurization_batch_size'], num_workers=self.env['threads'] - 1))]
+        return torch.cat(Y_preds)
 
     def __train__(self, X_train, Y_train, mask_train):
         """
