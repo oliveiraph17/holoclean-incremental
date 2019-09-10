@@ -28,6 +28,19 @@ class DBengine:
         self.conn_args = con
         self.engine = sql.create_engine(url, client_encoding='utf8', pool_size=pool_size)
 
+    def execute_updates(self, updates):
+        """
+        Executes :param updates: in parallel.
+
+        :param updates: (list[str]) list of SQL updates to be executed.
+        """
+        logging.debug('Preparing to execute %d updates.', len(updates))
+        tic = time.clock()
+        self._apply_func(partial(_execute_update, conn_args=self.conn_args),
+                         [(idx, q) for idx, q in enumerate(updates)])
+        toc = time.clock()
+        logging.debug('Time to execute %d updates: %.2f secs.', len(updates), toc - tic)
+
     def execute_queries(self, queries):
         """
         Executes :param queries: in parallel.
@@ -103,10 +116,35 @@ class DBengine:
         logging.debug('Time to create index: %.2f secs', toc-tic)
         return result
 
+    def drop_tables(self, table_list):
+        tic = time.clock()
+        conn = self.engine.connect()
+        for table in table_list:
+            conn.execute(drop_table_template.substitute(table=table))
+        conn.close()
+        toc = time.clock()
+        logging.debug('Time to drop %d tables: %.2f secs.', len(table_list), toc - tic)
+        return True
+
     def _apply_func(self, func, collection):
         if self._pool is None:
             return list(map(func, collection))
         return self._pool.map(func, collection)
+
+
+def _execute_update(args, conn_args):
+    update_id = args[0]
+    update = args[1]
+    logging.debug("Starting to execute update %s with id %s.", update, update_id)
+    tic = time.clock()
+    conn = psycopg2.connect(conn_args)
+    cur = conn.cursor()
+    cur.execute(update)
+    conn.commit()
+    cur.close()
+    conn.close()
+    toc = time.clock()
+    logging.debug('Time to execute update with id %d: %.2f secs.', update_id, (toc - tic))
 
 
 def _execute_query(args, conn_args):

@@ -9,6 +9,11 @@ import pandas as pd
 from .dbengine import DBengine
 from .table import Table, Source
 from utils import dictify_df, NULL_REPR
+from recordtype import recordtype
+from math import log2
+from pyitlib import discrete_random_variable as drv
+# from timeit import default_timer as timer
+# from statistics import mean
 
 
 class AuxTables(Enum):
@@ -19,6 +24,10 @@ class AuxTables(Enum):
     cell_distr     = 5
     inf_values_idx = 6
     inf_values_dom = 7
+    single_attr_stats = 8
+    pair_attr_stats = 9
+    training_cells = 10
+    repaired_table_copy = 11
 
 
 class CellStatus(Enum):
@@ -34,7 +43,11 @@ class Dataset:
         self.env = env
         self.id = name
         self.raw_data = None
+        # DataFrame with the incoming data appended to previous repaired data.
+        self.raw_data_with_previous_repaired_data_df = None
         self.repaired_data = None
+        # DataFrame with the rows from the previous dataset that are involved in violations.
+        self.previous_dirty_rows_df = None
         self.constraints = None
         self.aux_table = {}
         for tab in AuxTables:
@@ -52,7 +65,7 @@ class Dataset:
         self.attr_to_idx = {}
         self.attr_count = 0
         # dataset statistics
-        self.stats_ready = False
+        self.stats_ready = None
         # Total tuples
         self.total_tuples = 0
         # Domain stats for single attributes
@@ -74,6 +87,23 @@ class Dataset:
 
         self.quantized_data = None
         self.do_quantization = False
+
+        # Conditional entropy of each pair of attributes using the log base 2.
+        self.cond_entropies_base_2 = {}
+        # Correlations between attributes.
+        self.correlations = None
+        # First _tid_ to be loaded.
+        self.first_tid = None
+        # Boolean flag for incremental behavior.
+        self.incremental = env['incremental']
+        # Boolean flag for computing entropy using the incremental algorithm.
+        self.incremental_entropy = env['incremental_entropy']
+        # Boolean flag for computing entropy using the method implemented in pyitlib.
+        self.default_entropy = env['default_entropy']
+        # Boolean flag for repairing previous errors.
+        self.repair_previous_errors = env['repair_previous_errors']
+        # Boolean flag for recomputing statistics and retraining model from scratch in incremental scenarios.
+        self.recompute_from_scratch = env['recompute_from_scratch']
 
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
@@ -99,6 +129,9 @@ class Dataset:
         :param numerical_attrs:
         """
         tic = time.clock()
+
+        self.stats_ready = False
+
         try:
             # Do not include TID and source column as trainable attributes
             if exclude_attr_cols is None:
@@ -117,8 +150,8 @@ class Dataset:
             # If entity_col is not supplied, use auto-incrementing values.
             # Otherwise we use the entity values directly as _tid_'s.
             if entity_col is None:
-                # auto-increment
-                df.insert(0, '_tid_', range(0,len(df)))
+                self.first_tid = self.get_first_tid()
+                df.insert(0, '_tid_', range(self.first_tid, self.first_tid + len(df.index)))
             else:
                 # use entity IDs as _tid_'s directly
                 df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
@@ -172,13 +205,13 @@ class Dataset:
     def set_constraints(self, constraints):
         self.constraints = constraints
 
-    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False):
+    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False, append=False):
         """
         generate_aux_table writes/overwrites the auxiliary table specified by
         'aux_table'.
 
         It does:
-          1. stores/replaces the specified aux_table into Postgres (store=True), AND/OR
+          1. stores/replaces (store=True) or appends (append=True) the specified aux_table into Postgres (store=True), AND/OR
           2. sets an index on the aux_table's internal Pandas DataFrame (index_attrs=[<columns>]), AND/OR
           3. creates Postgres indexes for aux_table (store=True and index_attrs=[<columns>])
 
@@ -187,11 +220,15 @@ class Dataset:
         :param store: (bool) if true, creates/replaces Postgres table for this auxiliary table
         :param index_attrs: (list[str]) list of attributes to create indexes on. If store is true,
         also creates indexes on Postgres table.
+        :param append: (bool) if True, appends this auxiliary table to the PostgreSQL table.
         """
         try:
             self.aux_table[aux_table] = Table(aux_table.name, Source.DF, df=df)
             if store:
-                self.aux_table[aux_table].store_to_db(self.engine.engine)
+                if append:
+                    self.aux_table[aux_table].store_to_db(self.engine.engine, if_exists='append')
+                else:
+                    self.aux_table[aux_table].store_to_db(self.engine.engine)
             if index_attrs:
                 self.aux_table[aux_table].create_df_index(index_attrs)
             if store and index_attrs:
@@ -285,21 +322,13 @@ class Dataset:
                 <val1>: all values of <attr1>
                 <val2>: values of <attr2> that appear at least once with <val1>.
                 <count>: frequency (# of entities) where attr1=val1 AND attr2=val2
-
-        NB: neither single_attr_stats nor pair_attr_stats contain frequencies
-            for values that are NULL (NULL_REPR). One would need to explicitly
-            check if the value is NULL before lookup.
-
-            Also, values that only co-occur with NULLs will NOT be in pair_attr_stats.
         """
         if not self.stats_ready:
-            logging.debug('computing frequency and co-occurrence statistics from raw data...')
-            tic = time.clock()
             self.collect_stats()
-            logging.debug('DONE computing statistics in %.2fs', time.clock() - tic)
+            self.stats_ready = True
 
         stats = (self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
-        self.stats_ready = True
+
         return stats
 
     def collect_stats(self):
@@ -314,9 +343,39 @@ class Dataset:
               <count>: frequency (# of entities) where attr1: val1 AND attr2: val2
             Also known as co-occurrence count.
         """
-        logging.debug("Collecting single/pair-wise statistics...")
-        self.total_tuples = self.get_raw_data().shape[0]
-        # Single attribute-value frequency.
+        # These combinations of parameters should never happen, since they are conflicting.
+        if not self.incremental and self.recompute_from_scratch:
+            raise Exception('Inconsistent parameters: incremental=%r, recompute_from_scratch=%r.' %
+                            (self.incremental, self.recompute_from_scratch))
+        elif self.incremental_entropy and self.recompute_from_scratch:
+            raise Exception('Inconsistent parameters: incremental_entropy=%r, recompute_from_scratch=%r.' %
+                            (self.incremental_entropy, self.recompute_from_scratch))
+
+        total_tuples_loaded = None
+        single_attr_stats_loaded = None
+        pair_attr_stats_loaded = None
+
+        logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data.')
+
+        if self.incremental and not self.is_first_batch() and not self.recompute_from_scratch:
+            tic = time.clock()
+            total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded = self.load_stats()
+            logging.debug('DONE loading existing statistics from the database in %.2f secs.', time.clock() - tic)
+
+        tic = time.clock()
+
+        if not self.is_first_batch() and self.recompute_from_scratch:
+            # We get the statistics both from previous and incoming data.
+            self.load_previous_repaired_data()
+            data_df = self.raw_data_with_previous_repaired_data_df
+        else:
+            # We get the statistics from the incoming data.
+            data_df = self.raw_data.df
+
+        # Total number of tuples.
+        self.total_tuples = len(data_df.index)
+
+        # Single statistics.
         for attr in self.get_attributes():
             self.single_attr_stats[attr] = self.get_stats_single(attr)
         # Compute co-occurrence frequencies.
@@ -326,6 +385,43 @@ class Dataset:
                 if trg_attr != cond_attr:
                     self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr, trg_attr)
 
+        Stats = recordtype('Stats', 'total_tuples single_attr_stats pair_attr_stats')
+        stats1 = Stats(total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded)
+        stats2 = Stats(self.total_tuples, self.single_attr_stats, self.pair_attr_stats)
+
+        entropy_tic = time.clock()
+
+        if not self.incremental or self.is_first_batch():
+            self.correlations = self.compute_norm_cond_entropy_corr()
+        else:
+            if self.incremental_entropy:
+                # The incremental entropy calculation requires separate statistics.
+                self.correlations = self.compute_norm_cond_entropy_corr_incremental(total_tuples_loaded,
+                                                                                    single_attr_stats_loaded,
+                                                                                    pair_attr_stats_loaded)
+
+                # Merges statistics from incoming data to the loaded statistics.
+                self.merge_stats(stats1, stats2)
+
+                # Memoizes merged statistics in class variables.
+                self.total_tuples = stats1.total_tuples
+                self.single_attr_stats = stats1.single_attr_stats
+                self.pair_attr_stats = stats1.pair_attr_stats
+            else:
+                if not self.recompute_from_scratch:
+                    # Merges statistics from incoming data to the loaded statistics before computing entropy.
+                    self.merge_stats(stats1, stats2)
+
+                    # Memoizes merged statistics in class variables.
+                    self.total_tuples = stats1.total_tuples
+                    self.single_attr_stats = stats1.single_attr_stats
+                    self.pair_attr_stats = stats1.pair_attr_stats
+
+                self.correlations = self.compute_norm_cond_entropy_corr()
+
+        logging.debug('DONE computing entropy in %.2f secs.', time.clock() - entropy_tic)
+        logging.debug('DONE computing statistics from incoming data in %.2f secs.', time.clock() - tic)
+
     def get_stats_single(self, attr):
         """
         Returns a dictionary where the keys are domain values for :param attr: and
@@ -333,8 +429,11 @@ class Dataset:
         """
         # need to decode values into unicode strings since we do lookups via
         # unicode strings from Postgres
-        data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
-        return data_df[[attr]].loc[data_df[attr] != NULL_REPR].groupby([attr]).size().to_dict()
+        if not self.is_first_batch() and self.recompute_from_scratch:
+            data_df = self.raw_data_with_previous_repaired_data_df
+        else:
+            data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
+        return data_df[[attr]].groupby([attr]).size().to_dict()
 
     def get_stats_pair(self, first_attr, second_attr):
         """
@@ -342,15 +441,54 @@ class Dataset:
             <first_val>: all possible values for first_attr
             <second_val>: all values for second_attr that appear at least once with <first_val>
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
-        Filters out NULL values so no entries in the dictionary would have NULLs.
         """
-        data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
+        if not self.is_first_batch() and self.recompute_from_scratch:
+            data_df = self.raw_data_with_previous_repaired_data_df
+        else:
+            data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
         tmp_df = data_df[[first_attr, second_attr]]\
-            .loc[(data_df[first_attr] != NULL_REPR) & (data_df[second_attr] != NULL_REPR)]\
             .groupby([first_attr, second_attr])\
             .size()\
             .reset_index(name="count")
         return dictify_df(tmp_df)
+
+    def merge_stats(self, stats1, stats2):
+        """
+        Adds statistics from stats2 to stats1.
+        They are handled via recordtypes, which work like namedtuples but are mutable.
+        The statistics are: total_tuples, single_attr_stats, and pair_attr_stats.
+
+        :param stats1: (recordtype) loaded statistics.
+        :param stats2: (recordtype) incoming statistics.
+        """
+
+        attrs = self.get_attributes()
+
+        for attr in attrs:
+            for val, count in stats2.single_attr_stats[attr].items():
+                if val in stats1.single_attr_stats[attr].keys():
+                    # The key 'val' already exists, so we just update the count.
+                    stats1.single_attr_stats[attr][val] += count
+                else:
+                    # The key 'val' is new, so we insert a new dictionary for 'attr'.
+                    stats1.single_attr_stats[attr].update({val: count})
+
+        for cond_attr in attrs:
+            for trg_attr in attrs:
+                if cond_attr != trg_attr:
+                    for cond_val in stats2.pair_attr_stats[cond_attr][trg_attr].keys():
+                        for trg_val, count in stats2.pair_attr_stats[cond_attr][trg_attr][cond_val].items():
+                            if cond_val in stats1.pair_attr_stats[cond_attr][trg_attr].keys():
+                                if trg_val in stats1.pair_attr_stats[cond_attr][trg_attr][cond_val].keys():
+                                    stats1.pair_attr_stats[cond_attr][trg_attr][cond_val][trg_val] += count
+                                else:
+                                    new_dict = {trg_val: count}
+                                    stats1.pair_attr_stats[cond_attr][trg_attr][cond_val].update(new_dict)
+                            else:
+                                new_dict = {cond_val: {trg_val: count}}
+                                stats1.pair_attr_stats[cond_attr][trg_attr].update(new_dict)
+
+        stats1.total_tuples += stats2.total_tuples
 
     def get_domain_info(self):
         """
@@ -364,13 +502,11 @@ class Dataset:
 
     def get_inferred_values(self):
         tic = time.clock()
-        # index into domain with inferred_val_idx + 1 since SQL arrays begin at index 1.
-        query = "SELECT t1._tid_, t1.attribute, domain[inferred_val_idx + 1] as rv_value " \
-                "FROM " \
-                "(SELECT _tid_, attribute, " \
-                "_vid_, init_value, string_to_array(regexp_replace(domain, \'[{\"\"}]\', \'\', \'gi\'), \'|||\') as domain " \
-                "FROM %s) as t1, %s as t2 " \
-                "WHERE t1._vid_ = t2._vid_"%(AuxTables.cell_domain.name, AuxTables.inf_values_idx.name)
+
+        query = "SELECT t1._tid_, t1.attribute, t2.inferred_val as rv_value " \
+                "FROM (SELECT _tid_, attribute, _vid_ FROM %s) as t1, %s as t2 " \
+                "WHERE t1._vid_ = t2._vid_" % (AuxTables.cell_domain.name, AuxTables.inf_values_idx.name)
+
         self.generate_aux_table_sql(AuxTables.inf_values_dom, query, index_attrs=['_tid_'])
         self.aux_table[AuxTables.inf_values_dom].create_db_index(self.engine, ['attribute'])
         status = "DONE collecting the inferred values."
@@ -394,6 +530,520 @@ class Dataset:
         toc = time.clock()
         total_time = toc - tic
         return status, total_time
+
+    def get_repaired_dataset_incremental(self):
+        tic = time.clock()
+
+        tid_to_idx = {}
+
+        if self.is_first_batch():
+            # Gets only rows from the current batch for repairing.
+            # Therefore, the '_tid_' of each row is enough to index 'init_records'.
+            init_records = self.raw_data.df.sort_values(['_tid_']).to_records(index=False)
+        else:
+            # In this case, we have to create a mapping between '_tid_' and 'idx' to index 'init_records'.
+            if self.repair_previous_errors:
+                # Gets dirty rows from previous batches and rows from the current batch for repairing.
+                df_by_tid = pd.concat([self.previous_dirty_rows_df, self.raw_data.df]).sort_values(['_tid_'])
+
+                # Drops the old index [0..n, 0..m], generated by concatenating both DataFrames of sizes n and m,
+                # and creates a new index [0..n+m+1].
+                df_by_tid.reset_index(drop=True, inplace=True)
+            else:
+                # Gets only rows from the current batch for repairing.
+                df_by_tid = self.raw_data.df.sort_values(['_tid_'])
+
+            init_records = df_by_tid.to_records(index=False)
+
+            # Converts the index into a regular attribute.
+            df_by_tid.reset_index(level=0, inplace=True)
+
+            # Creates a dictionary which maps each '_tid_' to its respective 'idx'.
+            tid_to_idx = df_by_tid[['index', '_tid_']].set_index('_tid_').to_dict()
+
+        t = self.aux_table[AuxTables.inf_values_dom]
+        inferred_values = dictify_df(t.df.reset_index())
+
+        # Dictionary to keep track of previous dirty values that had their values changed after inference.
+        updated_previous_values = {}
+        max_previous_tid = 0
+
+        if not self.is_first_batch() and self.repair_previous_errors:
+            max_previous_tid = self.previous_dirty_rows_df['_tid_'].max(axis=0)
+
+        for tid in inferred_values:
+            if self.is_first_batch():
+                idx = tid
+            else:
+                idx = tid_to_idx['index'][tid]
+
+                if self.repair_previous_errors and tid <= max_previous_tid:
+                    updated_previous_values[tid] = []
+
+            for attr in inferred_values[tid]:
+                # Checks if the value was repaired.
+                if init_records[idx][attr] != inferred_values[tid][attr]:
+                    if not self.recompute_from_scratch:
+                        # Updates the statistics regarding the repaired value.
+                        # This must be done before replacing the old value with the repaired one.
+                        self.update_value_stats(init_records[idx],
+                                                attr,
+                                                init_records[idx][attr],
+                                                inferred_values[tid][attr])
+
+                    # Updates the record.
+                    init_records[idx][attr] = inferred_values[tid][attr]
+
+                    # Keeps track of cell that was changed.
+                    if not self.is_first_batch() and self.repair_previous_errors and tid <= max_previous_tid:
+                        updated_previous_values[tid].append([attr, inferred_values[tid][attr]])
+
+        repaired_df = pd.DataFrame.from_records(init_records)
+        repaired_table_name = self.raw_data.name + '_repaired'
+
+        # Keeps track of the time spent to generate a copy of the current repaired table, if needed.
+        repaired_table_generation_time = 0
+        if not self.is_first_batch() and self.repair_previous_errors:
+            tic_repaired_table_copy = time.clock()
+            # Makes a copy of the current repaired table in order to properly compute the evaluation metrics later on.
+            repaired_table_copy_sql = "SELECT * FROM %s" % (self.raw_data.name + "_repaired")
+            self.generate_aux_table_sql(AuxTables.repaired_table_copy, repaired_table_copy_sql)
+            repaired_table_generation_time = time.clock() - tic_repaired_table_copy
+
+            # Updates previous rows in the database.
+            self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
+
+            beginning = len(self.previous_dirty_rows_df)
+            end = beginning + len(self.raw_data.df)
+            repaired_incoming_rows_df = repaired_df.iloc[beginning:end]
+
+            self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_incoming_rows_df)
+            self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
+        else:
+            self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_df)
+            self.repaired_data.store_to_db(self.engine.engine)
+
+        if not self.recompute_from_scratch:
+            # Persists the up-to-date statistics in the database.
+            tic_inc = time.clock()
+            self.save_stats()
+            logging.debug('DONE storing computed statistics in the database in %.2f secs.', time.clock() - tic_inc)
+
+        if self.is_first_batch():
+            # This index is useful for querying the maximum _tid_ value in get_first_tid().
+            tic_inc = time.clock()
+            self.repaired_data.create_db_index(self.engine, ['_tid_'])
+            logging.debug('DONE indexing `_tid_` column on repaired table in %.2f secs.', time.clock() - tic_inc)
+
+        status = "DONE generating repaired dataset."
+
+        toc = time.clock()
+        total_time = toc - tic - repaired_table_generation_time
+
+        return status, total_time
+
+    def persist_repaired_previous_rows(self, updated_previous_values, repaired_table_name):
+        sql_commands = []
+
+        for tid in updated_previous_values:
+            # Checks if the list of updates for the current _tid_ is not empty.
+            if updated_previous_values[tid]:
+                command = "UPDATE {} SET".format(repaired_table_name)
+
+                assignments = []
+                for pair in updated_previous_values[tid]:
+                    assignments.append(" \"{}\" = '{}'".format(pair[0], pair[1]))
+                command += ",".join(assignments)
+
+                command += " WHERE _tid_ = {}".format(tid)
+
+                sql_commands.append(command)
+
+        # Checks if the list of SQL commands is not empty.
+        if sql_commands:
+            self.engine.execute_updates(sql_commands)
+
+    def update_value_stats(self, row, attr, old_attr_val, new_attr_val):
+        # This if-else block removes/decrements the frequency of 'old_attr_val'.
+        if self.single_attr_stats[attr][old_attr_val] == 1:
+            # Removes it from the single-attribute statistics.
+            self.single_attr_stats[attr].pop(old_attr_val)
+
+            # All entries corresponding to 'old_attr_val'
+            # must be removed from the pairwise statistics as well.
+            for other_attr in self.get_attributes():
+                if attr != other_attr:
+                    # Co-occurring value of 'other_attr' in the current repaired tuple.
+                    other_attr_val = row[other_attr]
+
+                    # Between 'attr' and 'other_attr'.
+                    self.pair_attr_stats[attr][other_attr].pop(old_attr_val)
+
+                    # The other way around.
+                    self.pair_attr_stats[other_attr][attr][other_attr_val].pop(old_attr_val)
+        else:
+            # Decrements it in the single-attribute statistics.
+            self.single_attr_stats[attr][old_attr_val] -= 1
+
+            # The frequency of 'old_attr_val' with each co-occurring value
+            # in the current repaired tuple must be updated in the pairwise statistics.
+            for other_attr in self.get_attributes():
+                if attr != other_attr:
+                    # Co-occurring value of 'other_attr' in the current repaired tuple.
+                    other_attr_val = row[other_attr]
+
+                    # Between 'attr' and 'other_attr'.
+                    if self.pair_attr_stats[attr][other_attr][old_attr_val][other_attr_val] == 1:
+                        self.pair_attr_stats[attr][other_attr][old_attr_val].pop(other_attr_val)
+                    else:
+                        self.pair_attr_stats[attr][other_attr][old_attr_val][other_attr_val] -= 1
+
+                    # The other way around.
+                    if self.pair_attr_stats[other_attr][attr][other_attr_val][old_attr_val] == 1:
+                        self.pair_attr_stats[other_attr][attr][other_attr_val].pop(old_attr_val)
+                    else:
+                        self.pair_attr_stats[other_attr][attr][other_attr_val][old_attr_val] -= 1
+
+        # Now we either create a new entry for the repaired value frequency or increment it.
+        if self.single_attr_stats[attr].get(new_attr_val) is None:
+            # The repaired value does not exist yet, so we create an entry for its frequency.
+            self.single_attr_stats[attr][new_attr_val] = 1
+
+            # The frequency of 'new_attr_val' with each co-occurring value
+            # in the current repaired tuple must be created in the pairwise statistics.
+            for other_attr in self.get_attributes():
+                if attr != other_attr:
+                    other_attr_val = row[other_attr]
+
+                    # Adds the key 'new_attr_val' with the corresponding nested dictionary.
+                    self.pair_attr_stats[attr][other_attr][new_attr_val] = {other_attr_val: 1}
+
+                    # Adds the key 'new_attr_val' with the value 1.
+                    self.pair_attr_stats[other_attr][attr][other_attr_val][new_attr_val] = 1
+        else:
+            # The repaired value already exists, so we increment its frequency.
+            self.single_attr_stats[attr][new_attr_val] += 1
+
+            # The frequency of 'new_attr_val' with each co-occurring value
+            # in the current repaired tuple must be updated in the pairwise statistics.
+            for other_attr in self.get_attributes():
+                if attr != other_attr:
+                    # Co-occurring value of 'other_attr' in the current repaired tuple.
+                    other_attr_val = row[other_attr]
+
+                    # Between 'attr' and 'other_attr'.
+                    if self.pair_attr_stats[attr][other_attr].get(new_attr_val) is None:
+                        # Adds the key 'new_attr_val' with the corresponding nested dictionary.
+                        self.pair_attr_stats[attr][other_attr][new_attr_val] = {other_attr_val: 1}
+                    elif self.pair_attr_stats[attr][other_attr][new_attr_val].get(other_attr_val) is None:
+                        # Adds the key 'other_attr_val' with the value 1.
+                        self.pair_attr_stats[attr][other_attr][new_attr_val][other_attr_val] = 1
+                    else:
+                        # Increments the frequency.
+                        self.pair_attr_stats[attr][other_attr][new_attr_val][other_attr_val] += 1
+
+                    # The other way around.
+                    if self.pair_attr_stats[other_attr][attr][other_attr_val].get(new_attr_val) is None:
+                        # Adds the key 'new_attr_val' with the value 1.
+                        self.pair_attr_stats[other_attr][attr][other_attr_val][new_attr_val] = 1
+                    else:
+                        # Increments the frequency.
+                        self.pair_attr_stats[other_attr][attr][other_attr_val][new_attr_val] += 1
+
+    def compute_norm_cond_entropy_corr(self):
+        """
+        Computes the correlations between attributes by calculating the normalized conditional entropy between them.
+        The conditional entropy is asymmetric, therefore we need pairwise computations.
+
+        The computed correlations are stored in a dictionary in the format:
+        {
+          attr_a: { cond_attr_i: corr_strength_a_i,
+                    cond_attr_j: corr_strength_a_j, ...},
+          attr_b: { cond_attr_i: corr_strength_b_i, ...}
+        }
+
+        :return a dictionary of correlations.
+        """
+        attrs = self.get_attributes()
+
+        corr = {}
+        for x in attrs:
+            corr[x] = {}
+
+            if x not in self.cond_entropies_base_2.keys():
+                self.cond_entropies_base_2[x] = {}
+
+            x_domain_size = len(self.single_attr_stats[x].keys())
+
+            for y in attrs:
+                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
+                if x_domain_size == 1:
+                    corr[x][y] = 0.0
+                    continue
+
+                # Sets correlation to 1.0 for same attributes.
+                if x == y:
+                    corr[x][y] = 1.0
+                    continue
+
+                # Computes the conditional entropy H(x|y).
+                # If H(x|y) = 0, then y determines x, i.e. y -> x.
+                if self.default_entropy:
+                    # Uses the implementation of pyitlib.
+                    corr[x][y] = 1.0 - drv.entropy_conditional(self.raw_data.df[x],
+                                                               self.raw_data.df[y],
+                                                               base=x_domain_size).item()
+                else:
+                    # Uses our implementation.
+                    self.cond_entropies_base_2[x][y] = self._conditional_entropy(x, y)
+
+                    # Uses the domain size of x as the log base for normalizing the conditional entropy.
+                    # The conditional entropy is 0 for strongly correlated attributes and 1 for independent attributes.
+                    # We reverse this to reflect the correlation.
+                    corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / log2(x_domain_size))
+
+        return corr
+
+    def compute_norm_cond_entropy_corr_incremental(self,
+                                                   num_tuples_loaded,
+                                                   single_attr_stats_loaded,
+                                                   pair_attr_stats_loaded):
+        """
+        Computes the correlations between attributes by calculating the normalized conditional entropy between them.
+        The conditional entropy is asymmetric, therefore we need pairwise computations.
+        Performs the computation incrementally.
+
+        The computed correlations are stored in a dictionary in the format:
+        {
+          attr_a: { cond_attr_i: corr_strength_a_i,
+                    cond_attr_j: corr_strength_a_j, ...},
+          attr_b: { cond_attr_i: corr_strength_b_i, ...}
+        }
+
+        :return a dictionary of correlations.
+        """
+
+        attrs = self.get_attributes()
+
+        corr = {}
+        for x in attrs:
+            corr[x] = {}
+
+            if x not in self.cond_entropies_base_2.keys():
+                self.cond_entropies_base_2[x] = {}
+
+            # Computes the number of unique values for this attribute regarding both loaded and current statistics.
+            unique_x_values = set(single_attr_stats_loaded[x].keys())
+            unique_x_values.update(self.single_attr_stats[x].keys())
+
+            x_domain_size = len(unique_x_values)
+
+            for y in attrs:
+                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
+                if x_domain_size == 1:
+                    corr[x][y] = 0.0
+                    continue
+
+                # Sets correlation to 1.0 for same attributes.
+                if x == y:
+                    corr[x][y] = 1.0
+                    continue
+
+                # Computes the conditional entropy H(x|y).
+                # If H(x|y) = 0, then y determines x, i.e. y -> x.
+                self.cond_entropies_base_2[x][y] = self._conditional_entropy_incremental(x,
+                                                                                         y,
+                                                                                         num_tuples_loaded,
+                                                                                         single_attr_stats_loaded,
+                                                                                         pair_attr_stats_loaded)
+
+                # Uses the domain size of x as the log base for normalizing the conditional entropy.
+                # The conditional entropy is 0.0 for strongly correlated attributes and 1.0 for independent attributes.
+                # We reverse this to reflect the correlation.
+                corr[x][y] = 1.0 - (self.cond_entropies_base_2[x][y] / log2(x_domain_size))
+
+        return corr
+
+    def _conditional_entropy(self, x_attr, y_attr):
+        """
+        Computes the conditional entropy considering the log base 2.
+
+        :param x_attr: (str) name of attribute X.
+        :param y_attr: (str) name of attribute Y.
+
+        :return: the conditional entropy of attributes X and Y using the log base 2.
+        """
+        xy_entropy = 0.0
+
+        for x_value in self.single_attr_stats[x_attr].keys():
+            for y_value, xy_freq in self.pair_attr_stats[x_attr][y_attr][x_value].items():
+                p_xy = xy_freq / float(self.total_tuples)
+
+                xy_entropy = xy_entropy - (p_xy * log2(xy_freq / float(self.single_attr_stats[y_attr][y_value])))
+
+        return xy_entropy
+
+    def _conditional_entropy_incremental(self,
+                                         x_attr,
+                                         y_attr,
+                                         num_tuples_loaded,
+                                         single_attr_stats_loaded,
+                                         pair_attr_stats_loaded):
+        """
+        Incrementally computes the conditional entropy considering the log base 2.
+
+        :param x_attr: (str) name of attribute X.
+        :param y_attr: (str) name of attribute Y.
+        :param num_tuples_loaded: (int) number of existing tuples in the database.
+        :param single_attr_stats_loaded: (dict) single-attribute statistics of existing tuples.
+        :param pair_attr_stats_loaded: (dict) pairwise statistics of existing tuples.
+
+        :return: the conditional entropy of attributes X and Y using the log base 2.
+        """
+
+        total = num_tuples_loaded + self.total_tuples
+        xy_entropy = (num_tuples_loaded / float(total)) * self.cond_entropies_base_2[x_attr][y_attr]
+
+        # Builds the dictionary for existing frequencies of Y including 0's for new values.
+        y_old_freq = {}
+        for y_value in self.single_attr_stats[y_attr].keys():
+            if y_value in single_attr_stats_loaded[y_attr].keys():
+                y_old_freq[y_value] = single_attr_stats_loaded[y_attr][y_value]
+            else:
+                y_old_freq[y_value] = 0
+
+        # Builds the dictionary for existing co-occurrences of X and Y including 0's for new values.
+        xy_old_freq = {}
+        for x_value in self.pair_attr_stats[x_attr][y_attr].keys():
+            xy_old_freq[x_value] = {}
+            if x_value in pair_attr_stats_loaded[x_attr][y_attr].keys():
+                for y_value in self.pair_attr_stats[x_attr][y_attr][x_value].keys():
+                    if y_value in pair_attr_stats_loaded[x_attr][y_attr][x_value].keys():
+                        xy_old_freq[x_value][y_value] = pair_attr_stats_loaded[x_attr][y_attr][x_value][y_value]
+                    else:
+                        xy_old_freq[x_value][y_value] = 0
+            else:
+                for y_value in self.pair_attr_stats[x_attr][y_attr][x_value].keys():
+                    xy_old_freq[x_value][y_value] = 0
+
+        # Updates the entropy regarding the new terms.
+        for x_value in self.pair_attr_stats[x_attr][y_attr].keys():
+            for y_value, xy_freq in self.pair_attr_stats[x_attr][y_attr][x_value].items():
+                new_term = xy_freq / float(total)
+                log_term_num = xy_old_freq[x_value][y_value] + xy_freq
+                log_term_den = y_old_freq[y_value] + self.single_attr_stats[y_attr][y_value]
+
+                xy_entropy = xy_entropy - (new_term * log2(log_term_num / float(log_term_den)))
+
+        # Updates the entropy regarding old terms which might need to be removed.
+        for x_value in self.pair_attr_stats[x_attr][y_attr].keys():
+            for y_value, xy_freq in self.pair_attr_stats[x_attr][y_attr][x_value].items():
+                if xy_old_freq[x_value][y_value] != 0:
+                    old_term = xy_old_freq[x_value][y_value] / float(total)
+                    log_term_num = 1.0 + (xy_freq / float(xy_old_freq[x_value][y_value]))
+                    log_term_den = 1.0 + (self.single_attr_stats[y_attr][y_value] /
+                                          float(y_old_freq[y_value]))
+
+                    xy_entropy = xy_entropy - (old_term * log2(log_term_num / log_term_den))
+
+        return xy_entropy
+
+    def get_first_tid(self):
+        first_tid = 0
+
+        if self.incremental:
+            try:
+                table_repaired_name = self.raw_data.name + '_repaired'
+                query = 'SELECT MAX(t1._tid_) FROM {} as t1'.format(table_repaired_name)
+                result = self.engine.execute_query(query)
+                first_tid = result[0][0] + 1
+            except Exception:
+                # There is no previously repaired table in the database.
+                pass
+
+        return first_tid
+
+    def load_previous_repaired_data(self):
+        try:
+            previous_repaired_data = Table(self.raw_data.name + '_repaired',
+                                           Source.DB,
+                                           db_engine=self.engine)
+
+            incoming_data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
+
+            self.raw_data_with_previous_repaired_data_df = pd.concat([previous_repaired_data.df,
+                                                                      incoming_data_df])
+        except ValueError:
+            raise Exception('ERROR while trying to load previous repaired data from the database.')
+
+    def load_stats(self):
+        num_tuples = None
+        single_attr_stats = None
+        pair_attr_stats = None
+
+        try:
+            self.aux_table[AuxTables.single_attr_stats] = Table(AuxTables.single_attr_stats.name,
+                                                                Source.DB,
+                                                                db_engine=self.engine)
+
+            single_attr_stats = dictify_df(self.aux_table[AuxTables.single_attr_stats].df)
+
+            self.aux_table[AuxTables.pair_attr_stats] = Table(AuxTables.pair_attr_stats.name,
+                                                              Source.DB,
+                                                              db_engine=self.engine)
+
+            pair_attr_stats = dictify_df(self.aux_table[AuxTables.pair_attr_stats].df)
+
+            table_repaired_name = self.raw_data.name + '_repaired'
+            query = 'SELECT COUNT(*) FROM {}'.format(table_repaired_name)
+            result = self.engine.execute_query(query)
+            num_tuples = result[0][0]
+        except ValueError:
+            raise Exception('ERROR while trying to load statistics from the database.')
+
+        return num_tuples, single_attr_stats, pair_attr_stats
+
+    def save_stats(self):
+        # For using an attribute table (attr_idx, attr_name)
+        # attrs = pd.DataFrame(data=self.attr_to_idx.items(), columns=['attr_name', 'attr_idx'])
+        # self.generate_aux_table(AuxTables.attrs, attrs, store=True)
+
+        # TODO: Update only the values that changed instead of replacing the statistics entirely.
+        single_stats = []
+        for attr in self.single_attr_stats.keys():
+            attr_stats = [(attr, val, freq) for val, freq in self.single_attr_stats[attr].items()]
+            single_stats += attr_stats
+
+        single_stats_df = pd.DataFrame(columns=['attr', 'val', 'freq'], data=single_stats)
+        self.generate_aux_table(AuxTables.single_attr_stats,
+                                single_stats_df.sort_values(by=['attr', 'val']),
+                                store=True)
+
+        pair_stats = []
+        for attr1 in self.pair_attr_stats.keys():
+            for attr2 in self.pair_attr_stats[attr1].keys():
+                for val1 in self.pair_attr_stats[attr1][attr2].keys():
+                    attr1_attr2_val1_val2_stats = [(attr1, attr2, val1, val2, freq)
+                                                   for val2, freq in self.pair_attr_stats[attr1][attr2][val1].items()]
+                    pair_stats += attr1_attr2_val1_val2_stats
+
+        pair_stats_df = pd.DataFrame(columns=['attr1', 'attr2', 'val1', 'val2', 'freq'], data=pair_stats)
+        self.generate_aux_table(AuxTables.pair_attr_stats,
+                                pair_stats_df.sort_values(by=['attr1', 'attr2', 'val1', 'val2']),
+                                store=True)
+
+    def is_first_batch(self):
+        # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.
+        return self.first_tid == 0
+
+    def set_previous_dirty_rows(self, previous_dirty_rows_df):
+        self.previous_dirty_rows_df = previous_dirty_rows_df
+
+    def get_previous_dirty_rows(self):
+        if self.previous_dirty_rows_df is None:
+            raise Exception('ERROR: Potentially dirty rows from the previous dataset could not be loaded.')
+
+        return self.previous_dirty_rows_df
 
     def load_embedding_model(self, model):
         """
