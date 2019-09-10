@@ -25,7 +25,7 @@ class DetectEngine:
 
         # Initialize all error detectors.
         for detector in detectors:
-            detector.setup(self.ds, self.env['repair_previous_errors'])
+            detector.setup(self.ds, self.env)
 
         # Run detection using each detector.
         for detector in detectors:

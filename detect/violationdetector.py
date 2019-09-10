@@ -8,6 +8,20 @@ unary_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond')
 multi_template = Template('SELECT t1._tid_ FROM "$table" as t1 WHERE $cond1 $c EXISTS ('
                           'SELECT t2._tid_ FROM "$table" as t2 WHERE $cond2 AND $cond3)')
 
+unary_template_inc_repair_previous = Template('SELECT t1._tid_ FROM "$table_repaired" AS t1 WHERE $cond ' +
+                                              'UNION ' +
+                                              'SELECT t1._tid_ FROM "$table" AS t1 WHERE $cond')
+
+multi_template_inc = Template('WITH all_rows AS ' +
+                              '(SELECT * FROM "$table" UNION SELECT * FROM "$table_repaired") ' +
+                              'SELECT t1._tid_ FROM "$table" AS t1 WHERE $cond1 $c ' +
+                              'EXISTS (SELECT t2._tid_ FROM all_rows AS t2 WHERE $cond2 AND $cond3)')
+
+multi_template_inc_repair_previous = Template('WITH all_rows AS ' +
+                                              '(SELECT * FROM "$table" UNION SELECT * FROM "$table_repaired") ' +
+                                              'SELECT t1._tid_ FROM all_rows AS t1 WHERE $cond1 $c ' +
+                                              'EXISTS (SELECT t2._tid_ FROM all_rows AS t2 WHERE $cond2 AND $cond3)')
+
 
 class ViolationDetector(Detector):
     """
@@ -69,7 +83,13 @@ class ViolationDetector(Detector):
         return query
 
     def gen_unary_query(self, tbl, c):
-        query = unary_template.substitute(table=tbl, cond=c.cnf_form)
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+            query = unary_template_inc_repair_previous.substitute(table_repaired=tbl + '_repaired',
+                                                                  table=tbl,
+                                                                  cond=c.cnf_form)
+        else:
+            query = unary_template.substitute(table=tbl, cond=c.cnf_form)
+
         return query
 
     def gen_mult_query(self, tbl, c):
@@ -102,11 +122,32 @@ class ViolationDetector(Detector):
             cond3 = " AND ".join(cond3_preds)
 
         if cond1 != '':
-            query = multi_template.substitute(table=tbl, cond1=cond1, c='AND',
-                                              cond2=cond2, cond3=cond3)
+            c_param = 'AND'
         else:
-            query = multi_template.substitute(table=tbl, cond1=cond1, c='',
-                                              cond2=cond2, cond3=cond3)
+            c_param = ''
+
+        if self.ds.incremental and not self.ds.is_first_batch():
+            if self.env['repair_previous_errors']:
+                query = multi_template_inc_repair_previous.substitute(table_repaired=tbl + '_repaired',
+                                                                      table=tbl,
+                                                                      cond1=cond1,
+                                                                      c=c_param,
+                                                                      cond2=cond2,
+                                                                      cond3=cond3)
+            else:
+                query = multi_template_inc.substitute(table_repaired=tbl + '_repaired',
+                                                      table=tbl,
+                                                      cond1=cond1,
+                                                      c=c_param,
+                                                      cond2=cond2,
+                                                      cond3=cond3)
+        else:
+            query = multi_template.substitute(table=tbl,
+                                              cond1=cond1,
+                                              c=c_param,
+                                              cond2=cond2,
+                                              cond3=cond3)
+
         return query
 
     def gen_tid_attr_output(self, res, attr_list):
