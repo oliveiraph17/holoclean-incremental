@@ -1,7 +1,11 @@
+from string import Template
+
 import pandas as pd
 
 from .detector import Detector
 from utils import NULL_REPR
+
+query_template = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE t1."$attribute" = \'$null\'')
 
 
 class NullDetector(Detector):
@@ -31,6 +35,19 @@ class NullDetector(Detector):
             tmp_df = self.df[self.df[attr] == NULL_REPR]['_tid_'].to_frame()
             tmp_df.insert(1, "attribute", attr)
             errors.append(tmp_df)
+
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+	        # Queries the database for potential errors in cells from previous batches.
+            table_repaired_name = self.ds.raw_data.name + '_repaired'
+
+            for attr in self.ds.get_attributes():
+                query = query_template.substitute(table_repaired=table_repaired_name,
+                                                  attribute=attr,
+                                                  null=NULL_REPR)
+
+                results = self.ds.engine.execute_query(query)
+                tmp_df = self._gen_tid_attr_output(results, [attr])
+                errors.append(tmp_df)
 
         errors_df = pd.concat(errors, ignore_index=True)
         return errors_df
