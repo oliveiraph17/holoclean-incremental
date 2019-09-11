@@ -85,6 +85,7 @@ class FeaturizedDataset:
             logging.warning("No weak labels available. Reduce pruning threshold.")
         labels = -1 * torch.ones(self.total_vars, 1).type(torch.LongTensor)
         is_clean = torch.zeros(self.total_vars, 1).type(torch.LongTensor)
+        current_training_cells = []
         for tuple in tqdm(res):
             vid = int(tuple[0])
             label = int(tuple[1])
@@ -94,6 +95,76 @@ class FeaturizedDataset:
             labels[vid] = label
             is_clean[vid] = clean
             current_training_cells.append(cid)
+        return labels, is_clean, current_training_cells
+
+    def generate_weak_labels_with_reduced_cells(self):
+        """
+        Generates a tensor of weak labels for clean cells and for weak-labelled potentially erroneous cells,
+        ignoring cells that were already used for training in previous batches,
+        along with a tensor keeping track of clean cells and of weak-labelled potentially erroneous cells,
+        the latter including the cells that were ignored in the tensor of weak labels.
+        :return: Two torch.Tensors, 'labels' and 'is_clean',
+            where 'labels' has size (# of labelled cells ignoring previous training cells, 1)
+            with labels[i][0] containing the weak label for the i-th variable/_vid_,
+            and 'is_clean' has size (# of labelled cells, 1),
+            with is_clean[i][0] containing 1 for a clean j-th variable or 0 for a potentially erroneous j-th variable.
+        """
+        # Keeps track of clean cells (True) and potentially dirty cells that have been weak-labelled (False).
+        # Cells with NULL weak labels (i.e. NULL init values that were not weak-labelled) are ignored.
+        is_clean_query = """
+            SELECT _vid_, (t2._cid_ IS NULL) AS clean
+            FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
+            WHERE weak_label != '{null_repr}' AND (t2._cid_ IS NULL OR t1.fixed != {cell_status});
+        """.format(cell_domain=AuxTables.cell_domain.name,
+                   dk_cells=AuxTables.dk_cells.name,
+                   null_repr=NULL_REPR,
+                   cell_status=CellStatus.NOT_SET.value)
+
+        # Executes query.
+        is_clean_result = self.ds.engine.execute_query(is_clean_query)
+
+        if len(is_clean_result) == 0:
+            raise Exception("No weak labels available. Reduce pruning threshold.")
+
+        # Instantiates tensors.
+        labels = -1 * torch.ones(self.total_vars, 1).type(torch.LongTensor)
+        is_clean = torch.zeros(self.total_vars, 1).type(torch.LongTensor)
+
+        # Iterates over the result set to update the 'is_clean' tensor.
+        for tup in tqdm(is_clean_result):
+            vid = int(tup[0])
+            clean = int(tup[1])
+
+            is_clean[vid] = clean
+
+        # This query is similar to the previous one, but ignores cells previously used in training.
+        # Instead of returning True or False, it returns the weak label of each cell, along with its _cid_.
+        weak_label_query = """
+            SELECT _vid_, weak_label_idx, t1._cid_
+            FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
+            WHERE weak_label != '{null_repr}' AND (t2._cid_ IS NULL OR t1.fixed != {cell_status})
+                AND t1._cid_ NOT IN (SELECT _cid_ FROM {training_cells});
+        """.format(cell_domain=AuxTables.cell_domain.name,
+                   dk_cells=AuxTables.dk_cells.name,
+                   null_repr=NULL_REPR,
+                   cell_status=CellStatus.NOT_SET.value,
+                   training_cells=AuxTables.training_cells.name)
+
+        # Executes query.
+        weak_label_result = self.ds.engine.execute_query(weak_label_query)
+
+        # Instantiates list.
+        current_training_cells = []
+
+        # Iterates over the result set to update the 'labels' tensor.
+        for tup in tqdm(weak_label_result):
+            vid = int(tup[0])
+            label = int(tup[1])
+            cid = int(tup[2])
+
+            labels[vid] = label
+            current_training_cells.append(cid)
+
         return labels, is_clean, current_training_cells
 
     def generate_var_mask(self):
@@ -139,7 +210,7 @@ class FeaturizedDataset:
         X_train = self.tensor.index_select(0, train_idx)
         Y_train = self.weak_labels.index_select(0, train_idx)
         mask_train = self.var_class_mask.index_select(0, train_idx)
-        return X_train, Y_train, mask_train
+        return X_train, Y_train, mask_train, self.train_cid
 
     def get_infer_data(self):
         """

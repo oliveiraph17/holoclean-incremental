@@ -113,8 +113,9 @@ class DomainEngine:
                     out[attr1][attr2][val1] = top_cands
         return out
 
+    @staticmethod
     @lru_cache(maxsize=None)
-    def get_corr_attributes(self, attr, thres):
+    def get_corr_attributes(attr, thres, corr_lst):
         """
         get_corr_attributes returns attributes from self.correlations
         that are correlated with attr with magnitude at least self.cor_strength
@@ -122,10 +123,11 @@ class DomainEngine:
 
         :param attr: (string) the original attribute to get the correlated attributes for.
         :param thres: (float) correlation threshold (absolute) for returned attributes.
+        :param corr_lst: (frozenset) correlations between every pair of attributes.
         """
-        if attr not in self.correlations:
+        if attr not in corr_lst:
             return []
-        attr_correlations = self.correlations[attr]
+        attr_correlations = corr_lst[attr]
         return sorted([corr_attr
             for corr_attr, corr_strength in attr_correlations.items()
 # <<<<<<< HEAD
@@ -285,7 +287,7 @@ class DomainEngine:
 
         domain = collections.OrderedDict()
         init_value = row[attr]
-        correlated_attributes = self.get_corr_attributes(attr, self.cor_strength)
+        correlated_attributes = self.get_corr_attributes(attr, self.cor_strength, self.correlations)
         # iterate through all correlated attributes and take the top k co-occurrence values
         # for 'attr' with the current row's 'cond_attr' value.
         for cond_attr in correlated_attributes:
@@ -318,7 +320,8 @@ class DomainEngine:
 
         # We should not have any NULLs since we do not store co-occurring NULL
         # values.
-        domain.discard(NULL_REPR) # (kaster) Added because incremental statistics store NULLs
+        if NULL_REPR in domain:
+            del domain[NULL_REPR] # (kaster) Added because incremental statistics store NULLs
         assert NULL_REPR not in domain
 
         # Add the initial value to the domain if it is not NULL.

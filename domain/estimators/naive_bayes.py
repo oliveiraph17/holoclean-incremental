@@ -1,10 +1,10 @@
 import math
+import pandas as pd
 
 from tqdm import tqdm
 
 from ..estimator import Estimator
 from utils import NULL_REPR
-from ..domain import DomainEngine
 
 class NaiveBayes(Estimator):
     """
@@ -39,12 +39,14 @@ class NaiveBayes(Estimator):
         pass
 
     def _predict_pp(self, row, attr, values):
+        from ..domain import DomainEngine
         nb_score = []
 # <<<<<<< dev
 #         correlated_attributes = self._get_corr_attributes(attr)
 # =======
         correlated_attributes = DomainEngine.get_corr_attributes(attr,
-                                                                 self._cor_strength)
+                                                                 self._cor_strength,
+                                                                 self._correlations)
 # >>>>>>> dev-mixed
         for val1 in values:
             # This check was added recently, whereas the same check for 'val2' was already present.

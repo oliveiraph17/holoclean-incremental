@@ -25,10 +25,9 @@ class RepairEngine:
         tic = time.clock()
         feat_info = self.feat_dataset.featurizer_info
         output_dim = self.feat_dataset.classes
-        self.repair_model = RepairModel(self.env, feat_info, output_dim,
+        self.repair_model = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch(),
                                         bias=self.env['bias'],
-                                        layer_sizes=self.env['layer_sizes'],
-                                        self.ds.is_first_batch())
+                                        layer_sizes=self.env['layer_sizes'])
         toc = time.clock()
         status = "DONE setting up repair model."
         setup_time = toc - tic
@@ -46,7 +45,7 @@ class RepairEngine:
 
         status = "DONE training repair model."
         train_time = toc - tic
-        return status, train_time
+        return status, train_time, X_train.shape[0]
 
     def fit_validate_repair_model(self, eval_engine, validate_period):
         tic = time.clock()

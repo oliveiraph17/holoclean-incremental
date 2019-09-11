@@ -406,13 +406,13 @@ class Dataset:
         # data_df = self.ds.get_quantized_data() if self.do_quantization \
         #    else self.ds.get_raw_data()
         if not self.incremental or self.is_first_batch():
-            self.correlations = self.compute_norm_cond_entropy_corr()
+            correlations = self.compute_norm_cond_entropy_corr()
         else:
             if self.incremental_entropy:
                 # The incremental entropy calculation requires separate statistics.
-                self.correlations = self.compute_norm_cond_entropy_corr_incremental(total_tuples_loaded,
-                                                                                    single_attr_stats_loaded,
-                                                                                    pair_attr_stats_loaded)
+                correlations = self.compute_norm_cond_entropy_corr_incremental(total_tuples_loaded,
+                                                                               single_attr_stats_loaded,
+                                                                               pair_attr_stats_loaded)
 
                 # Merges statistics from incoming data to the loaded statistics.
                 self.merge_stats(stats1, stats2)
@@ -431,10 +431,10 @@ class Dataset:
                     self.single_attr_stats = stats1.single_attr_stats
                     self.pair_attr_stats = stats1.pair_attr_stats
 
-                self.correlations = self.compute_norm_cond_entropy_corr()
+                correlations = self.compute_norm_cond_entropy_corr()
 
         if self.env['debug_mode']:
-            corrs_df = pd.DataFrame.from_dict(self.correlations, orient='columns')
+            corrs_df = pd.DataFrame.from_dict(correlations, orient='columns')
             corrs_df.index.name = 'cond_attr'
             corrs_df.columns.name = 'attr'
             pd.set_option('display.max_columns', len(corrs_df.columns))
@@ -442,8 +442,16 @@ class Dataset:
             logging.debug("correlations:\n%s", corrs_df)
             logging.debug("summary of correlations:\n%s", corrs_df.describe())
 
+        self.correlations = self._make_hashable(correlations)
+
         logging.debug('DONE computing entropy in %.2f secs.', time.clock() - entropy_tic)
         logging.debug('DONE computing statistics from incoming data in %.2f secs.', time.clock() - tic)
+
+    def _make_hashable(self, corr_dict):
+        if isinstance(corr_dict, dict):
+            return tuple(sorted((k, self._make_hashable(v)) for k, v in corr_dict.items()))
+
+        return corr_dict
 
     def get_stats_single(self, attr):
         """

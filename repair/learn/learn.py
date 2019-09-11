@@ -112,7 +112,7 @@ class TiedLinear(torch.nn.Module):
 
 class RepairModel:
 
-    def __init__(self, env, feat_info, max_domain, bias=False, layer_sizes=[1], is_first_batch):
+    def __init__(self, env, feat_info, max_domain, is_first_batch, bias=False, layer_sizes=[1]):
         """
         feat_info (list[FeatInfo]): featurizer information
         max_domain (int): maximum domain size i.e. output dimension
@@ -174,12 +174,8 @@ class RepairModel:
                               epoch_idx, cost / max(num_batches, 1),
                               100. * np.mean(Y_assign == grdt))
 
-        if self.is_first_batch:
-            # Always saves at least one version of the model.
+        if self.env['save_load_checkpoint']:
             self.save_checkpoint()
-        else:
-            if self.env['save_load_checkpoint']:
-                self.save_checkpoint()
 
     def infer_values(self, X_pred, mask_pred):
         logging.info('inferring on %d examples (cells)', X_pred.shape[0])
@@ -256,3 +252,13 @@ class RepairModel:
                 'size': feat_size
             }
         return report
+
+    def save_checkpoint(self, file_path='/tmp/checkpoint.tar'):
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict()
+        }, file_path)
+
+    @staticmethod
+    def load_checkpoint(file_path='/tmp/checkpoint.tar'):
+        return torch.load(file_path)

@@ -347,7 +347,7 @@ class EvalEngine:
                 queries.append(query)
         else:
             query_attrs = [attr] if attr else self.ds.categorical_attrs
-            for attr in query_attrs
+            for attr in query_attrs:
                 query = errors_template_previous.substitute(init_table=self.ds.raw_data.name,
                                                             grdt_table=self.clean_data.name,
                                                             attr=attr,

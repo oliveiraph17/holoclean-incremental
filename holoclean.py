@@ -397,7 +397,7 @@ class Session:
             return
 
         if logger_name == 'repairing_quality_logger':
-            header = 'batch;dk_cells;training_cells;clean_dataset_ratio;' \
+            header = 'batch;dk_cells;training_cells;' \
                      'precision;recall;repairing_recall;f1;repairing_f1;' \
                      'detected_errors;total_errors;correct_repairs;total_repairs;' \
                      'repairs_on_correct_cells;repairs_on_incorrect_cells'
@@ -652,7 +652,6 @@ class Session:
         logging.info(status)
         logging.debug('Time to generate report: %.2f secs', report_time)
         if self.env['log_repairing_quality']:
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'clean_dataset_ratio')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'precision')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'recall')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'repair_recall')))
