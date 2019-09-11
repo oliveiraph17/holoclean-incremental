@@ -31,6 +31,21 @@ errors_template = Template('SELECT count(*) ' \
 #                            '  AND t2._attribute_ = \'$attr\' ' \
 #                            '  AND t1."$attr" != t2._value_')
 # >>>>>>> hcq-embedding-3
+
+errors_template_previous = Template('SELECT COUNT(*) FROM ( '
+                                    '  SELECT t1._tid_ '
+                                    '    FROM "$init_table" AS t1, "$grdt_table" AS t2 '
+                                    '   WHERE t1._tid_ = t2._tid_ '
+                                    '     AND t2._attribute_ = \'$attr\' '
+                                    '     NOT t1."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\')) '
+                                    '   UNION '
+                                    '  SELECT t3._tid_ '
+                                    '    FROM "$rep_table_copy" AS t3, "$grdt_table" AS t2 '
+                                    '   WHERE t3._tid_ = t2._tid_ '
+                                    '     AND t2._attribute_ = \'$attr\' '
+                                    '     AND NOT t3."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\')) '
+                                    ') AS q')
+
 """
 The 'errors' aliased subquery returns the (_tid_, _attribute_, _value_)
 from the ground truth table for all cells that have an error in the original
@@ -63,6 +78,23 @@ correct_repairs_template = Template('SELECT COUNT(*) FROM '
 #                                     '  AND repairs.rv_value = errors._value_')
 # >>>>>>> hcq-embedding-3
 
+# The template below is similar to the previous one, but considers errors
+# both from the repaired and from the incoming data.
+correct_repairs_template_previous = Template('SELECT COUNT(*) FROM '
+                                             '  (SELECT t2._tid_, t2._attribute_, t2._value_ '
+                                             '     FROM "$init_table" as t1, "$grdt_table" as t2 '
+                                             '    WHERE t1._tid_ = t2._tid_ '
+                                             '      AND t2._attribute_ = \'$attr\' '
+                                             '      AND NOT t1."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\')) '
+                                             '    UNION '
+                                             '   SELECT t2._tid_, t2._attribute_, t2._value_ '
+                                             '     FROM $rep_table_copy as t3, $grdt_table as t2 '
+                                             '    WHERE t3._tid_ = t2._tid_ '
+                                             '      AND t2._attribute_ = \'$attr\' '
+                                             '      AND NOT t3."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\')) ) AS errors, $inf_dom AS repairs '
+                                             ' WHERE errors._tid_ = repairs._tid_ '
+                                             '   AND errors._attribute_ = repairs.attribute '
+                                             '   AND repairs.rv_value = ANY(string_to_array(regexp_replace(errors._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\')) ')
 
 """
 Calculates RMSE error for the given attribute.
@@ -306,12 +338,22 @@ class EvalEngine:
         queries = []
         total_errors = 0.0
 
-        query_attrs = [attr] if attr else self.ds.categorical_attrs
-        for attr in query_attrs:
-            query = errors_template.substitute(init_table=self.ds.raw_data.name,
-                                               grdt_table=self.clean_data.name,
-                                               attr=attr)
-            queries.append(query)
+        if self.ds.is_first_batch() or not self.env['repair_previous_errors']:
+            query_attrs = [attr] if attr else self.ds.categorical_attrs
+            for attr in query_attrs:
+                query = errors_template.substitute(init_table=self.ds.raw_data.name,
+                                                   grdt_table=self.clean_data.name,
+                                                   attr=attr)
+                queries.append(query)
+        else:
+            query_attrs = [attr] if attr else self.ds.categorical_attrs
+            for attr in query_attrs
+                query = errors_template_previous.substitute(init_table=self.ds.raw_data.name,
+                                                            grdt_table=self.clean_data.name,
+                                                            attr=attr,
+                                                            rep_table_copy=AuxTables.repaired_table_copy.name)
+                queries.append(query)
+
         results = self.ds.engine.execute_queries(queries)
 
         for i in range(len(results)):
@@ -381,12 +423,23 @@ class EvalEngine:
         queries = []
         correct_repairs = 0.0
 
-        query_attrs = [attr] if attr else self.ds.categorical_attrs
-        for attr in query_attrs:
-            query = correct_repairs_template.substitute(init_table=self.ds.raw_data.name,
-                                                        grdt_table=self.clean_data.name,
-                                                        attr=attr, inf_dom=AuxTables.inf_values_dom.name)
-            queries.append(query)
+        if self.ds.is_first_batch() or not self.env['repair_previous_errors']:
+            query_attrs = [attr] if attr else self.ds.categorical_attrs
+            for attr in query_attrs:
+                query = correct_repairs_template.substitute(init_table=self.ds.raw_data.name,
+                                                            grdt_table=self.clean_data.name,
+                                                            attr=attr, inf_dom=AuxTables.inf_values_dom.name)
+                queries.append(query)
+        else:
+            query_attrs = [attr] if attr else self.ds.categorical_attrs
+            for attr in query_attrs:
+                query = correct_repairs_template_previous.substitute(init_table=self.ds.raw_data.name,
+                                                                     grdt_table=self.clean_data.name,
+                                                                     attr=attr,
+                                                                     inf_dom=AuxTables.inf_values_dom.name,
+                                                                     rep_table_copy=AuxTables.repaired_table_copy.name)
+                queries.append(query)
+
         results = self.ds.engine.execute_queries(queries)
 
         for i in range(len(results)):
