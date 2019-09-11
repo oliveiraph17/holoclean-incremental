@@ -19,17 +19,17 @@ EvalReport = namedtuple('EvalReport', report_name_list)
 EvalReport.__new__.__defaults__ = (0,) * len(report_name_list)
 
 # <<<<<<< HEAD
-# errors_template = Template('SELECT count(*) ' \
-#                            'FROM  "$init_table" as t1, "$grdt_table" as t2 ' \
-#                            'WHERE t1._tid_ = t2._tid_ ' \
-#                            '  AND t2._attribute_ = \'$attr\' ' \
-#                            '  AND NOT t1."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\'))')
-# >>>>>>> hcq-embedding-3
 errors_template = Template('SELECT count(*) ' \
                            'FROM  "$init_table" as t1, "$grdt_table" as t2 ' \
                            'WHERE t1._tid_ = t2._tid_ ' \
                            '  AND t2._attribute_ = \'$attr\' ' \
-                           '  AND t1."$attr" != t2._value_')
+                           '  AND NOT t1."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\'))')
+# >>>>>>> hcq-embedding-3
+# errors_template = Template('SELECT count(*) ' \
+#                            'FROM  "$init_table" as t1, "$grdt_table" as t2 ' \
+#                            'WHERE t1._tid_ = t2._tid_ ' \
+#                            '  AND t2._attribute_ = \'$attr\' ' \
+#                            '  AND t1."$attr" != t2._value_')
 # >>>>>>> hcq-embedding-3
 """
 The 'errors' aliased subquery returns the (_tid_, _attribute_, _value_)
@@ -42,25 +42,25 @@ We then count the number of cells that we repaired to the correct ground
 truth value.
 """
 # <<<<<<< HEAD
-# correct_repairs_template = Template('SELECT COUNT(*) FROM '
-#                                     '  (SELECT t2._tid_, t2._attribute_, t2._value_ '
-#                                     '     FROM "$init_table" as t1, "$grdt_table" as t2 '
-#                                     '    WHERE t1._tid_ = t2._tid_ '
-#                                     '      AND t2._attribute_ = \'$attr\' '
-#                                     '      AND NOT t1."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\'))) as errors, "$inf_dom" as repairs '
-#                                     'WHERE errors._tid_ = repairs._tid_ '
-#                                     '  AND errors._attribute_ = repairs.attribute '
-#                                     '  AND repairs.rv_value = ANY(string_to_array(regexp_replace(errors._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\'))')
-# =======
 correct_repairs_template = Template('SELECT COUNT(*) FROM '
                                     '  (SELECT t2._tid_, t2._attribute_, t2._value_ '
                                     '     FROM "$init_table" as t1, "$grdt_table" as t2 '
                                     '    WHERE t1._tid_ = t2._tid_ '
                                     '      AND t2._attribute_ = \'$attr\' '
-                                    '      AND t1."$attr" != t2._value_) as errors, "$inf_dom" as repairs '
+                                    '      AND NOT t1."$attr" = ANY(string_to_array(regexp_replace(t2._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\'))) as errors, "$inf_dom" as repairs '
                                     'WHERE errors._tid_ = repairs._tid_ '
                                     '  AND errors._attribute_ = repairs.attribute '
-                                    '  AND repairs.rv_value = errors._value_')
+                                    '  AND repairs.rv_value = ANY(string_to_array(regexp_replace(errors._value_,\'[{\"\"}]\',\'\',\'gi\'),\'|\'))')
+# =======
+# correct_repairs_template = Template('SELECT COUNT(*) FROM '
+#                                     '  (SELECT t2._tid_, t2._attribute_, t2._value_ '
+#                                     '     FROM "$init_table" as t1, "$grdt_table" as t2 '
+#                                     '    WHERE t1._tid_ = t2._tid_ '
+#                                     '      AND t2._attribute_ = \'$attr\' '
+#                                     '      AND t1."$attr" != t2._value_) as errors, "$inf_dom" as repairs '
+#                                     'WHERE errors._tid_ = repairs._tid_ '
+#                                     '  AND errors._attribute_ = repairs.attribute '
+#                                     '  AND repairs.rv_value = errors._value_')
 # >>>>>>> hcq-embedding-3
 
 
@@ -237,39 +237,39 @@ class EvalEngine:
         attr_clause = self.get_categorical_clause(attr) if self.ds.numerical_attrs else "TRUE"
 
 # <<<<<<< HEAD
-#         query = """
-#             SELECT
-#                 (t1.init_value = ANY(string_to_array(regexp_replace(t3._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) AS is_correct,
-#                 count(*)
-#             FROM   "{}" as t1, "{}" as t2, "{}" as t3
-#             WHERE  t1._tid_ = t2._tid_
-#               AND  t1.attribute = t2.attribute
-#               AND  t1.init_value != t2.rv_value
-#               AND  t1._tid_ = t3._tid_
-#               AND  t1.attribute = t3._attribute_
-#               AND  {}
-#             GROUP BY is_correct
-#               """.format(AuxTables.cell_domain.name,
-#                          AuxTables.inf_values_dom.name,
-#                          self.clean_data.name,
-#                          attr_clause)
-# =======
         query = """
-                    SELECT
-                        t1.init_value = t3._value_ AS is_correct,
-                        count(*)
-                    FROM   "{}" as t1, "{}" as t2, "{}" as t3
-                    WHERE  t1._tid_ = t2._tid_
-                      AND  t1.attribute = t2.attribute
-                      AND  t1.init_value != t2.rv_value
-                      AND  t1._tid_ = t3._tid_
-                      AND  t1.attribute = t3._attribute_
-                      AND  {}
-                    GROUP BY is_correct
-                      """.format(AuxTables.cell_domain.name,
-                                 AuxTables.inf_values_dom.name,
-                                 self.clean_data.name,
-                                 attr_clause)
+            SELECT
+                (t1.init_value = ANY(string_to_array(regexp_replace(t3._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) AS is_correct,
+                count(*)
+            FROM   "{}" as t1, "{}" as t2, "{}" as t3
+            WHERE  t1._tid_ = t2._tid_
+              AND  t1.attribute = t2.attribute
+              AND  t1.init_value != t2.rv_value
+              AND  t1._tid_ = t3._tid_
+              AND  t1.attribute = t3._attribute_
+              AND  {}
+            GROUP BY is_correct
+              """.format(AuxTables.cell_domain.name,
+                         AuxTables.inf_values_dom.name,
+                         self.clean_data.name,
+                         attr_clause)
+# =======
+#         query = """
+#                     SELECT
+#                         t1.init_value = t3._value_ AS is_correct,
+#                         count(*)
+#                     FROM   "{}" as t1, "{}" as t2, "{}" as t3
+#                     WHERE  t1._tid_ = t2._tid_
+#                       AND  t1.attribute = t2.attribute
+#                       AND  t1.init_value != t2.rv_value
+#                       AND  t1._tid_ = t3._tid_
+#                       AND  t1.attribute = t3._attribute_
+#                       AND  {}
+#                     GROUP BY is_correct
+#                       """.format(AuxTables.cell_domain.name,
+#                                  AuxTables.inf_values_dom.name,
+#                                  self.clean_data.name,
+#                                  attr_clause)
 # >>>>>>> hcq-embedding-3
 
         res = self.ds.engine.execute_query(query)
@@ -337,29 +337,29 @@ class EvalEngine:
         attr_clause = self.get_categorical_clause(attr) if self.ds.numerical_attrs else "TRUE"
 
 # <<<<<<< HEAD
-#         query = "SELECT count(*) FROM " \
-#                 "  (SELECT _vid_ " \
-#                 '   FROM "{}" as t1, "{}" as t2, "{}" as t3 ' \
-#                 "   WHERE t1._tid_ = t2._tid_ " \
-#                 "     AND t1._cid_ = t3._cid_ " \
-#                 "     AND t1.attribute = t2._attribute_ " \
-#                 "     AND NOT t1.init_value = ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\')) " \
-#                 "     AND {}) AS t".format(AuxTables.cell_domain.name,
-#                                            self.clean_data.name,
-#                                            AuxTables.dk_cells.name,
-#                                            attr_clause)
-# =======
         query = "SELECT count(*) FROM " \
                 "  (SELECT _vid_ " \
                 '   FROM "{}" as t1, "{}" as t2, "{}" as t3 ' \
                 "   WHERE t1._tid_ = t2._tid_ " \
                 "     AND t1._cid_ = t3._cid_ " \
                 "     AND t1.attribute = t2._attribute_ " \
-                "     AND t1.init_value != t2._value_" \
+                "     AND NOT t1.init_value = ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\')) " \
                 "     AND {}) AS t".format(AuxTables.cell_domain.name,
-                                   self.clean_data.name,
-                                   AuxTables.dk_cells.name,
-                                   attr_clause)
+                                           self.clean_data.name,
+                                           AuxTables.dk_cells.name,
+                                           attr_clause)
+# =======
+#         query = "SELECT count(*) FROM " \
+#                 "  (SELECT _vid_ " \
+#                 '   FROM "{}" as t1, "{}" as t2, "{}" as t3 ' \
+#                 "   WHERE t1._tid_ = t2._tid_ " \
+#                 "     AND t1._cid_ = t3._cid_ " \
+#                 "     AND t1.attribute = t2._attribute_ " \
+#                 "     AND t1.init_value != t2._value_" \
+#                 "     AND {}) AS t".format(AuxTables.cell_domain.name,
+#                                    self.clean_data.name,
+#                                    AuxTables.dk_cells.name,
+#                                    attr_clause)
 # >>>>>>> hcq-embedding-3
 
         res = self.ds.engine.execute_query(query)
@@ -465,40 +465,14 @@ class EvalEngine:
 
     def log_weak_label_stats(self):
 # <<<<<<< HEAD
-#         query = """
-#         select
-#             (t3._tid_ is NULL) as clean,
-#             (t1.fixed) as status,
-#             (t1.init_value =  ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) as init_eq_grdth,
-#             (t1.weak_label = ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) as wl_eq_grdth,
-#             (t1.weak_label = t4.rv_value) as wl_eq_infer,
-#             (t4.rv_value = ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) as infer_eq_grdth,
-#             count(*) as count
-#         from
-#             "{cell_domain}" as t1,
-#             "{clean_data}" as t2
-#             left join "{dk_cells}" as t3 on t2._tid_ = t3._tid_ and t2._attribute_ = t3.attribute
-#             left join "{inf_values_dom}" as t4 on t2._tid_ = t4._tid_ and t2._attribute_ = t4.attribute where t1._tid_ = t2._tid_ and t1.attribute = t2._attribute_
-#         group by
-#             clean,
-#             status,
-#             init_eq_grdth,
-#             wl_eq_grdth,
-#             wl_eq_infer,
-#             infer_eq_grdth
-#         """.format(cell_domain=AuxTables.cell_domain.name,
-#                 clean_data=self.clean_data.name,
-#                 dk_cells=AuxTables.dk_cells.name,
-#                 inf_values_dom=AuxTables.inf_values_dom.name)
-# =======
         query = """
         select
             (t3._tid_ is NULL) as clean,
             (t1.fixed) as status,
-            (t1.init_value =  t2._value_) as init_eq_grdth,
-            (t1.weak_label = t2._value_) as wl_eq_grdth,
+            (t1.init_value =  ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) as init_eq_grdth,
+            (t1.weak_label = ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) as wl_eq_grdth,
             (t1.weak_label = t4.rv_value) as wl_eq_infer,
-            (t4.rv_value = t2._value_) as infer_eq_grdth,
+            (t4.rv_value = ANY(string_to_array(regexp_replace(t2._value_,\'[{{\"\"}}]\',\'\',\'gi\'),\'|\'))) as infer_eq_grdth,
             count(*) as count
         from
             "{cell_domain}" as t1,
@@ -516,6 +490,32 @@ class EvalEngine:
                 clean_data=self.clean_data.name,
                 dk_cells=AuxTables.dk_cells.name,
                 inf_values_dom=AuxTables.inf_values_dom.name)
+# =======
+#         query = """
+#         select
+#             (t3._tid_ is NULL) as clean,
+#             (t1.fixed) as status,
+#             (t1.init_value =  t2._value_) as init_eq_grdth,
+#             (t1.weak_label = t2._value_) as wl_eq_grdth,
+#             (t1.weak_label = t4.rv_value) as wl_eq_infer,
+#             (t4.rv_value = t2._value_) as infer_eq_grdth,
+#             count(*) as count
+#         from
+#             "{cell_domain}" as t1,
+#             "{clean_data}" as t2
+#             left join "{dk_cells}" as t3 on t2._tid_ = t3._tid_ and t2._attribute_ = t3.attribute
+#             left join "{inf_values_dom}" as t4 on t2._tid_ = t4._tid_ and t2._attribute_ = t4.attribute where t1._tid_ = t2._tid_ and t1.attribute = t2._attribute_
+#         group by
+#             clean,
+#             status,
+#             init_eq_grdth,
+#             wl_eq_grdth,
+#             wl_eq_infer,
+#             infer_eq_grdth
+#         """.format(cell_domain=AuxTables.cell_domain.name,
+#                 clean_data=self.clean_data.name,
+#                 dk_cells=AuxTables.dk_cells.name,
+#                 inf_values_dom=AuxTables.inf_values_dom.name)
 # >>>>>>> hcq-embedding-3
 
         res = self.ds.engine.execute_query(query)

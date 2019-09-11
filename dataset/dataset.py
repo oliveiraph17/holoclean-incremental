@@ -502,11 +502,13 @@ class Dataset:
 
     def get_inferred_values(self):
         tic = time.clock()
-
-        query = "SELECT t1._tid_, t1.attribute, t2.inferred_val as rv_value " \
-                "FROM (SELECT _tid_, attribute, _vid_ FROM %s) as t1, %s as t2 " \
-                "WHERE t1._vid_ = t2._vid_" % (AuxTables.cell_domain.name, AuxTables.inf_values_idx.name)
-
+        # index into domain with inferred_val_idx + 1 since SQL arrays begin at index 1.
+        query = "SELECT t1._tid_, t1.attribute, domain[inferred_val_idx + 1] as rv_value " \
+                "FROM " \
+                "(SELECT _tid_, attribute, " \
+                "_vid_, init_value, string_to_array(regexp_replace(domain, \'[{\"\"}]\', \'\', \'gi\'), \'|||\') as domain " \
+                "FROM %s) as t1, %s as t2 " \
+                "WHERE t1._vid_ = t2._vid_"%(AuxTables.cell_domain.name, AuxTables.inf_values_idx.name)
         self.generate_aux_table_sql(AuxTables.inf_values_dom, query, index_attrs=['_tid_'])
         self.aux_table[AuxTables.inf_values_dom].create_db_index(self.engine, ['attribute'])
         status = "DONE collecting the inferred values."
