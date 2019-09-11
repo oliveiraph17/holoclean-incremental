@@ -331,6 +331,17 @@ class Dataset:
 
         return stats
 
+    def get_correlations(self):
+        """
+        Compute, if not ready, and return attribute correlations based on conditional entropy.
+        :return:
+        """
+        if not self.stats_ready:
+            self.collect_stats()
+            self.stats_ready = True
+
+        return self.correlations
+
     def collect_stats(self):
         """
         collect_stats memoizes:
@@ -391,6 +402,9 @@ class Dataset:
 
         entropy_tic = time.clock()
 
+        # TODO(kaster): adjust the correlation computation to use correctly the quantized_data as indicated below.
+        # data_df = self.ds.get_quantized_data() if self.do_quantization \
+        #    else self.ds.get_raw_data()
         if not self.incremental or self.is_first_batch():
             self.correlations = self.compute_norm_cond_entropy_corr()
         else:
@@ -418,6 +432,15 @@ class Dataset:
                     self.pair_attr_stats = stats1.pair_attr_stats
 
                 self.correlations = self.compute_norm_cond_entropy_corr()
+
+        if self.env['debug_mode']:
+            corrs_df = pd.DataFrame.from_dict(self.correlations, orient='columns')
+            corrs_df.index.name = 'cond_attr'
+            corrs_df.columns.name = 'attr'
+            pd.set_option('display.max_columns', len(corrs_df.columns))
+            pd.set_option('display.max_rows', len(corrs_df.columns))
+            logging.debug("correlations:\n%s", corrs_df)
+            logging.debug("summary of correlations:\n%s", corrs_df.describe())
 
         logging.debug('DONE computing entropy in %.2f secs.', time.clock() - entropy_tic)
         logging.debug('DONE computing statistics from incoming data in %.2f secs.', time.clock() - tic)
@@ -778,14 +801,14 @@ class Dataset:
             x_domain_size = len(self.single_attr_stats[x].keys())
 
             for y in attrs:
-                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
-                if x_domain_size == 1:
-                    corr[x][y] = 0.0
-                    continue
-
                 # Sets correlation to 1.0 for same attributes.
                 if x == y:
                     corr[x][y] = 1.0
+                    continue
+
+                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
+                if x_domain_size == 1:
+                    corr[x][y] = 0.0
                     continue
 
                 # Computes the conditional entropy H(x|y).
@@ -841,14 +864,14 @@ class Dataset:
             x_domain_size = len(unique_x_values)
 
             for y in attrs:
-                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
-                if x_domain_size == 1:
-                    corr[x][y] = 0.0
-                    continue
-
                 # Sets correlation to 1.0 for same attributes.
                 if x == y:
                     corr[x][y] = 1.0
+                    continue
+
+                # Sets correlation to 0.0 if entropy of x is 1 (only one possible value).
+                if x_domain_size == 1:
+                    corr[x][y] = 0.0
                     continue
 
                 # Computes the conditional entropy H(x|y).

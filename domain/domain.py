@@ -46,36 +46,12 @@ class DomainEngine:
         'cell_domain', 'pos_values').
         """
         tic = time.time()
-
-        if self.correlations is None:
-            self.compute_correlations()
         self.setup_attributes()
         self.domain_df = self.generate_domain()
         self.store_domains(self.domain_df)
         status = "DONE with domain preparation."
         toc = time.time()
         return status, toc - tic
-
-    # TODO(richardwu): move this to Dataset after loading data.
-    def compute_correlations(self):
-        """
-        compute_correlations memoizes to self.correlations; a data structure
-        that contains pairwise correlations between attributes (values are treated as
-        discrete categories).
-        """
-        logging.debug("Computing correlations...")
-        data_df = self.ds.get_quantized_data() if self.do_quantization \
-            else self.ds.get_raw_data()
-        self.correlations = compute_norm_cond_entropy_corr(data_df,
-                                                           self.ds.get_attributes(),
-                                                           self.ds.get_attributes())
-        corrs_df = pd.DataFrame.from_dict(self.correlations, orient='columns')
-        corrs_df.index.name = 'cond_attr'
-        corrs_df.columns.name = 'attr'
-        pd.set_option('display.max_columns', len(corrs_df.columns))
-        pd.set_option('display.max_rows', len(corrs_df.columns))
-        logging.debug("correlations:\n%s", corrs_df)
-        logging.debug("summary of correlations:\n%s", corrs_df.describe())
 
     def store_domains(self, domain):
         """
@@ -99,6 +75,7 @@ class DomainEngine:
 
     def setup_attributes(self):
         total, single_stats, pair_stats = self.ds.get_statistics()
+        self.correlations = self.ds.get_correlations()
         self.total = total
         self.single_stats = single_stats
         logging.debug("preparing pruned co-occurring statistics...")
@@ -190,8 +167,13 @@ class DomainEngine:
         # Iterate over dataset rows.
         cells = []
         vid = 0
+
         raw_df = self.ds.get_quantized_data() if self.do_quantization else self.ds.get_raw_data()
-        records = raw_df.to_records()
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+            # TODO(kaster): adjust here to properly handle quantized_data for previous dirty rows
+            records = pd.concat([self.ds.get_previous_dirty_rows(), raw_df]).to_records(index=False)
+        else:
+            records = raw_df.to_records()
 
         dk_lookup = {(val[0], val[1]) for val in self.ds.aux_table[AuxTables.dk_cells].df[['_tid_', 'attribute']].values}
 
@@ -320,7 +302,11 @@ class DomainEngine:
             # values with a null value.
             # it is possible for cond_val to not be in pair stats if it only co-occurs
             # with null values.
-            if cond_val == NULL_REPR or cond_val not in self.pair_stats[cond_attr][attr]:
+# <<<<<<<< dev
+#             if cond_val == NULL_REPR or cond_val not in self.pair_stats[cond_attr][attr]:
+# ========
+            if cond_val == NULL_REPR or self.pair_stats[cond_attr][attr][cond_val] == [NULL_REPR]:
+# >>>>>>>> dev-mixed
                 continue
 
             # update domain with top co-occuring values with the cond init value.
@@ -332,6 +318,7 @@ class DomainEngine:
 
         # We should not have any NULLs since we do not store co-occurring NULL
         # values.
+        domain.discard(NULL_REPR) # (kaster) Added because incremental statistics store NULLs
         assert NULL_REPR not in domain
 
         # Add the initial value to the domain if it is not NULL.
@@ -359,6 +346,7 @@ class DomainEngine:
         domain_pool = set(self.single_stats[attr].keys())
         # We should not have any NULLs since we do not keep track of their
         # counts.
+        domain_pool.discard(NULL_REPR) # (kaster) Added because incremental statistics store NULLs
         assert NULL_REPR not in domain_pool
         domain_pool = domain_pool.difference(cur_dom)
         domain_pool = sorted(list(domain_pool))
@@ -387,8 +375,8 @@ class DomainEngine:
             init_value: initial value for this cell
             init_index: domain index of init_value
         """
-        self.compute_correlations()
-        self.setup_attributes()
+        if not self.setup_complete:
+            self.setup_attributes()
 
         logging.debug('generating initial set of un-pruned domain values...')
         records = self.ds.get_raw_data().to_records()

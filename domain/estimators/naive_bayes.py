@@ -1,11 +1,10 @@
-from functools import lru_cache
 import math
 
 from tqdm import tqdm
 
 from ..estimator import Estimator
 from utils import NULL_REPR
-
+from ..domain import DomainEngine
 
 class NaiveBayes(Estimator):
     """
@@ -26,7 +25,14 @@ class NaiveBayes(Estimator):
         # TID to raw data tuple for prediction.
         self._raw_records_by_tid = {}
         raw_df = self.ds.get_quantized_data() if self.ds.do_quantization else self.ds.get_raw_data()
-        for row in raw_df.to_records():
+
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+            # TODO(kaster): adjust here to properly handle quantized_data for previous dirty rows
+            records = pd.concat([self.ds.get_previous_dirty_rows(), raw_df]).to_records()
+        else:
+            records = raw_df.to_records()
+
+        for row in records:
             self._raw_records_by_tid[row['_tid_']] = row
 
     def train(self, num_epochs=None, batch_size=None):
@@ -34,8 +40,17 @@ class NaiveBayes(Estimator):
 
     def _predict_pp(self, row, attr, values):
         nb_score = []
-        correlated_attributes = self._get_corr_attributes(attr)
+# <<<<<<< dev
+#         correlated_attributes = self._get_corr_attributes(attr)
+# =======
+        correlated_attributes = DomainEngine.get_corr_attributes(attr,
+                                                                 self._cor_strength)
+# >>>>>>> dev-mixed
         for val1 in values:
+            # This check was added recently, whereas the same check for 'val2' was already present.
+            if val1 == NULL_REPR:
+                continue
+
             val1_count = self._freq[attr][val1]
             log_prob = math.log(float(val1_count) / float(self._n_tuples))
             for at in correlated_attributes:
@@ -43,9 +58,7 @@ class NaiveBayes(Estimator):
                 if at == attr or at == '_tid_':
                     continue
                 val2 = row[at]
-                # Since we do not have co-occurrence stats with NULL values,
-                # we skip them.
-                # It also doesn't make sense for our likelihood to be conditioned
+                # It does not make sense for our likelihood to be conditioned
                 # on a NULL value.
                 if val2 == NULL_REPR:
                     continue
@@ -76,15 +89,3 @@ class NaiveBayes(Estimator):
         """
         for row in tqdm(self.domain_df.to_records()):
             yield row['_vid_'], True, self._predict_pp(self._raw_records_by_tid[row['_tid_']], row['attribute'], row['domain'].split('|||'))
-
-    @lru_cache(maxsize=None)
-    def _get_corr_attributes(self, attr):
-        """
-        TODO: refactor this with Domain::get_corr_attributes().
-        """
-        if attr not in self._correlations:
-            return []
-        attr_correlations = self._correlations[attr]
-        return sorted([corr_attr
-                for corr_attr, corr_strength in attr_correlations.items()
-                if corr_attr != attr and corr_strength > self._cor_strength])
