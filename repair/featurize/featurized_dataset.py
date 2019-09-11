@@ -44,7 +44,10 @@ class FeaturizedDataset:
         # TODO: remove after we validate it is not needed.
         self.in_features = self.tensor.shape[2]
         logging.debug("generating weak labels...")
-        self.weak_labels, self.is_clean = self.generate_weak_labels()
+        if not self.env['ignore_previous_training_cells'] or self.ds.is_first_batch():
+            self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels()
+        else:
+            self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels_with_reduced_cells()
         logging.debug("DONE generating weak labels.")
         logging.debug("generating mask...")
         self.var_class_mask, self.var_to_domsize = self.generate_var_mask()
@@ -70,7 +73,7 @@ class FeaturizedDataset:
         # labelled. Do not train on cells with NULL weak labels (i.e.
         # NULL init values that were not weak labelled).
         query = """
-        SELECT _vid_, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean
+        SELECT _vid_, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_
         FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
         WHERE weak_label != '{null_repr}' AND (t2._cid_ is NULL OR t1.fixed != {cell_status});
         """.format(cell_domain=AuxTables.cell_domain.name,
@@ -87,9 +90,11 @@ class FeaturizedDataset:
             label = int(tuple[1])
             fixed = int(tuple[2])
             clean = int(tuple[3])
+            cid = int(tuple[4])
             labels[vid] = label
             is_clean[vid] = clean
-        return labels, is_clean
+            current_training_cells.append(cid)
+        return labels, is_clean, current_training_cells
 
     def generate_var_mask(self):
         """

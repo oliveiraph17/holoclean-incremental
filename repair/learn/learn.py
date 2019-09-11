@@ -112,7 +112,7 @@ class TiedLinear(torch.nn.Module):
 
 class RepairModel:
 
-    def __init__(self, env, feat_info, max_domain, bias=False, layer_sizes=[1]):
+    def __init__(self, env, feat_info, max_domain, bias=False, layer_sizes=[1], is_first_batch):
         """
         feat_info (list[FeatInfo]): featurizer information
         max_domain (int): maximum domain size i.e. output dimension
@@ -123,6 +123,7 @@ class RepairModel:
         self.model = TiedLinear(self.env, feat_info, max_domain,
                                 bias=bias, layer_sizes=layer_sizes)
         self.featurizer_weights = {}
+        self.is_first_batch = is_first_batch
 
         self.loss = torch.nn.CrossEntropyLoss()
         trainable_parameters = filter(lambda p: p.requires_grad,
@@ -136,6 +137,17 @@ class RepairModel:
             self.optimizer = optim.Adam(trainable_parameters,
                                    lr=self.env['learning_rate'],
                                    weight_decay=self.env['weight_decay'])
+
+        if self.env['save_load_checkpoint'] and not self.is_first_batch:
+            # Loads from disk the model parameters and the optimizer state
+            # to continue using them from the point at which they were previously saved.
+            try:
+                checkpoint = self.load_checkpoint()
+
+                self.model.load_state_dict(checkpoint['model_state_dict'])
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            except OSError:
+                raise Exception('No existing checkpoint could be loaded.')
 
     def fit_model(self, X_train, Y_train, mask_train, epochs):
         """
@@ -161,6 +173,13 @@ class RepairModel:
                 logging.debug("Epoch %d, cost = %f, acc = %.2f%%",
                               epoch_idx, cost / max(num_batches, 1),
                               100. * np.mean(Y_assign == grdt))
+
+        if self.is_first_batch:
+            # Always saves at least one version of the model.
+            self.save_checkpoint()
+        else:
+            if self.env['save_load_checkpoint']:
+                self.save_checkpoint()
 
     def infer_values(self, X_pred, mask_pred):
         logging.info('inferring on %d examples (cells)', X_pred.shape[0])

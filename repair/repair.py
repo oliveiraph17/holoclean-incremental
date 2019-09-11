@@ -27,7 +27,8 @@ class RepairEngine:
         output_dim = self.feat_dataset.classes
         self.repair_model = RepairModel(self.env, feat_info, output_dim,
                                         bias=self.env['bias'],
-                                        layer_sizes=self.env['layer_sizes'])
+                                        layer_sizes=self.env['layer_sizes'],
+                                        self.ds.is_first_batch())
         toc = time.clock()
         status = "DONE setting up repair model."
         setup_time = toc - tic
@@ -35,17 +36,21 @@ class RepairEngine:
 
     def fit_repair_model(self):
         tic = time.clock()
-        X_train, Y_train, mask_train = self.feat_dataset.get_training_data()
+        X_train, Y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
         logging.info('training with %d training examples (cells)', X_train.shape[0])
         self.repair_model.fit_model(X_train, Y_train, mask_train, self.env['epochs'])
         toc = time.clock()
+
+        if self.env['ignore_previous_training_cells']:
+            self._save_training_cells(train_cid)
+
         status = "DONE training repair model."
         train_time = toc - tic
         return status, train_time
 
     def fit_validate_repair_model(self, eval_engine, validate_period):
         tic = time.clock()
-        X_train, Y_train, mask_train = self.feat_dataset.get_training_data()
+        X_train, Y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
         logging.info('training with %d training examples (cells)', X_train.shape[0])
 
         # Training loop
@@ -63,9 +68,26 @@ class RepairEngine:
                 logging.info(weights)
 
         toc = time.clock()
+
+        if self.env['ignore_previous_training_cells']:
+            self._save_training_cells(train_cid)
+
         status = "DONE training repair model."
         train_time = toc - tic
         return status, train_time
+
+    def _save_training_cells(self, train_cid):
+        # Generates table 'training_cells'.
+        training_cells = []
+        for i in range(len(train_cid)):
+            training_cells.append({'_cid_': train_cid[i]})
+
+        self.ds.generate_aux_table(AuxTables.training_cells,
+                                   pd.DataFrame(data=training_cells),
+                                   store=True,
+                                   index_attrs=False,
+                                   append=True)
+
 
     def infer_repairs(self):
         tic = time.clock()

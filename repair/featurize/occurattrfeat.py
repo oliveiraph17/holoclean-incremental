@@ -29,7 +29,14 @@ class OccurAttrFeaturizer(Featurizer):
 
     def setup_stats(self):
         raw_df = self.ds.get_quantized_data() if self.ds.do_quantization else self.ds.get_raw_data()
-        self.raw_data_dict = raw_df.set_index('_tid_').to_dict('index')
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+            # TODO(kaster): Make get_previous_dirty_rows to handle quantized data
+            df = pd.concat([self.ds.get_previous_dirty_rows(), raw_df])
+            df.reset_index(drop=True, inplace=True)
+            self.raw_data_dict = df.set_index('_tid_').to_dict('index')
+        else:
+            self.raw_data_dict = raw_df.set_index('_tid_').to_dict('index')
+
         total, single_stats, pair_stats = self.ds.get_statistics()
         self.total = float(total)
         self.single_stats = single_stats
@@ -72,7 +79,8 @@ class OccurAttrFeaturizer(Featurizer):
             # with NULL values.
             if attr == rv_attr \
                     or val == NULL_REPR \
-                    or val not in self.pair_stats[attr][rv_attr]:
+                    or val not in self.pair_stats[attr][rv_attr] \
+                    or self.pair_stats[attr][rv_attr][val] == [NULL_REPR]:
                 continue
             attr_idx = self.ds.attr_to_idx[attr]
             count1 = float(self.single_stats[attr][val])
