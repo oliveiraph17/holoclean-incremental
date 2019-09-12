@@ -122,6 +122,7 @@ class RepairModel:
         self.max_domain = max_domain
         self.model = TiedLinear(self.env, feat_info, max_domain,
                                 bias=bias, layer_sizes=layer_sizes)
+        self.featurizer_weight_stats = {}
         self.featurizer_weights = {}
         self.is_first_batch = is_first_batch
 
@@ -144,7 +145,14 @@ class RepairModel:
             try:
                 checkpoint = self.load_checkpoint()
 
-                self.model.load_state_dict(checkpoint['model_state_dict'])
+                loaded_state_dict = checkpoint['model_state_dict']
+                initial_state_dict = self.model.state_dict()
+
+                # Handles size mismatch (if any) between loaded and initial model state dictionaries.
+                # Then, assigns the newly-adjusted loaded state dictionary to the model.
+                # self.featurizer_weights
+
+                # self.model.load_state_dict()
                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             except OSError:
                 raise Exception('No existing checkpoint could be loaded.')
@@ -243,7 +251,7 @@ class RepairModel:
                 feat_name, feat_size, max_w, min_w, mean_w, abs_mean_w, weight_str
             )
             # Wrap in a dictionary.
-            self.featurizer_weights[feat_name] = {
+            self.featurizer_weight_stats[feat_name] = {
                 'max': max_w,
                 'min': min_w,
                 'avg': mean_w,

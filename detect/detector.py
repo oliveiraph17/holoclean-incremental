@@ -1,5 +1,7 @@
 from abc import ABCMeta, abstractmethod
 
+import pandas as pd
+
 
 class Detector:
     """
@@ -31,3 +33,17 @@ class Detector:
         :return dataframe  for the dk_cell
         """
         raise NotImplementedError
+
+    @staticmethod
+    def _gen_tid_attr_output(res, attr_list):
+        errors = []
+
+        for t in res:
+            tid = int(t[0])
+
+            for attr in attr_list:
+                errors.append({'_tid_': tid, 'attribute': attr})
+
+        error_df = pd.DataFrame(data=errors)
+
+        return error_df
