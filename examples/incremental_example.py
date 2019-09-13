@@ -66,7 +66,7 @@ with open(dataset_dir + dataset_name + '.csv') as dataset_file:
                 recompute_from_scratch=False,
                 skip_training=False,
                 ignore_previous_training_cells=False,
-                save_load_checkpoint=True
+                save_load_checkpoint=False
             ).session
 
             # Drops tables and model checkpoint in the first batch.
