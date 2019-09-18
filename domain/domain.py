@@ -114,7 +114,7 @@ class DomainEngine:
         return out
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    # @lru_cache(maxsize=None)
     def get_corr_attributes(attr, thres, corr_lst):
         """
         get_corr_attributes returns attributes from self.correlations
