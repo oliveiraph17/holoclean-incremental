@@ -23,13 +23,17 @@ class FeaturizedDataset:
         logging.debug('featurizing training data...')
         tensors = [f.create_tensor() for f in featurizers]
         self.featurizer_info = [FeatInfo(featurizer.name,
-                                         tensor.size()[2],
+                                         # tensor.size()[2],
+                                         0,  # (kaster) tensor.size now is variant
                                          featurizer.learnable,
                                          featurizer.init_weight,
                                          featurizer.feature_names())
                                 for tensor, featurizer in zip(tensors, featurizers)
                                 if tensor is not None]
-        tensor = torch.cat([tens for tens in tensors if tens is not None], 2)
+        # tensor = torch.cat([tens for tens in tensors if tens is not None], 2)
+        tensor = {}
+        for attr in self.ds.get_active_attributes():
+            tensor[attr] = torch.cat([tens[attr] for tens in tensors], 2)
         self.tensor = tensor
 
         logging.debug('DONE featurization. Feature tensor size: %s', self.tensor.shape)

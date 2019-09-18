@@ -525,10 +525,19 @@ class Dataset:
         """
         Returns (number of random variables, count of distinct values across all attributes).
         """
-        query = 'SELECT count(_vid_), max(domain_size) FROM %s'%AuxTables.cell_domain.name
+        # query = 'SELECT count(_vid_), max(domain_size) FROM %s'%AuxTables.cell_domain.name
+        # res = self.engine.execute_query(query)
+        # total_vars = int(res[0][0])
+        # classes = int(res[0][1])
+        # return total_vars, classes
+        query = 'SELECT count(_vid_) FROM %s'%AuxTables.cell_domain.name
         res = self.engine.execute_query(query)
         total_vars = int(res[0][0])
-        classes = int(res[0][1])
+        query = 'SELECT attribute, max(domain_size) FROM %s GROUP BY attribute' % AuxTables.cell_domain.name
+        res = self.engine.execute_query(query)
+        classes = {}
+        for row in res:
+            classes[row[0]] = int(row[1])
         return total_vars, classes
 
     def get_inferred_values(self):
