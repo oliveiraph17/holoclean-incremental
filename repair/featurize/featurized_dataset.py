@@ -23,8 +23,7 @@ class FeaturizedDataset:
         logging.debug('featurizing training data...')
         tensors = [f.create_tensor() for f in featurizers]
         self.featurizer_info = [FeatInfo(featurizer.name,
-                                         # tensor.size()[2],
-                                         0,  # (kaster) tensor.size now is variant
+                                         next(iter(tensor.values())).size(2),  # Gets the first tensor in the dict.
                                          featurizer.learnable,
                                          featurizer.init_weight,
                                          featurizer.feature_names())
@@ -36,7 +35,8 @@ class FeaturizedDataset:
             tensor[attr] = torch.cat([tens[attr] for tens in tensors], 2)
         self.tensor = tensor
 
-        logging.debug('DONE featurization. Feature tensor size: %s', self.tensor.shape)
+        tensor_shapes = [str(attr) + ':' + str(t.shape) for attr, t in self.tensor.items()]
+        logging.debug('DONE featurization. Feature tensor size: %s', ', '.join(tensor_shapes))
 
         if self.env['debug_mode']:
             weights_df = pd.DataFrame(self.tensor.reshape(-1, self.tensor.shape[-1]).numpy())
@@ -46,22 +46,19 @@ class FeaturizedDataset:
             weights_df.to_pickle('debug/{}_train_features.pkl'.format(self.ds.id))
 
         # TODO: remove after we validate it is not needed.
-        self.in_features = self.tensor.shape[2]
+        self.in_features = next(iter(self.tensor.values())).size(2)  # Gets the first tensor in the dict.
         logging.debug("generating weak labels...")
         if not self.env['ignore_previous_training_cells'] or self.ds.is_first_batch():
             self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels()
         else:
             self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels_with_reduced_cells()
         logging.debug("DONE generating weak labels.")
-        logging.debug("generating mask...")
-        self.var_class_mask, self.var_to_domsize = self.generate_var_mask()
-        logging.debug("DONE generating mask.")
 
         if self.env['feature_norm']:
             logging.debug("normalizing features...")
-            n_cells, n_classes, n_feats = self.tensor.shape
-            # normalize within each cell the features
-            self.tensor = F.normalize(self.tensor, p=2, dim=1)
+            for attr, t in self.tensor.items():
+                # normalize within each cell the features
+                self.tensor[attr] = F.normalize(t, p=2, dim=1)
             logging.debug("DONE feature normalization.")
 
     def generate_weak_labels(self):
@@ -77,27 +74,36 @@ class FeaturizedDataset:
         # labelled. Do not train on cells with NULL weak labels (i.e.
         # NULL init values that were not weak labelled).
         query = """
-        SELECT _vid_, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_
+        SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_
         FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
-        WHERE weak_label != '{null_repr}' AND (t2._cid_ is NULL OR t1.fixed != {cell_status});
+        ORDER BY _vid_;
         """.format(cell_domain=AuxTables.cell_domain.name,
-                   dk_cells=AuxTables.dk_cells.name,
-                   null_repr=NULL_REPR,
-                   cell_status=CellStatus.NOT_SET.value)
+                   dk_cells=AuxTables.dk_cells.name)
         res = self.ds.engine.execute_query(query)
         if len(res) == 0:
             logging.warning("No weak labels available. Reduce pruning threshold.")
-        labels = -1 * torch.ones(self.total_vars, 1).type(torch.LongTensor)
-        is_clean = torch.zeros(self.total_vars, 1).type(torch.LongTensor)
+        labels = {}
+        is_clean = {}
         current_training_cells = []
+        # count[attr] will match _vid_ in the featurizers because both are generated ordered by _vid_.
+        count = {}
+        for attr in self.ds.get_active_attributes():
+            count[attr] = 0
+            num_instances = self.tensor[attr].size(0)
+            labels[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
+            is_clean[attr] = torch.zeros(num_instances, 1).type(torch.LongTensor)
+
         for tuple in tqdm(res):
-            vid = int(tuple[0])
+            attr = tuple[0]
             label = int(tuple[1])
             fixed = int(tuple[2])
             clean = int(tuple[3])
             cid = int(tuple[4])
-            labels[vid] = label
-            is_clean[vid] = clean
+            if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
+                # Considers only not null and clean or fixed cells as weak labels.
+                labels[attr][count[attr]] = label
+                is_clean[attr][count[attr]] = clean
+            count[attr] += 1
             current_training_cells.append(cid)
         return labels, is_clean, current_training_cells
 
@@ -210,21 +216,25 @@ class FeaturizedDataset:
         and only a small amount of incorrect initial values which allow us
         to train to convergence.
         """
-        train_idx = (self.weak_labels != -1).nonzero()[:,0]
-        X_train = self.tensor.index_select(0, train_idx)
-        Y_train = self.weak_labels.index_select(0, train_idx)
-        mask_train = self.var_class_mask.index_select(0, train_idx)
-        return X_train, Y_train, mask_train, self.train_cid
+        X_train = {}
+        Y_train = {}
+        for attr in self.ds.get_active_attributes():
+            train_idx = (self.weak_labels[attr] != -1).nonzero()[:, 0]
+            X_train[attr] = self.tensor[attr].index_select(0, train_idx)
+            Y_train[attr] = self.weak_labels[attr].index_select(0, train_idx)
+        return X_train, Y_train, self.train_cid
 
     def get_infer_data(self):
         """
         Retrieves the samples to be inferred i.e. DK cells.
         """
-        if self.env['infer_mode'] == 'dk':
-            infer_idx = (self.is_clean == 0).nonzero()[:, 0]
-        elif self.env['infer_mode'] == 'all':
-            infer_idx = torch.arange(0, self.tensor.size(0))
+        infer_idx = {}
+        X_infer = {}
+        for attr in self.ds.get_active_attributes():
+            if self.env['infer_mode'] == 'dk':
+                infer_idx[attr] = (self.is_clean[attr] == 0).nonzero()[:, 0]
+            elif self.env['infer_mode'] == 'all':
+                infer_idx[attr] = torch.arange(0, self.tensor[attr].size(0))
 
-        X_infer = self.tensor.index_select(0, infer_idx)
-        mask_infer = self.var_class_mask.index_select(0, infer_idx)
-        return X_infer, mask_infer, infer_idx
+            X_infer[attr] = self.tensor[attr].index_select(0, infer_idx[attr])
+        return X_infer, infer_idx

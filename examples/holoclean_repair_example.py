@@ -22,6 +22,7 @@ hc = holoclean.HoloClean(
 
 # 2. Load training data and denial constraints.
 hc.load_data('hospital', '../testdata/hospital/hospital.csv')
+# hc.load_data('hospital', '../testdata/hospital/hospital_numerical.csv', numerical_attrs=['Score', 'Sample'])
 hc.load_dcs('../testdata/hospital/hospital_constraints.txt')
 hc.ds.set_constraints(hc.get_dcs())
 
@@ -34,14 +35,22 @@ hc.generate_domain()
 hc.run_estimator()
 featurizers = [
     OccurAttrFeaturizer(),
-    FreqFeaturizer(),
-    ConstraintFeaturizer(),
+    # FreqFeaturizer(),
+    # ConstraintFeaturizer(),
 ]
 
 hc.repair_errors(featurizers)
+# hc.repair_validate_errors(featurizers,
+#                  fpath='../testdata/hospital/hospital_clean.csv',
+# #                  fpath='../testdata/hospital/hospital_numerical_clean.csv',
+#                  tid_col='tid',
+#                  attr_col='attribute',
+#                  val_col='correct_val',
+#                  validate_period=5)
 
 # 5. Evaluate the correctness of the results.
 report = hc.evaluate(fpath='../testdata/hospital/hospital_clean.csv',
+# report = hc.evaluate(fpath='../testdata/hospital/hospital_numerical_clean.csv',
             tid_col='tid',
             attr_col='attribute',
             val_col='correct_val')
