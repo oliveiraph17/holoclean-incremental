@@ -53,6 +53,9 @@ class FeaturizedDataset:
         else:
             self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels_with_reduced_cells()
         logging.debug("DONE generating weak labels.")
+        logging.debug("generating mask...")
+        self.var_class_mask, self.var_to_domsize = self.generate_var_mask()
+        logging.debug("DONE generating mask.")
 
         if self.env['feature_norm']:
             logging.debug("normalizing features...")
@@ -191,15 +194,23 @@ class FeaturizedDataset:
             where tensor[i][j] = 0 iff the value corresponding to domain index 'j'
             is valid for the i-th VID and tensor[i][j] = -10e6 otherwise.
         """
+        mask = {}
         var_to_domsize = {}
-        query = 'SELECT _vid_, domain_size FROM %s' % AuxTables.cell_domain.name
+        count = {}
+        for attr, t in self.tensor.items():
+            mask[attr] = torch.zeros(t.size(0), t.size(1))
+            var_to_domsize[attr] = {}
+            count[attr] = 0
+
+        query = 'SELECT _vid_, domain_size, attribute FROM %s ORDER BY _vid_' % AuxTables.cell_domain.name
         res = self.ds.engine.execute_query(query)
-        mask = torch.zeros(self.total_vars,self.classes)
         for tuple in tqdm(res):
             vid = int(tuple[0])
             max_class = int(tuple[1])
-            mask[vid, max_class:] = -10e6
-            var_to_domsize[vid] = max_class
+            attr = tuple[2]
+            mask[attr][count[attr], max_class:] = -10e6
+            var_to_domsize[attr][count[attr]] = max_class
+            count[attr] += 1
         return mask, var_to_domsize
 
     def get_tensor(self):
@@ -218,11 +229,13 @@ class FeaturizedDataset:
         """
         X_train = {}
         Y_train = {}
+        mask_train = {}
         for attr in self.ds.get_active_attributes():
             train_idx = (self.weak_labels[attr] != -1).nonzero()[:, 0]
             X_train[attr] = self.tensor[attr].index_select(0, train_idx)
             Y_train[attr] = self.weak_labels[attr].index_select(0, train_idx)
-        return X_train, Y_train, self.train_cid
+            mask_train[attr] = self.var_class_mask[attr].index_select(0, train_idx)
+        return X_train, Y_train, mask_train, self.train_cid
 
     def get_infer_data(self):
         """
@@ -230,6 +243,7 @@ class FeaturizedDataset:
         """
         infer_idx = {}
         X_infer = {}
+        mask_infer = {}
         for attr in self.ds.get_active_attributes():
             if self.env['infer_mode'] == 'dk':
                 infer_idx[attr] = (self.is_clean[attr] == 0).nonzero()[:, 0]
@@ -237,4 +251,5 @@ class FeaturizedDataset:
                 infer_idx[attr] = torch.arange(0, self.tensor[attr].size(0))
 
             X_infer[attr] = self.tensor[attr].index_select(0, infer_idx[attr])
-        return X_infer, infer_idx
+            mask_infer[attr] = self.var_class_mask[attr].index_select(0, infer_idx[attr])
+        return X_infer, mask_infer, infer_idx

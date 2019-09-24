@@ -38,11 +38,11 @@ class RepairEngine:
     def fit_repair_model(self):
         tic = time.clock()
         total_training_cells = 0
-        X_train, Y_train, train_cid = self.feat_dataset.get_training_data()
+        X_train, Y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
         for attr in self.ds.get_active_attributes():
             logging.info('Training model for %s with %d training examples (cells)', attr, X_train[attr].size(0))
             tic_attr = time.clock()
-            self.repair_model[attr].fit_model(X_train[attr], Y_train[attr], self.env['epochs'])
+            self.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr], self.env['epochs'])
             logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
             total_training_cells += X_train[attr].size(0)
         toc = time.clock()
@@ -56,7 +56,7 @@ class RepairEngine:
 
     def fit_validate_repair_model(self, eval_engine, validate_period):
         tic = time.clock()
-        X_train, Y_train, train_cid = self.feat_dataset.get_training_data()
+        X_train, Y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
         total_training_cells = sum(t.size(0) for t in X_train.values())
 
         # Training loop
@@ -65,7 +65,7 @@ class RepairEngine:
             for attr in self.ds.get_active_attributes():
                 logging.info('Training model for %s with %d training examples (cells)', attr, X_train[attr].size(0))
                 tic_attr = time.clock()
-                self.repair_model[attr].fit_model(X_train[attr], Y_train[attr], 1)
+                self.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr], 1)
                 logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
     
             if epoch_idx % validate_period == 0:
@@ -101,12 +101,12 @@ class RepairEngine:
 
     def infer_repairs(self):
         tic = time.clock()
-        X_pred, infer_idx = self.feat_dataset.get_infer_data()
+        X_pred, mask_pred, infer_idx = self.feat_dataset.get_infer_data()
         Y_pred = {}
         for attr in self.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
             tic_attr = time.clock()
-            Y_pred[attr] = self.repair_model[attr].infer_values(X_pred[attr])
+            Y_pred[attr] = self.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
             logging.debug('Done. Elapsed time: %.2f', time.clock() - tic_attr)
 
         distr_df, infer_val_df = self.get_infer_dataframes(infer_idx, Y_pred)

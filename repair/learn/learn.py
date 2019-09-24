@@ -71,7 +71,7 @@ class TiedLinear(torch.nn.Module):
             logging.debug("training model with additional hidden layers of size: %s",
                           list(map(str, [w.shape for w in self.other_weights])))
 
-    def forward(self, X):
+    def forward(self, X, index, mask):
         """
         Performs one forward pass and outputs the logits of size
         (batch, max_domain)
@@ -102,6 +102,11 @@ class TiedLinear(torch.nn.Module):
         # (batch, # of classes)
         output = output.squeeze(-1)
 
+        # Add our mask so that invalid domain classes for a given variable/VID
+        # has a large negative value, resulting in a softmax probability
+        # of de facto 0.
+        # (batch, # of classes)
+        output.index_add_(0, index, mask)
         return output
 
 
@@ -145,12 +150,14 @@ class RepairModel:
             except OSError:
                 raise Exception('No existing checkpoint could be loaded.')
 
-    def fit_model(self, X_train, Y_train, epochs):
+    def fit_model(self, X_train, Y_train, mask_train, epochs):
         """
         X_train: (batch, # of classes (domain size), total # of features)
         Y_train: (batch, 1)
         mask_train: (batch, # of classes)
         """
+        # last_prec = 0
+        # count_prec = 0
         batch_size = self.env['batch_size']
         for epoch_idx in tqdm(range(1, epochs + 1)):
             cost = 0.
@@ -158,26 +165,36 @@ class RepairModel:
             for k in range(num_batches):
                 start, end = k * batch_size, (k + 1) * batch_size
                 cost += self.__train__(X_train[start:end],
-                                       Y_train[start:end])
+                                       Y_train[start:end],
+                                       mask_train[start:end])
 
             if self.env['verbose']:
                 # Compute and print accuracy at the end of epoch
                 grdt = Y_train.numpy().flatten()
-                Y_pred = self.__predict__(X_train)
+                Y_pred = self.__predict__(X_train, mask_train)
                 Y_assign = Y_pred.data.numpy().argmax(axis=1)
                 logging.debug("Epoch %d, cost = %f, acc = %.2f%%",
                               epoch_idx, cost / max(num_batches, 1),
                               100. * np.mean(Y_assign == grdt))
 
+                # curr_prec = 100. * np.mean(Y_assign == grdt)
+                # if curr_prec == last_prec:
+                #     count_prec += 1
+                #     if count_prec == 5:
+                #         break
+                # else:
+                #     last_prec = curr_prec
+                #     count_prec = 0
+
         if self.env['save_load_checkpoint']:
             self.save_checkpoint()
 
-    def infer_values(self, X_pred):
+    def infer_values(self, X_pred, mask_pred):
         logging.info('inferring on %d examples (cells)', X_pred.shape[0])
-        output = self.__predict__(X_pred)
+        output = self.__predict__(X_pred, mask_pred)
         return output
 
-    def __train__(self, X_train, Y_train):
+    def __train__(self, X_train, Y_train, mask_train):
         """
         X_train: (batch, # of classes (domain size), total # of features)
         Y_train: (batch, 1)
@@ -189,7 +206,7 @@ class RepairModel:
         # for linear combination of input features.
         # Mask makes invalid output classes have a large negative value so
         # to zero out softmax probability.
-        fx = self.model.forward(X_train)
+        fx = self.model.forward(X_train, index, mask_train)
         # loss is CrossEntropyLoss: combines log softmax + Negative log
         # likelihood loss.
         # Y_Var is just a single 1D tensor with value (0 - 'class' - 1) i.e.
@@ -205,13 +222,13 @@ class RepairModel:
         cost = output.item()
         return cost
 
-    def __predict__(self, X_pred):
+    def __predict__(self, X_pred, mask_pred):
         """
         X_pred: (batch, # of classes (domain size), total # of features)
         Y_pred: (batch, 1)
         """
         index = torch.LongTensor(range(X_pred.size()[0]))
-        fx = self.model.forward(X_pred)
+        fx = self.model.forward(X_pred, index, mask_pred)
         output = softmax(fx, 1)
         return output
 

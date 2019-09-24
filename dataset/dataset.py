@@ -645,19 +645,22 @@ class Dataset:
 
         # Keeps track of the time spent to generate a copy of the current repaired table, if needed.
         repaired_table_generation_time = 0
-        if not self.is_first_batch() and self.repair_previous_errors:
-            tic_repaired_table_copy = time.clock()
-            # Makes a copy of the current repaired table in order to properly compute the evaluation metrics later on.
-            repaired_table_copy_sql = "SELECT * FROM %s" % (self.raw_data.name + "_repaired")
-            self.generate_aux_table_sql(AuxTables.repaired_table_copy, repaired_table_copy_sql)
-            repaired_table_generation_time = time.clock() - tic_repaired_table_copy
+        if not self.is_first_batch():
+            if self.repair_previous_errors:
+                tic_repaired_table_copy = time.clock()
+                # Makes a copy of the current repaired table in order to properly compute the evaluation metrics later on.
+                repaired_table_copy_sql = "SELECT * FROM %s" % (self.raw_data.name + "_repaired")
+                self.generate_aux_table_sql(AuxTables.repaired_table_copy, repaired_table_copy_sql)
+                repaired_table_generation_time = time.clock() - tic_repaired_table_copy
 
-            # Updates previous rows in the database.
-            self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
+                # Updates previous rows in the database.
+                self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
 
-            beginning = len(self.previous_dirty_rows_df)
-            end = beginning + len(self.raw_data.df)
-            repaired_incoming_rows_df = repaired_df.iloc[beginning:end]
+                beginning = len(self.previous_dirty_rows_df)
+                end = beginning + len(self.raw_data.df)
+                repaired_incoming_rows_df = repaired_df.iloc[beginning:end]
+            else:
+                repaired_incoming_rows_df = repaired_df
 
             self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_incoming_rows_df)
             self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
