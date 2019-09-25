@@ -8,17 +8,6 @@ from detect import NullDetector, ViolationDetector
 # Parameters for HoloClean
 hc_args = {
     'incremental': True,
-    'log_repairing_quality': True,
-    'log_execution_times': False,
-    'epochs': 2,
-}
-
-# Parameters for the Executor
-inc_args = {
-    'project_root': os.environ['HOLOCLEANHOME'],
-    'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-    'dataset_name': 'hospital',
     'featurizers': {  # Pattern => file_name: class_name
         'occurattrfeat': 'OccurAttrFeaturizer',
         # 'freqfeat': 'FreqFeaturizer',
@@ -26,6 +15,24 @@ inc_args = {
         # 'embeddingfeat': 'EmbeddingFeaturizer',
         # 'initattrfeat': 'InitAttrFeaturizer',
     },
+    'detectors': {  # Pattern => file_name: class_name
+        'nulldetector': 'NullDetector',
+        'violationdetector': 'ViolationDetector',
+        # 'errorloaderdetector': 'ErrorsLoaderDetector',
+    },
+    'log_repairing_quality': True,
+    'log_execution_times': False,
+    'epochs': 2,
+}
+
+detectors = [NullDetector(), ViolationDetector()]
+
+# Parameters for the Executor
+inc_args = {
+    'project_root': os.environ['HOLOCLEANHOME'],
+    'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
+    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
+    'dataset_name': 'hospital',
     'tuples_to_read_list': [100] * 10,
     'number_of_iterations': 1,
 }
@@ -47,8 +54,13 @@ class Executor:
     def run(self):
         with open(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                   self.inc_args['dataset_name'] + '.csv') as dataset_file:
-            modules = {feat_file: importlib.import_module('repair.featurize.' + feat_file)
-                       for feat_file in self.inc_args['featurizers'].keys()}
+            # Import modules for dynamically instantiate the components to HoloClean (detectors and featurizers)
+            modules = {}
+            modules['detect'] = {detector_file: importlib.import_module('detect.' + detector_file)
+                       for detector_file in self.hc_args['detectors'].keys()}
+            modules['featurize'] = {featurizer_file: importlib.import_module('repair.featurize.' + featurizer_file)
+                       for featurizer_file in self.hc_args['featurizers'].keys()}
+
             dataset_file_header = dataset_file.readline()
 
             for current_iteration in range(self.inc_args['number_of_iterations']):
@@ -96,7 +108,10 @@ class Executor:
                     hc.ds.set_constraints(hc.get_dcs())
 
                     # Detects erroneous cells using these two detectors.
-                    detectors = [NullDetector(), ViolationDetector()]
+                    detectors = [
+                        getattr(modules['detect'][detector_file], detector_class)()
+                        for detector_file, detector_class in self.hc_args['detectors'].items()
+                    ]
                     hc.detect_errors(detectors)
 
                     # Repairs errors based on the defined features.
@@ -104,8 +119,8 @@ class Executor:
                     hc.run_estimator()
 
                     featurizers = [
-                        getattr(modules[feat_file], feat_class)()
-                        for feat_file, feat_class in self.inc_args['featurizers'].items()
+                        getattr(modules[featurizer_file], featurizer_class)()
+                        for featurizer_file, featurizer_class in self.hc_args['featurizers'].items()
                     ]
                     hc.repair_errors(featurizers)
 
