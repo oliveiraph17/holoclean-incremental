@@ -3,7 +3,6 @@ import importlib
 import holoclean
 import logging
 import os
-from detect import NullDetector, ViolationDetector
 
 # Parameters for HoloClean
 hc_args = {
@@ -24,8 +23,6 @@ hc_args = {
     'log_execution_times': False,
     'epochs': 2,
 }
-
-detectors = [NullDetector(), ViolationDetector()]
 
 # Parameters for the Executor
 inc_args = {
@@ -54,7 +51,7 @@ class Executor:
     def run(self):
         with open(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                   self.inc_args['dataset_name'] + '.csv') as dataset_file:
-            # Import modules for dynamically instantiate the components to HoloClean (detectors and featurizers)
+            # Import modules for dynamically instantiate the HoloClean components (detectors and featurizers)
             modules = {}
             modules['detect'] = {detector_file: importlib.import_module('detect.' + detector_file)
                        for detector_file in self.hc_args['detectors'].keys()}
@@ -119,7 +116,7 @@ class Executor:
                     hc.run_estimator()
 
                     featurizers = [
-                        getattr(modules[featurizer_file], featurizer_class)()
+                        getattr(modules['featurize'][featurizer_file], featurizer_class)()
                         for featurizer_file, featurizer_class in self.hc_args['featurizers'].items()
                     ]
                     hc.repair_errors(featurizers)
