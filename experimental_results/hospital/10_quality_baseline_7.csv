@@ -1,2 +1,0 @@
-batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;repairs_on_correct_cells;repairs_on_incorrect_cells
-1;787;1673;0;0.0;0.0;0;0;47.0;50.0;0.0;0;0;0
