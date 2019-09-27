@@ -2,55 +2,20 @@ from examples.holoclean_incremental_repair_example import Executor
 
 import os
 
-# Pattern => file_name: class_name
-detectors = [
-    {'nulldetector': 'NullDetector',
-     'violationdetector': 'ViolationDetector'},
-
-    {'errorloaderdetector': 'ErrorsLoaderDetector'}
-]
-
-# Pattern => file_name: class_name
-featurizers = [
-    {'occurattrfeat': 'OccurAttrFeaturizer'},
-
-    {'occurattrfeat': 'OccurAttrFeaturizer',
-     'freqfeat': 'FreqFeaturizer',
-     'constraintfeat': 'ConstraintFeaturizer'},
-
-    {'embeddingfeat': 'EmbeddingFeaturizer'},
-
-    {'embeddingfeat': 'EmbeddingFeaturizer',
-     'constraintfeat': 'ConstraintFeaturizer'}
-]
-
-# Pattern => file_name: class_name
-featurizers_error_loader = [
-    {'occurattrfeat': 'OccurAttrFeaturizer'},
-
-    {'occurattrfeat': 'OccurAttrFeaturizer',
-     'freqfeat': 'FreqFeaturizer'},
-
-    {'embeddingfeat': 'EmbeddingFeaturizer'}
-]
-
-domain_thresh_1_values = [0, 0.1, 0.2, 0.3, 0.4]
-
-estimator_types = ['NaiveBayes', 'Logistic', 'TupleEmbedding']
-
 hc_args = {
-    'detectors': None,
-    'featurizers': None,
+    'detectors': {'nulldetector': 'NullDetector',
+                  'violationdetector': 'ViolationDetector'},
+    'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
     'weak_label_thresh': 0.99,
     'max_domain': 10000,
     'cor_strength': 0.6,
     'nb_cor_strength': 0.8,
-    'epochs': 2,
+    'epochs': 20,
     'threads': 1,
     'verbose': False,
     'timeout': 3*60000,
-    'estimator_type': None,
+    'estimator_type': 'NaiveBayes',
     'current_iteration': None,
     'current_batch_number': None,
     'log_repairing_quality': True,
@@ -71,7 +36,7 @@ inc_args = {
     'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
     'dataset_name': 'hospital',
     'approach': 'a',
-    'tuples_to_read_list': [100] * 10,
+    'tuples_to_read_list': [250] * 4,
     'number_of_iterations': 1,
 }
 
