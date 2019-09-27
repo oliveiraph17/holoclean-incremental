@@ -276,6 +276,19 @@ arguments = [
       'default': False,
       'type': bool,
       'help': 'Maintains model parameters and optimizer state incrementally.'}),
+    (('-slc', '--epochs-convergence'),
+     {'metavar': 'EPOCHS_CONVERGENCE',
+      'dest': 'epochs_convergence',
+      'default': 0,
+      'type': int,
+      'help': 'The number of epochs to stop training if the prediction precision does not change. '
+              'Zero means to not stop before running the defined number of epochs.'}),
+    (('-slc', '--convergence-thresh'),
+     {'metavar': 'CONVERGENCE_THRESH',
+      'dest': 'convergence_thresh',
+      'default': 0,
+      'type': int,
+      'help': 'The threshold to define whether the prediction precision significantly changed or not.'}),
 ]
 
 # Flags for Holoclean mode
