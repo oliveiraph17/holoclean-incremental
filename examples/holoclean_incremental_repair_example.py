@@ -106,17 +106,17 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
+        'detectors': {  # Pattern => file_name: class_name
+            'nulldetector': 'NullDetector',
+            'violationdetector': 'ViolationDetector',
+            # 'errorloaderdetector': 'ErrorsLoaderDetector',
+        },
         'featurizers': {  # Pattern => file_name: class_name
             'occurattrfeat': 'OccurAttrFeaturizer',
             # 'freqfeat': 'FreqFeaturizer',
             # 'constraintfeat': 'ConstraintFeaturizer',
             # 'embeddingfeat': 'EmbeddingFeaturizer',
             # 'initattrfeat': 'InitAttrFeaturizer',
-        },
-        'detectors': {  # Pattern => file_name: class_name
-            'nulldetector': 'NullDetector',
-            'violationdetector': 'ViolationDetector',
-            # 'errorloaderdetector': 'ErrorsLoaderDetector',
         },
         'domain_thresh_1': 0,
         'weak_label_thresh': 0.99,
@@ -127,6 +127,7 @@ if __name__ == "__main__":
         'threads': 1,
         'verbose': True,
         'timeout': 3 * 60000,
+        'estimator_type': 'NaiveBayes',
         'current_iteration': None,
         'current_batch_number': None,
         'log_repairing_quality': True,

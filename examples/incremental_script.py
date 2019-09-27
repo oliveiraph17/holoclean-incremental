@@ -2,19 +2,45 @@ from examples.holoclean_incremental_repair_example import Executor
 
 import os
 
+# Pattern => file_name: class_name
+detectors = [
+    {'nulldetector': 'NullDetector',
+     'violationdetector': 'ViolationDetector'},
+
+    {'errorloaderdetector': 'ErrorsLoaderDetector'}
+]
+
+# Pattern => file_name: class_name
+featurizers = [
+    {'occurattrfeat': 'OccurAttrFeaturizer'},
+
+    {'occurattrfeat': 'OccurAttrFeaturizer',
+     'freqfeat': 'FreqFeaturizer',
+     'constraintfeat': 'ConstraintFeaturizer'},
+
+    {'embeddingfeat': 'EmbeddingFeaturizer'},
+
+    {'embeddingfeat': 'EmbeddingFeaturizer',
+     'constraintfeat': 'ConstraintFeaturizer'}
+]
+
+# Pattern => file_name: class_name
+featurizers_error_loader = [
+    {'occurattrfeat': 'OccurAttrFeaturizer'},
+
+    {'occurattrfeat': 'OccurAttrFeaturizer',
+     'freqfeat': 'FreqFeaturizer'},
+
+    {'embeddingfeat': 'EmbeddingFeaturizer'}
+]
+
+domain_thresh_1_values = [0, 0.1, 0.2, 0.3, 0.4]
+
+estimator_types = ['NaiveBayes', 'Logistic', 'TupleEmbedding']
+
 hc_args = {
-    'featurizers': {  # Pattern => file_name: class_name
-        'occurattrfeat': 'OccurAttrFeaturizer',
-        # 'freqfeat': 'FreqFeaturizer',
-        # 'constraintfeat': 'ConstraintFeaturizer',
-        # 'embeddingfeat': 'EmbeddingFeaturizer',
-        # 'initattrfeat': 'InitAttrFeaturizer',
-    },
-    'detectors': {  # Pattern => file_name: class_name
-        'nulldetector': 'NullDetector',
-        'violationdetector': 'ViolationDetector',
-        # 'errorloaderdetector': 'ErrorsLoaderDetector',
-    },
+    'detectors': None,
+    'featurizers': None,
     'domain_thresh_1': 0,
     'weak_label_thresh': 0.99,
     'max_domain': 10000,
@@ -24,6 +50,7 @@ hc_args = {
     'threads': 1,
     'verbose': False,
     'timeout': 3*60000,
+    'estimator_type': None,
     'current_iteration': None,
     'current_batch_number': None,
     'log_repairing_quality': True,
