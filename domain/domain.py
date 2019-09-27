@@ -114,8 +114,8 @@ class DomainEngine:
         return out
 
     @staticmethod
-    # @lru_cache(maxsize=None)
-    def get_corr_attributes(attr, thres, corr_lst):
+    @lru_cache(maxsize=None)
+    def get_corr_attributes(attr, thres, correlations):
         """
         get_corr_attributes returns attributes from self.correlations
         that are correlated with attr with magnitude at least self.cor_strength
@@ -123,18 +123,44 @@ class DomainEngine:
 
         :param attr: (string) the original attribute to get the correlated attributes for.
         :param thres: (float) correlation threshold (absolute) for returned attributes.
-        :param corr_lst: (frozenset) correlations between every pair of attributes.
+        :param correlations: (nested tuples) correlations between every pair of attributes.
         """
-        if attr not in corr_lst:
-            return []
-        attr_correlations = corr_lst[attr]
-        return sorted([corr_attr
-            for corr_attr, corr_strength in attr_correlations.items()
-# <<<<<<< HEAD
-#             if corr_attr != attr and corr_strength > thres])
-# =======
-            if corr_attr != attr and corr_strength >= thres])
-# >>>>>>> hcq-embedding-3
+        # The format of 'correlations' is as follows:
+        # (
+        #     ('attr1', (('attr1', 1.0),
+        #                ('attr2', <value_1_2>),
+        #                ('attr3', <value_1_3>),
+        #                ('attr4', <value_1_4>),
+        #                ...
+        #                ('attrX', <value_1_X>))),
+        #
+        #     ('attr2', (('attr1', <value_2_1>),
+        #                ('attr2', 1.0),
+        #                ('attr3', <value_2_3>),
+        #                ('attr4', <value_2_4>),
+        #                ...
+        #                ('attrX', <value_2_X>))),
+        #
+        #     ...
+        #
+        #     ('attrX', (('attr1', <value_X_1>),
+        #                ('attr2', <value_X_2>),
+        #                ('attr3', <value_X_3>),
+        #                ('attr4', <value_X_4>),
+        #                ...
+        #                ('attrX', 1.0)))
+        # )
+        for current_attr_tuple in correlations:
+            if attr in current_attr_tuple:
+                attr_correlations_tuple = current_attr_tuple[1]
+                return sorted([attr_correlations[0]
+                              for attr_correlations in attr_correlations_tuple
+                              # <<<<<<< HEAD
+                              #     if corr_attr != attr and corr_strength > thres])
+                              # =======
+                              if attr_correlations[0] != attr and attr_correlations[1] >= thres])
+                              # >>>>>>> hcq-embedding-3
+        return []
 
     def generate_domain(self):
         """
