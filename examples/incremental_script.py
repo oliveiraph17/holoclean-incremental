@@ -43,7 +43,7 @@ inc_args = {
 
 ######################################################################
 # Co-occurrence featurizer
-hc_args['featurizers'] = {'occurattrfeat': 'OccurAttrFeaturizer'},
+hc_args['featurizers'] = {'occurattrfeat': 'OccurAttrFeaturizer'}
 hc_args['estimator_type'] = 'NaiveBayes'
 ######################################################################
 
@@ -116,7 +116,7 @@ executor.run()
 
 ######################################################################
 # Tuple-embedding featurizer
-hc_args['featurizers'] = {'embeddingfeat': 'EmbeddingFeaturizer'},
+hc_args['featurizers'] = {'embeddingfeat': 'EmbeddingFeaturizer'}
 hc_args['estimator_type'] = 'TupleEmbedding'
 ######################################################################
 
