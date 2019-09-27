@@ -16,6 +16,8 @@ hc_args = {
     'verbose': False,
     'timeout': 3*60000,
     'estimator_type': 'NaiveBayes',
+    'epochs_convergence': 3,
+    'convergence_thresh': 0.01,
     'current_iteration': None,
     'current_batch_number': None,
     'log_repairing_quality': True,
