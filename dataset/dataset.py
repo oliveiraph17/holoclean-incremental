@@ -635,14 +635,14 @@ class Dataset:
         repaired_table_name = self.raw_data.name + '_repaired'
 
         # Keeps track of the time spent to generate a copy of the current repaired table, if needed.
-        repaired_table_generation_time = 0
+        repaired_table_copy_time = 0
         if not self.is_first_batch():
             if self.repair_previous_errors:
                 tic_repaired_table_copy = time.clock()
                 # Makes a copy of the current repaired table in order to properly compute the evaluation metrics later on.
                 repaired_table_copy_sql = "SELECT * FROM %s" % (self.raw_data.name + "_repaired")
                 self.generate_aux_table_sql(AuxTables.repaired_table_copy, repaired_table_copy_sql)
-                repaired_table_generation_time = time.clock() - tic_repaired_table_copy
+                repaired_table_copy_time = time.clock() - tic_repaired_table_copy
 
                 # Updates previous rows in the database.
                 self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
@@ -659,11 +659,13 @@ class Dataset:
             self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_df)
             self.repaired_data.store_to_db(self.engine.engine)
 
+        save_stats_time = 0
         if not self.recompute_from_scratch:
             # Persists the up-to-date statistics in the database.
             tic_inc = time.clock()
             self.save_stats()
-            logging.debug('DONE storing computed statistics in the database in %.2f secs.', time.clock() - tic_inc)
+            save_stats_time = time.clock() - tic_inc
+            logging.debug('DONE storing computed statistics in the database in %.2f secs.', save_stats_time)
 
         if self.is_first_batch():
             # This index is useful for querying the maximum _tid_ value in get_first_tid().
@@ -674,9 +676,9 @@ class Dataset:
         status = "DONE generating repaired dataset."
 
         toc = time.clock()
-        total_time = toc - tic - repaired_table_generation_time
+        total_time = toc - tic - repaired_table_copy_time - save_stats_time
 
-        return status, total_time
+        return status, total_time, repaired_table_copy_time, save_stats_time
 
     def persist_repaired_previous_rows(self, updated_previous_values, repaired_table_name):
         sql_commands = []

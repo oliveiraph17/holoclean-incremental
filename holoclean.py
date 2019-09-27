@@ -412,14 +412,14 @@ class Session:
         if logger_name == 'repairing_quality_logger':
             header = 'batch;dk_cells;training_cells;' \
                      'precision;recall;repairing_recall;f1;repairing_f1;' \
-                     'detected_errors;total_errors;correct_repairs;total_repairs;' \
+                     'detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;' \
                      'repairs_on_correct_cells;repairs_on_incorrect_cells'
 
             self.experiment_logger = repairing_quality_logger
         elif logger_name == 'execution_time_logger':
             header = 'iteration;batch;load_data;load_dcs;detect_errors;setup_domain;' \
                      'featurize_data;setup_model;fit_model;infer_repairs;' \
-                     'get_inferred_values;generate_repaired_dataset'
+                     'get_inferred_values;generate_repaired_dataset;repaired_table_copy_time;save_stats_time'
 
             self.experiment_logger = execution_time_logger
         else:
@@ -625,14 +625,18 @@ class Session:
         if self.env['log_execution_times']:
             self.execution_times.append(str(time))
 
+        repaired_table_copy_time = 0
+        save_stats_time = 0
         if self.env['incremental']:
-            status, time = self.ds.get_repaired_dataset_incremental()
+            status, time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
         else:
             status, time = self.ds.get_repaired_dataset()
         logging.info(status)
         logging.debug('Time to store repaired dataset: %.2f secs', time)
         if self.env['log_execution_times']:
             self.execution_times.append(str(time))
+            self.execution_times.append(str(repaired_table_copy_time))
+            self.execution_times.append(str(save_stats_time))
 
         if self.env['log_execution_times']:
             self.experiment_logger.info(';'.join(self.execution_times))
@@ -674,6 +678,7 @@ class Session:
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_errors')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'correct_repairs')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs')))
+            self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_correct')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_incorrect')))
 
