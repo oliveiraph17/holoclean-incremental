@@ -139,17 +139,6 @@ class RepairModel:
                                    lr=self.env['learning_rate'],
                                    weight_decay=self.env['weight_decay'])
 
-        if self.env['save_load_checkpoint'] and not self.is_first_batch:
-            # Loads from disk the model parameters and the optimizer state
-            # to continue using them from the point at which they were previously saved.
-            try:
-                checkpoint = self.load_checkpoint()
-
-                self.model.load_state_dict(checkpoint['model_state_dict'])
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            except OSError:
-                raise Exception('No existing checkpoint could be loaded.')
-
     def fit_model(self, X_train, Y_train, mask_train, epochs):
         """
         X_train: (batch, # of classes (domain size), total # of features)
@@ -272,6 +261,11 @@ class RepairModel:
             'optimizer_state_dict': self.optimizer.state_dict()
         }, file_path)
 
-    @staticmethod
-    def load_checkpoint(file_path='/tmp/checkpoint.tar'):
-        return torch.load(file_path)
+    def load_checkpoint(self, file_path='/tmp/checkpoint.tar'):
+        try:
+            checkpoint = torch.load(file_path)
+
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        except OSError:
+            raise Exception('No existing checkpoint could be loaded.')
