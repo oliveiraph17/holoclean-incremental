@@ -155,11 +155,7 @@ class DomainEngine:
                 attr_correlations_tuple = current_attr_tuple[1]
                 return sorted([attr_correlations[0]
                               for attr_correlations in attr_correlations_tuple
-                              # <<<<<<< HEAD
-                              #     if corr_attr != attr and corr_strength > thres])
-                              # =======
                               if attr_correlations[0] != attr and attr_correlations[1] >= thres])
-                              # >>>>>>> hcq-embedding-3
         return []
 
     def generate_domain(self):
@@ -221,42 +217,21 @@ class DomainEngine:
 
                 if len(dom) <= 1:
                     # Initial  value is NULL and we cannot come up with
-                    # a domain (note that NULL is not included in the domain)
-# <<<<<<< HEAD
-#                     # Note if len(dom) == 1, then we generated a single correct
-#                     # value (since NULL is not included in the domain).
-#                     # This would be a "SINGLE_VALUE" example and we'd still
-#                     # like to generate a random domain for it.
-# =======
-# >>>>>>> hcq-embedding-3
+                    # a domain (note that NULL is not included in the domain);
+                    # Note if len(dom) == 1, then we generated a single correct
+                    # value (since NULL is not included in the domain).
+                    # This would be a "SINGLE_VALUE" example and we'd still
+                    # like to generate a random domain for it.
                     if init_value == NULL_REPR and len(dom) == 0:
                        continue
 
                     # Not enough domain values, we need to get some random
                     # values (other than 'init_value') for training. However,
                     # this might still get us zero domain values.
-# <<<<<<< HEAD
-#                     rand_dom_values = self.get_random_domain(attr, init_value)
-# =======
                     rand_dom_values = self.get_random_domain(attr, dom)
-# >>>>>>> hcq-embedding-3
 
-# <<<<<<< HEAD
-#                     # rand_dom_values might still be empty. In this case,
-#                     # there are no other possible values for this cell. There
-#                     # is not point to use this cell for training and there is no
-#                     # point to run inference on it since we cannot even generate
-#                     # a random domain. Therefore, we just ignore it from the
-#                     # final tensor.
-#                     # We do not drop NULL cells since we stil have to repair them
-#                     # with their 1 domain value.
-#                     if init_value != NULL_REPR and len(rand_dom_values) == 0:
-#                         continue
-# =======
                     # We still want to add cells with only 1 single value and no
                     # additional random domain # they are required in the output.
-# >>>>>>> hcq-embedding-3
-
 
                     # Otherwise, just add the random domain values to the domain
                     # and set the cell status accordingly.
@@ -330,11 +305,7 @@ class DomainEngine:
             # values with a null value.
             # it is possible for cond_val to not be in pair stats if it only co-occurs
             # with null values.
-# <<<<<<<< dev
-#             if cond_val == NULL_REPR or cond_val not in self.pair_stats[cond_attr][attr]:
-# ========
             if cond_val == NULL_REPR or self.pair_stats[cond_attr][attr][cond_val] == [NULL_REPR]:
-# >>>>>>>> dev-mixed
                 continue
 
             # update domain with top co-occuring values with the cond init value.
