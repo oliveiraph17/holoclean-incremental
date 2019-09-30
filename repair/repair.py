@@ -2,6 +2,7 @@ import logging
 import time
 
 import pandas as pd
+import numpy as np
 
 from .featurize import FeaturizedDataset
 from .learn import RepairModel
@@ -30,6 +31,9 @@ class RepairEngine:
             self.repair_model[attr] = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch(),
                                                   bias=self.env['bias'],
                                                   layer_sizes=self.env['layer_sizes'])
+            if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
+                self.repair_model[attr].load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
+
         toc = time.clock()
         status = "DONE setting up repair model."
         setup_time = toc - tic
@@ -42,7 +46,26 @@ class RepairEngine:
         for attr in self.ds.get_active_attributes():
             logging.info('Training model for %s with %d training examples (cells)', attr, X_train[attr].size(0))
             tic_attr = time.clock()
+
+            if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
+                tic_skip = time.clock()
+                logging.debug("Checking if learning can be skipped for %s...", attr)
+                grdt = Y_train[attr].numpy().flatten()
+                Y_pred = self.repair_model[attr].infer_values(X_train[attr], mask_train[attr])
+                Y_assign = Y_pred.data.numpy().argmax(axis=1)
+                accuracy = 100. * np.mean(Y_assign == grdt)
+                logging.debug("Previous model accuracy: %.2f. Inference time: %.2f", accuracy, time.clock() - tic_skip)
+                if accuracy >= self.env['skip_training_thresh']:
+                    logging.debug("Training skipped.")
+                    continue
+
             self.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr], self.env['epochs'])
+
+            if self.env['save_load_checkpoint']:
+                tic_checkpoint = time.clock()
+                self.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
+                logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
+
             logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
             total_training_cells += X_train[attr].size(0)
         toc = time.clock()
