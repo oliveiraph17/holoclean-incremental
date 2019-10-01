@@ -13,6 +13,7 @@ _templates
 *.swn
 *.pyc
 .cache/
+testdata/confidential/
 
 # pip package metadata
 *egg-info/

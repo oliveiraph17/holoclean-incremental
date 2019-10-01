@@ -429,6 +429,8 @@ class Session:
             handler = logging.FileHandler(log_fpath)
             handler.setFormatter(experiment_logger_formatter)
 
+            if self.experiment_logger.hasHandlers():
+                self.experiment_logger.handlers.clear()
             self.experiment_logger.addHandler(handler)
 
             # Writes header to log file.
