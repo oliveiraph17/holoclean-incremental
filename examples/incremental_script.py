@@ -33,11 +33,11 @@ hc_args = {
 
 inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
-    'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/confidential/',
-    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/confidential/',
-    'dataset_name': 'adult_1',
+    'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
+    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
+    'dataset_name': 'hospital',
     'approach': 'co_a',
-    'tuples_to_read_list': [2000] * 4,
+    'tuples_to_read_list': [250] * 4,
     'iterations': [0],
 }
 
@@ -46,6 +46,31 @@ inc_args = {
 hc_args['featurizers'] = {'occurattrfeat': 'OccurAttrFeaturizer'}
 hc_args['estimator_type'] = 'NaiveBayes'
 ######################################################################
+
+hc_args['incremental'] = False
+hc_args['repair_previous_errors'] = False
+hc_args['recompute_from_scratch'] = False
+
+# A - Quality
+hc_args['log_repairing_quality'] = True
+hc_args['log_execution_times'] = True
+executor = Executor(hc_args, inc_args)
+executor.run()
+
+# A - Time
+hc_args['log_repairing_quality'] = False
+hc_args['log_execution_times'] = True
+inc_args['iterations'] = [1, 2]
+executor = Executor(hc_args, inc_args)
+executor.run()
+
+######################################################################
+
+inc_args['dataset_dir'] = os.environ['HOLOCLEANHOME'] + '/testdata/confidential/'
+inc_args['log_dir'] = os.environ['HOLOCLEANHOME'] + '/experimental_results/confidential/'
+inc_args['dataset_name'] = 'adult_1'
+inc_args['tuples_to_read_list'] = [2000] * 4
+inc_args['iterations'] = [0]
 
 hc_args['incremental'] = False
 hc_args['repair_previous_errors'] = False
