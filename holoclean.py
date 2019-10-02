@@ -295,6 +295,12 @@ arguments = [
       'default': 0,
       'type': int,
       'help': 'The threshold to define whether the prediction precision significantly changed or not.'}),
+    (('-app', '--append'),
+     {'metavar': 'APPEND',
+      'dest': 'append',
+      'default': False,
+      'type': bool,
+      'help': 'Sets if the repaired table should be appended to an existing one.'}),
 ]
 
 # Flags for Holoclean mode
@@ -381,10 +387,6 @@ class Session:
         :param env: Holoclean environment
         :param name: Name for the Holoclean session
         """
-        if env['log_repairing_quality'] and env['log_execution_times']:
-            raise Exception('Inconsistent parameters: log_repairing_quality=%r, log_execution_times=%r.' %
-                            (env['log_repairing_quality'], env['log_execution_times']))
-
         # use DEBUG logging level if verbose enabled
         if env['verbose']:
             root_logger.setLevel(logging.DEBUG)
@@ -400,7 +402,8 @@ class Session:
         # Initialize members
         self.name = name
         self.env = env
-        self.experiment_logger = None
+        self.experiment_quality_logger = None
+        self.experiment_time_logger = None
         self.repairing_quality_metrics = []
         self.execution_times = []
         self.ds = Dataset(name, env)
@@ -410,35 +413,46 @@ class Session:
         self.repair_engine = RepairEngine(env, self.ds)
         self.eval_engine = EvalEngine(env, self.ds)
 
-    def setup_experiment_logger(self, logger_name, log_fpath):
+    def setup_experiment_loggers(self, quality_log_fpath, time_log_fpath):
         if not self.env['log_repairing_quality'] and not self.env['log_execution_times']:
             # Nothing needs to be logged.
             return
 
-        if logger_name == 'repairing_quality_logger':
-            header = 'batch;dk_cells;training_cells;' \
-                     'precision;recall;repairing_recall;f1;repairing_f1;' \
-                     'detected_errors;total_errors;correct_repairs;total_repairs;' \
-                     'repairs_on_correct_cells;repairs_on_incorrect_cells'
-
-            self.experiment_logger = repairing_quality_logger
-        elif logger_name == 'execution_time_logger':
-            header = 'iteration;batch;load_data;load_dcs;detect_errors;setup_domain;' \
-                     'featurize_data;setup_model;fit_model;infer_repairs;' \
-                     'get_inferred_values;generate_repaired_dataset'
-
-            self.experiment_logger = execution_time_logger
-        else:
-            raise Exception('Unexpected logger name: %s.' % logger_name)
+        quality_header = ''
+        if self.env['log_repairing_quality']:
+            quality_header = 'batch;dk_cells;training_cells;' \
+                             'precision;recall;repairing_recall;f1;repairing_f1;' \
+                             'detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;' \
+                             'repairs_on_correct_cells;repairs_on_incorrect_cells'
+            self.experiment_quality_logger = repairing_quality_logger
+        time_header = ''
+        if self.env['log_execution_times']:
+            time_header = 'iteration;batch;load_data;load_dcs;detect_errors;setup_domain;' \
+                          'featurize_data;setup_model;fit_model;infer_repairs;' \
+                          'get_inferred_values;generate_repaired_dataset;repaired_table_copy_time;save_stats_time'
+            self.experiment_time_logger = execution_time_logger
 
         if self.env['current_iteration'] == 0 and self.env['current_batch_number'] == 0:
-            handler = logging.FileHandler(log_fpath)
-            handler.setFormatter(experiment_logger_formatter)
+            if self.env['log_repairing_quality']:
+                quality_handler = logging.FileHandler(quality_log_fpath)
+                quality_handler.setFormatter(experiment_logger_formatter)
 
-            self.experiment_logger.addHandler(handler)
+                if self.experiment_quality_logger.hasHandlers():
+                    self.experiment_quality_logger.handlers.clear()
+                self.experiment_quality_logger.addHandler(quality_handler)
 
-            # Writes header to log file.
-            self.experiment_logger.info(header)
+                # Writes header to quality log file.
+                self.experiment_quality_logger.info(quality_header)
+            if self.env['log_execution_times']:
+                time_handler = logging.FileHandler(time_log_fpath)
+                time_handler.setFormatter(experiment_logger_formatter)
+
+                if self.experiment_time_logger.hasHandlers():
+                    self.experiment_time_logger.handlers.clear()
+                self.experiment_time_logger.addHandler(time_handler)
+
+                # Writes header to time log file.
+                self.experiment_time_logger.info(time_header)
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
                   exclude_attr_cols=None, numerical_attrs=None):
@@ -631,17 +645,21 @@ class Session:
         if self.env['log_execution_times']:
             self.execution_times.append(str(time))
 
+        repaired_table_copy_time = 0
+        save_stats_time = 0
         if self.env['incremental']:
-            status, time = self.ds.get_repaired_dataset_incremental()
+            status, time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
         else:
             status, time = self.ds.get_repaired_dataset()
         logging.info(status)
         logging.debug('Time to store repaired dataset: %.2f secs', time)
         if self.env['log_execution_times']:
             self.execution_times.append(str(time))
+            self.execution_times.append(str(repaired_table_copy_time))
+            self.execution_times.append(str(save_stats_time))
 
         if self.env['log_execution_times']:
-            self.experiment_logger.info(';'.join(self.execution_times))
+            self.experiment_time_logger.info(';'.join(self.execution_times))
 
         if self.env['print_fw']:
             status, time = self.repair_engine.get_featurizer_weights()
@@ -680,10 +698,11 @@ class Session:
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_errors')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'correct_repairs')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs')))
+            self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_correct')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_incorrect')))
 
-            self.experiment_logger.info(';'.join(self.repairing_quality_metrics))
+            self.experiment_quality_logger.info(';'.join(self.repairing_quality_metrics))
 
         return eval_report
 
