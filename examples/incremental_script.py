@@ -12,7 +12,7 @@ hc_args = {
     'nb_cor_strength': 0.8,
     'epochs': 20,
     'threads': 1,
-    'verbose': False,
+    'verbose': True,
     'timeout': 3*60000,
     'estimator_type': 'NaiveBayes',
     'epochs_convergence': 3,
@@ -33,11 +33,11 @@ hc_args = {
 
 inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
-    'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-    'dataset_name': 'hospital',
+    'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/confidential/',
+    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/confidential/',
+    'dataset_name': 'adult_1',
     'approach': 'co_a',
-    'tuples_to_read_list': [250] * 4,
+    'tuples_to_read_list': [2500] * 40,
     'number_of_iterations': 1,
 }
 

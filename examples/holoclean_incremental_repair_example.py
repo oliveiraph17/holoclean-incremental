@@ -56,8 +56,6 @@ class Executor:
                     # Drops metatables in the first batch.
                     if self.hc_args['current_batch_number'] == 0:
                         table_list = [self.inc_args['dataset_name'] + '_repaired',
-                                      'single_attr_stats',
-                                      'pair_attr_stats',
                                       'training_cells',
                                       'repaired_table_copy']
 
@@ -124,7 +122,7 @@ if __name__ == "__main__":
         'current_batch_number': None,
         'log_repairing_quality': True,
         'log_execution_times': False,
-        'incremental': False,
+        'incremental': True,
         'incremental_entropy': False,
         'default_entropy': False,
         'repair_previous_errors': False,

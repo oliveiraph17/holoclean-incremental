@@ -3,7 +3,7 @@ import logging
 import os
 import time
 
-import numpy as np
+import ujson
 import pandas as pd
 
 from .dbengine import DBengine
@@ -24,10 +24,8 @@ class AuxTables(Enum):
     cell_distr     = 5
     inf_values_idx = 6
     inf_values_dom = 7
-    single_attr_stats = 8
-    pair_attr_stats = 9
-    training_cells = 10
-    repaired_table_copy = 11
+    training_cells = 8
+    repaired_table_copy = 9
 
 
 class CellStatus(Enum):
@@ -1015,60 +1013,26 @@ class Dataset:
             raise Exception('ERROR while trying to load previous repaired data from the database.')
 
     def load_stats(self):
-        num_tuples = None
-        single_attr_stats = None
-        pair_attr_stats = None
-
         try:
-            self.aux_table[AuxTables.single_attr_stats] = Table(AuxTables.single_attr_stats.name,
-                                                                Source.DB,
-                                                                db_engine=self.engine)
-
-            single_attr_stats = dictify_df(self.aux_table[AuxTables.single_attr_stats].df)
-
-            self.aux_table[AuxTables.pair_attr_stats] = Table(AuxTables.pair_attr_stats.name,
-                                                              Source.DB,
-                                                              db_engine=self.engine)
-
-            pair_attr_stats = dictify_df(self.aux_table[AuxTables.pair_attr_stats].df)
+            with open('/tmp/single_attr_stats.ujson', encoding='utf-8') as f:
+                single_attr_stats = ujson.load(f)
+            with open('/tmp/pair_attr_stats.ujson', encoding='utf-8') as f:
+                pair_attr_stats = ujson.load(f)
 
             table_repaired_name = self.raw_data.name + '_repaired'
             query = 'SELECT COUNT(*) FROM {}'.format(table_repaired_name)
             result = self.engine.execute_query(query)
             num_tuples = result[0][0]
-        except ValueError:
-            raise Exception('ERROR while trying to load statistics from the database.')
 
-        return num_tuples, single_attr_stats, pair_attr_stats
+            return num_tuples, single_attr_stats, pair_attr_stats
+        except ValueError:
+            raise Exception('ERROR while trying to load statistics.')
 
     def save_stats(self):
-        # For using an attribute table (attr_idx, attr_name)
-        # attrs = pd.DataFrame(data=self.attr_to_idx.items(), columns=['attr_name', 'attr_idx'])
-        # self.generate_aux_table(AuxTables.attrs, attrs, store=True)
-
-        # TODO: Update only the values that changed instead of replacing the statistics entirely.
-        single_stats = []
-        for attr in self.single_attr_stats.keys():
-            attr_stats = [(attr, val, freq) for val, freq in self.single_attr_stats[attr].items()]
-            single_stats += attr_stats
-
-        single_stats_df = pd.DataFrame(columns=['attr', 'val', 'freq'], data=single_stats)
-        self.generate_aux_table(AuxTables.single_attr_stats,
-                                single_stats_df.sort_values(by=['attr', 'val']),
-                                store=True)
-
-        pair_stats = []
-        for attr1 in self.pair_attr_stats.keys():
-            for attr2 in self.pair_attr_stats[attr1].keys():
-                for val1 in self.pair_attr_stats[attr1][attr2].keys():
-                    attr1_attr2_val1_val2_stats = [(attr1, attr2, val1, val2, freq)
-                                                   for val2, freq in self.pair_attr_stats[attr1][attr2][val1].items()]
-                    pair_stats += attr1_attr2_val1_val2_stats
-
-        pair_stats_df = pd.DataFrame(columns=['attr1', 'attr2', 'val1', 'val2', 'freq'], data=pair_stats)
-        self.generate_aux_table(AuxTables.pair_attr_stats,
-                                pair_stats_df.sort_values(by=['attr1', 'attr2', 'val1', 'val2']),
-                                store=True)
+        with open('/tmp/single_attr_stats.ujson', 'w', encoding='utf-8') as f:
+            ujson.dump(self.single_attr_stats, f, ensure_ascii=False)
+        with open('/tmp/pair_attr_stats.ujson', 'w', encoding='utf-8') as f:
+            ujson.dump(self.pair_attr_stats, f, ensure_ascii=False)
 
     def is_first_batch(self):
         # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.
