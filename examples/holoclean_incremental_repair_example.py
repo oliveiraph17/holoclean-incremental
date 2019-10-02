@@ -9,15 +9,15 @@ class Executor:
         self.hc_args = hc_values
         self.inc_args = inc_values
 
-        self.log_fpath = ''
-
+        self.quality_log_fpath = ''
         if self.hc_args['log_repairing_quality']:
-            self.log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
-                               self.inc_args['approach'] + '_quality_log.csv')
+            self.quality_log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
+                                       self.inc_args['approach'] + '_quality_log.csv')
 
+        self.time_log_fpath = ''
         if self.hc_args['log_execution_times']:
-            self.log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
-                               self.inc_args['approach'] + '_time_log.csv')
+            self.time_log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
+                                    self.inc_args['approach'] + '_time_log.csv')
 
     def run(self):
         # Imports modules to dynamically instantiate HoloClean components (detectors and featurizers).
@@ -28,7 +28,7 @@ class Executor:
                           for featurizer_file in self.hc_args['featurizers'].keys()}
         }
 
-        for current_iteration in range(self.inc_args['number_of_iterations']):
+        for current_iteration in self.inc_args['iterations']:
             with open(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                       self.inc_args['dataset_name'] + '.csv') as dataset_file:
                 self.hc_args['current_iteration'] = current_iteration
@@ -55,20 +55,18 @@ class Executor:
 
                     # Drops metatables in the first batch.
                     if self.hc_args['current_batch_number'] == 0:
-                        table_list = [self.inc_args['dataset_name'] + '_repaired',
+                        table_list = [self.inc_args['dataset_name'] + '_' + self.inc_args['approach'] + '_repaired',
                                       'training_cells',
                                       'repaired_table_copy']
 
                         hc.ds.engine.drop_tables(table_list)
 
-                    # Sets up logger for the experiments.
-                    if self.hc_args['log_repairing_quality']:
-                        hc.setup_experiment_logger('repairing_quality_logger', self.log_fpath)
-                    elif self.hc_args['log_execution_times']:
-                        hc.setup_experiment_logger('execution_time_logger', self.log_fpath)
+                    # Sets up loggers for the experiments.
+                    hc.setup_experiment_loggers(self.quality_log_fpath, self.time_log_fpath)
 
                     # Loads existing data and Denial Constraints.
-                    hc.load_data(self.inc_args['dataset_name'], '/tmp/current_batch.csv')
+                    hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
+                                 '/tmp/current_batch.csv')
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
@@ -111,9 +109,9 @@ if __name__ == "__main__":
         'max_domain': 10000,
         'cor_strength': 0.6,
         'nb_cor_strength': 0.8,
-        'epochs': 10,
+        'epochs': 20,
         'threads': 1,
-        'verbose': False,
+        'verbose': True,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
         'epochs_convergence': 3,
@@ -121,8 +119,8 @@ if __name__ == "__main__":
         'current_iteration': None,
         'current_batch_number': None,
         'log_repairing_quality': True,
-        'log_execution_times': False,
-        'incremental': True,
+        'log_execution_times': True,
+        'incremental': False,
         'incremental_entropy': False,
         'default_entropy': False,
         'repair_previous_errors': False,
@@ -138,9 +136,9 @@ if __name__ == "__main__":
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
         'dataset_name': 'hospital',
-        'approach': 'a',
+        'approach': 'co_a',
         'tuples_to_read_list': [250] * 4,
-        'number_of_iterations': 1,
+        'iterations': [0],
     }
 
     # Runs the default example.
