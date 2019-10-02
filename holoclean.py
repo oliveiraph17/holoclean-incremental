@@ -295,6 +295,12 @@ arguments = [
       'default': 0,
       'type': int,
       'help': 'The threshold to define whether the prediction precision significantly changed or not.'}),
+    (('-app', '--append'),
+     {'metavar': 'APPEND',
+      'dest': 'append',
+      'default': False,
+      'type': bool,
+      'help': 'Sets if the repaired table should be appended to an existing one.'}),
 ]
 
 # Flags for Holoclean mode

@@ -66,7 +66,7 @@ class Executor:
 
                     # Loads existing data and Denial Constraints.
                     hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
-                                 '/tmp/current_batch.csv')
+                                 '/tmp/current_batch.csv', entity_col=self.inc_args['entity_col'])
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
@@ -128,6 +128,7 @@ if __name__ == "__main__":
         'skip_training': False,
         'ignore_previous_training_cells': False,
         'save_load_checkpoint': False,
+        'append': True
     }
 
     # Default parameters for Executor.
@@ -136,6 +137,7 @@ if __name__ == "__main__":
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
         'dataset_name': 'hospital',
+        'entity_col': None,
         'approach': 'co_a',
         'tuples_to_read_list': [250] * 4,
         'iterations': [0],
