@@ -29,6 +29,7 @@ hc_args = {
     'skip_training': False,
     'ignore_previous_training_cells': False,
     'save_load_checkpoint': False,
+    'append': True
 }
 
 inc_args = {
@@ -36,6 +37,7 @@ inc_args = {
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
     'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
     'dataset_name': 'hospital',
+    'entity_col': None,
     'approach': 'co_a',
     'tuples_to_read_list': [250] * 4,
     'iterations': [0],
