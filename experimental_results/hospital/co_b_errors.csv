@@ -1,5 +1,4 @@
 batch;attribute;errors
-1;_tid_;0
 1;ProviderNumber;0
 1;HospitalName;0
 1;Address1;0
@@ -17,7 +16,6 @@ batch;attribute;errors
 1;Score;7
 1;Sample;8
 1;Stateavg;0
-2;_tid_;0
 2;ProviderNumber;0
 2;HospitalName;0
 2;Address1;1
@@ -35,7 +33,6 @@ batch;attribute;errors
 2;Score;8
 2;Sample;8
 2;Stateavg;18
-3;_tid_;0
 3;ProviderNumber;0
 3;HospitalName;0
 3;Address1;0
@@ -53,7 +50,6 @@ batch;attribute;errors
 3;Score;5
 3;Sample;9
 3;Stateavg;0
-4;_tid_;0
 4;ProviderNumber;0
 4;HospitalName;0
 4;Address1;1
