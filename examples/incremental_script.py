@@ -37,7 +37,7 @@ inc_args = {
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
     'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
     'dataset_name': 'hospital_wtids_v2',
-    'entity_col': None,
+    'entity_col': '_tid_',
     'approach': 'co_a',
     'tuples_to_read_list': [250] * 4,
     'iterations': [0],
@@ -49,58 +49,58 @@ hc_args['featurizers'] = {'occurattrfeat': 'OccurAttrFeaturizer'}
 hc_args['estimator_type'] = 'NaiveBayes'
 ######################################################################
 
-hc_args['incremental'] = False
-hc_args['repair_previous_errors'] = False
-hc_args['recompute_from_scratch'] = False
-
-# A - Time
-hc_args['log_repairing_quality'] = False
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [0, 1, 2]
-executor = Executor(hc_args, inc_args)
-executor.run()
-
-######################################################################
-
-hc_args['incremental'] = True
-hc_args['repair_previous_errors'] = True
-hc_args['recompute_from_scratch'] = True
-inc_args['approach'] = 'co_b'
-
-# B - Quality
-hc_args['log_repairing_quality'] = True
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [0]
-executor = Executor(hc_args, inc_args)
-executor.run()
-
-# B - Time
-hc_args['log_repairing_quality'] = False
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [1, 2]
-executor = Executor(hc_args, inc_args)
-executor.run()
+#hc_args['incremental'] = False
+#hc_args['repair_previous_errors'] = False
+#hc_args['recompute_from_scratch'] = False
+#
+## A - Time
+#hc_args['log_repairing_quality'] = False
+#hc_args['log_execution_times'] = True
+#inc_args['iterations'] = [0, 1, 2]
+#executor = Executor(hc_args, inc_args)
+#executor.run()
 
 ######################################################################
 
-hc_args['incremental'] = True
-hc_args['repair_previous_errors'] = False
-hc_args['recompute_from_scratch'] = False
-inc_args['approach'] = 'co_c'
+#hc_args['incremental'] = True
+#hc_args['repair_previous_errors'] = True
+#hc_args['recompute_from_scratch'] = True
+#inc_args['approach'] = 'co_b'
+#
+## B - Quality
+#hc_args['log_repairing_quality'] = True
+#hc_args['log_execution_times'] = True
+#inc_args['iterations'] = [0]
+#executor = Executor(hc_args, inc_args)
+#executor.run()
+#
+## B - Time
+#hc_args['log_repairing_quality'] = False
+#hc_args['log_execution_times'] = True
+#inc_args['iterations'] = [1, 2]
+#executor = Executor(hc_args, inc_args)
+#executor.run()
 
-# C - Quality
-hc_args['log_repairing_quality'] = True
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [0]
-executor = Executor(hc_args, inc_args)
-executor.run()
+######################################################################
 
-# C - Time
-hc_args['log_repairing_quality'] = False
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [1, 2]
-executor = Executor(hc_args, inc_args)
-executor.run()
+#hc_args['incremental'] = True
+#hc_args['repair_previous_errors'] = False
+#hc_args['recompute_from_scratch'] = False
+#inc_args['approach'] = 'co_c'
+#
+## C - Quality
+#hc_args['log_repairing_quality'] = True
+#hc_args['log_execution_times'] = True
+#inc_args['iterations'] = [0]
+#executor = Executor(hc_args, inc_args)
+#executor.run()
+#
+## C - Time
+#hc_args['log_repairing_quality'] = False
+#hc_args['log_execution_times'] = True
+#inc_args['iterations'] = [1, 2]
+#executor = Executor(hc_args, inc_args)
+#executor.run()
 
 ######################################################################
 
@@ -108,7 +108,7 @@ hc_args['incremental'] = True
 hc_args['repair_previous_errors'] = True
 hc_args['recompute_from_scratch'] = True
 hc_args['save_load_checkpoint'] = True
-inc_args['approach'] = 'co_b+'
+inc_args['approach'] = 'co_bplus'
 
 # B+ - Quality
 hc_args['log_repairing_quality'] = True
@@ -130,7 +130,7 @@ hc_args['incremental'] = True
 hc_args['repair_previous_errors'] = False
 hc_args['recompute_from_scratch'] = False
 hc_args['save_load_checkpoint'] = True
-inc_args['approach'] = 'co_c+'
+inc_args['approach'] = 'co_cplus'
 
 # C+ - Time
 hc_args['log_repairing_quality'] = False
