@@ -6,13 +6,13 @@ hc_args = {
     'detectors': {'nulldetector': 'NullDetector', 'violationdetector': 'ViolationDetector'},
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
-    'weak_label_thresh': 0.99,
-    'max_domain': 50,
-    'cor_strength': 0.6,
-    'nb_cor_strength': 0.8,
+    'weak_label_thresh': 0.60,
+    'max_domain': 1000,
+    'cor_strength': 0.2,
+    'nb_cor_strength': 0.3,
     'epochs': 20,
     'threads': 1,
-    'verbose': False,
+    'verbose': True,
     'timeout': 3*60000,
     'estimator_type': 'NaiveBayes',
     'epochs_convergence': 3,
@@ -36,10 +36,10 @@ inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
     'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-    'dataset_name': 'hospital',
+    'dataset_name': None,
     'entity_col': None,
     'approach': 'co_a',
-    'tuples_to_read_list': [250] * 4,
+    'tuples_to_read_list': [1000] * 5,
     'iterations': [0],
 }
 
@@ -49,7 +49,7 @@ hc_args['featurizers'] = {'occurattrfeat': 'OccurAttrFeaturizer'}
 hc_args['estimator_type'] = 'NaiveBayes'
 ######################################################################
 
-datasets = {'hospital': None, 'hospital_wtids_v2': '_tid_'}
+datasets = {'food5k_shuffled': '_tid_'}
 
 for dataset_name, entity_col in datasets.items():
     inc_args['dataset_name'] = dataset_name
