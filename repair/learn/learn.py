@@ -261,10 +261,7 @@ class RepairModel:
         }, file_path)
 
     def load_checkpoint(self, file_path='/tmp/checkpoint.tar'):
-        try:
-            checkpoint = torch.load(file_path)
+        checkpoint = torch.load(file_path)
 
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        except OSError:
-            raise Exception('No existing checkpoint could be loaded.')
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
