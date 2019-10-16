@@ -21,21 +21,23 @@ hc_args = {
     'current_batch_number': None,
     'log_repairing_quality': True,
     'log_execution_times': True,
-    'incremental': False,
+    'incremental': None,
     'incremental_entropy': False,
     'default_entropy': False,
-    'repair_previous_errors': False,
-    'recompute_from_scratch': False,
+    'repair_previous_errors': None,
+    'recompute_from_scratch': None,
     'skip_training': False,
     'ignore_previous_training_cells': False,
     'save_load_checkpoint': False,
+    'append': True
 }
 
 inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
     'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-    'dataset_name': 'hospital',
+    'dataset_name': None,
+    'entity_col': None,
     'approach': 'co_a',
     'tuples_to_read_list': [250] * 4,
     'iterations': [0],
@@ -47,86 +49,113 @@ hc_args['featurizers'] = {'occurattrfeat': 'OccurAttrFeaturizer'}
 hc_args['estimator_type'] = 'NaiveBayes'
 ######################################################################
 
-hc_args['incremental'] = False
-hc_args['repair_previous_errors'] = False
-hc_args['recompute_from_scratch'] = False
+datasets = {'food5k_shuffled': '_tid_'}
 
-# A - Quality
-hc_args['log_repairing_quality'] = True
-hc_args['log_execution_times'] = True
-executor = Executor(hc_args, inc_args)
-executor.run()
+for dataset_name, entity_col in datasets.items():
+    inc_args['dataset_name'] = dataset_name
+    inc_args['entity_col'] = entity_col
 
-# A - Time
-hc_args['log_repairing_quality'] = False
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [1, 2]
-executor = Executor(hc_args, inc_args)
-executor.run()
+    ######################################################################
 
-######################################################################
+    hc_args['incremental'] = False
+    hc_args['repair_previous_errors'] = False
+    hc_args['recompute_from_scratch'] = False
 
-inc_args['dataset_dir'] = os.environ['HOLOCLEANHOME'] + '/testdata/confidential/'
-inc_args['log_dir'] = os.environ['HOLOCLEANHOME'] + '/experimental_results/confidential/'
-inc_args['dataset_name'] = 'adult_1'
-inc_args['tuples_to_read_list'] = [2000] * 4
-inc_args['iterations'] = [0]
+    # A - Quality
+    hc_args['log_repairing_quality'] = True
+    hc_args['log_execution_times'] = True
+    executor = Executor(hc_args, inc_args)
+    executor.run()
 
-hc_args['incremental'] = False
-hc_args['repair_previous_errors'] = False
-hc_args['recompute_from_scratch'] = False
+    # A - Time
+    hc_args['log_repairing_quality'] = False
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [1, 2]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
 
-# A - Quality
-hc_args['log_repairing_quality'] = True
-hc_args['log_execution_times'] = True
-executor = Executor(hc_args, inc_args)
-executor.run()
+    ######################################################################
 
-# A - Time
-hc_args['log_repairing_quality'] = False
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [1, 2]
-executor = Executor(hc_args, inc_args)
-executor.run()
+    hc_args['incremental'] = True
+    hc_args['repair_previous_errors'] = True
+    hc_args['recompute_from_scratch'] = True
+    inc_args['approach'] = 'co_b'
 
-######################################################################
+    # B - Quality
+    hc_args['log_repairing_quality'] = True
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [0]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
 
-hc_args['incremental'] = True
-hc_args['repair_previous_errors'] = True
-hc_args['recompute_from_scratch'] = True
-inc_args['approach'] = 'co_b'
+    # B - Time
+    hc_args['log_repairing_quality'] = False
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [1, 2]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
 
-# B - Quality
-hc_args['log_repairing_quality'] = True
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [0]
-executor = Executor(hc_args, inc_args)
-executor.run()
+    ######################################################################
 
-# B - Time
-hc_args['log_repairing_quality'] = False
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [1, 2]
-executor = Executor(hc_args, inc_args)
-executor.run()
+    hc_args['incremental'] = True
+    hc_args['repair_previous_errors'] = False
+    hc_args['recompute_from_scratch'] = False
+    inc_args['approach'] = 'co_c'
 
-######################################################################
+    # C - Quality
+    hc_args['log_repairing_quality'] = True
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [0]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
 
-hc_args['incremental'] = True
-hc_args['repair_previous_errors'] = False
-hc_args['recompute_from_scratch'] = False
-inc_args['approach'] = 'co_c'
+    # C - Time
+    hc_args['log_repairing_quality'] = False
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [1, 2]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
 
-# C - Quality
-hc_args['log_repairing_quality'] = True
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [0]
-executor = Executor(hc_args, inc_args)
-executor.run()
+    ######################################################################
 
-# C - Time
-hc_args['log_repairing_quality'] = False
-hc_args['log_execution_times'] = True
-inc_args['iterations'] = [1, 2]
-executor = Executor(hc_args, inc_args)
-executor.run()
+    hc_args['incremental'] = True
+    hc_args['repair_previous_errors'] = True
+    hc_args['recompute_from_scratch'] = True
+    hc_args['save_load_checkpoint'] = True
+    inc_args['approach'] = 'co_bplus'
+
+    # B+ - Quality
+    hc_args['log_repairing_quality'] = True
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [0]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
+
+    # B+ - Time
+    hc_args['log_repairing_quality'] = False
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [1, 2]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
+
+    ######################################################################
+
+    hc_args['incremental'] = True
+    hc_args['repair_previous_errors'] = False
+    hc_args['recompute_from_scratch'] = False
+    hc_args['save_load_checkpoint'] = True
+    inc_args['approach'] = 'co_cplus'
+
+    # C+ - Quality
+    hc_args['log_repairing_quality'] = True
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [0]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
+
+    # C+ - Time
+    hc_args['log_repairing_quality'] = False
+    hc_args['log_execution_times'] = True
+    inc_args['iterations'] = [0, 1, 2]
+    executor = Executor(hc_args, inc_args)
+    executor.run()
