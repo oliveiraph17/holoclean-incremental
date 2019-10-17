@@ -6,16 +6,16 @@ hc_args = {
     'detectors': {'nulldetector': 'NullDetector', 'violationdetector': 'ViolationDetector'},
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
-    'weak_label_thresh': 0.99,
-    'max_domain': 50,
-    'cor_strength': 0.6,
-    'nb_cor_strength': 0.8,
-    'epochs': 20,
+    'weak_label_thresh': 0.60,
+    'max_domain': 1000,
+    'cor_strength': 0.2,
+    'nb_cor_strength': 0.3,
+    'epochs': 50,
     'threads': 1,
     'verbose': False,
     'timeout': 3*60000,
     'estimator_type': 'NaiveBayes',
-    'epochs_convergence': 3,
+    'epochs_convergence': 5,
     'convergence_thresh': 0.01,
     'current_iteration': None,
     'current_batch_number': None,
@@ -39,7 +39,7 @@ inc_args = {
     'dataset_name': None,
     'entity_col': None,
     'approach': 'co_a',
-    'tuples_to_read_list': [250] * 4,
+    'tuples_to_read_list': [1000] * 5,
     'iterations': [0],
 }
 
@@ -156,6 +156,6 @@ for dataset_name, entity_col in datasets.items():
     # C+ - Time
     hc_args['log_repairing_quality'] = False
     hc_args['log_execution_times'] = True
-    inc_args['iterations'] = [0, 1, 2]
+    inc_args['iterations'] = [1, 2]
     executor = Executor(hc_args, inc_args)
     executor.run()
