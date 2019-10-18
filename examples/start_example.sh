@@ -10,5 +10,5 @@ fi
 echo "Launching example script $script"
 python $script
 
-scp finished.txt incuser@129.97.171.159:/home/incuser
+#scp finished.txt incuser@129.97.171.159:/home/incuser
 
