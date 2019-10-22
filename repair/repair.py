@@ -41,8 +41,6 @@ class RepairEngine:
         status = "DONE setting up repair model."
         setup_time = toc - tic
 
-        self.feat_dataset.save_train_data()
-
         return status, setup_time
 
     def fit_repair_model(self):
@@ -75,6 +73,8 @@ class RepairEngine:
             logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
             total_training_cells += X_train[attr].size(0)
         toc = time.clock()
+
+        self.feat_dataset.save_train_data()
 
         if self.env['ignore_previous_training_cells']:
             self._save_training_cells(train_cid)
