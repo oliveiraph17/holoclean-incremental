@@ -1090,7 +1090,7 @@ class Dataset:
             raise Exception("cannot retrieve embedding model: it was never trained and loaded!")
         return self._embedding_model
 
-    def get_previuos_training_data(self):
+    def get_previous_training_data(self):
         if self.previous_training_df is None:
             if not self.is_first_batch():
                 query = 'SELECT t1.*, t2.attribute FROM "{}" AS t1, "{}" AS t2 WHERE t1._tid_ = t2._tid_ '.format(

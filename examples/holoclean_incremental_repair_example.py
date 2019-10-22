@@ -57,7 +57,9 @@ class Executor:
                     if self.hc_args['current_batch_number'] == 0:
                         table_list = [self.inc_args['dataset_name'] + '_' + self.inc_args['approach'] + '_repaired',
                                       'training_cells',
-                                      'repaired_table_copy']
+                                      'repaired_table_copy',
+                                      'cell_domain_previous',
+                                      'previous_training']
 
                         hc.ds.engine.drop_tables(table_list)
 

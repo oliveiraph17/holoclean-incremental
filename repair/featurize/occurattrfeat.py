@@ -38,7 +38,7 @@ class OccurAttrFeaturizer(Featurizer):
         else:
             self.raw_data_dict = raw_df.set_index('_tid_').to_dict('index')
 
-        previous_df = self.ds.get_previuos_training_data()
+        previous_df = self.ds.get_previous_training_data()
         if previous_df is not None:
             self.previous_data_dict = previous_df.drop_duplicates(subset='_tid_', keep='first').\
                 set_index('_tid_').to_dict('index')

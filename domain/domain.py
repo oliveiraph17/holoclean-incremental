@@ -295,7 +295,7 @@ class DomainEngine:
         # Iterate over dataset rows.
         cells = []
 
-        raw_df = self.ds.get_previuos_training_data()
+        raw_df = self.ds.get_previous_training_data()
         if raw_df is None:
             return
 

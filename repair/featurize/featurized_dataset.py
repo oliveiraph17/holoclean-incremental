@@ -224,8 +224,17 @@ class FeaturizedDataset:
             var_to_domsize[attr] = {}
             count[attr] = 0
 
-        query = 'SELECT _vid_, domain_size, attribute FROM %s ORDER BY _vid_' % AuxTables.cell_domain.name
+        if self.ds.previous_training_df is None:
+            query = 'SELECT _vid_, domain_size, attribute FROM %s ORDER BY _vid_' % AuxTables.cell_domain.name
+        else:
+            query = """
+            WITH all_cell_domain AS (SELECT * FROM {cell_domain} UNION SELECT * FROM {cell_domain_previous})
+            SELECT _vid_, domain_size, attribute FROM all_cell_domain ORDER BY _vid_;
+            """.format(cell_domain=AuxTables.cell_domain.name,
+                       cell_domain_previous=AuxTables.cell_domain_previous.name)
+
         res = self.ds.engine.execute_query(query)
+
         for tuple in tqdm(res):
             vid = int(tuple[0])
             max_class = int(tuple[1])
