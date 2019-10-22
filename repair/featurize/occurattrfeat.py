@@ -38,6 +38,13 @@ class OccurAttrFeaturizer(Featurizer):
         else:
             self.raw_data_dict = raw_df.set_index('_tid_').to_dict('index')
 
+        previous_df = self.ds.get_previuos_training_data()
+        if previous_df is not None:
+            self.previous_data_dict = previous_df.drop_duplicates(subset='_tid_', keep='first').\
+                set_index('_tid_').to_dict('index')
+        else:
+            self.previous_data_dict = None
+
         total, single_stats, pair_stats = self.ds.get_statistics()
         self.total = float(total)
         self.single_stats = single_stats
@@ -72,6 +79,19 @@ class OccurAttrFeaturizer(Featurizer):
             tuple = self.raw_data_dict[tid]
             feat_tensor = self.gen_feat_tensor(row, tuple)
             tensors[row['attribute']].append(feat_tensor)
+
+        # Iterate over previous training cells
+        if self.previous_data_dict is not None:
+            t = self.ds.aux_table[AuxTables.cell_domain_previous]
+            sorted_domain = t.df.reset_index().sort_values(by=['_vid_'])[['_tid_', 'attribute', '_vid_', 'domain']]
+            records = sorted_domain.to_records()
+            for row in tqdm(list(records)):
+                # Get tuple from raw_dataset.
+                tid = row['_tid_']
+                tuple = self.previous_data_dict[tid]
+                feat_tensor = self.gen_feat_tensor(row, tuple)
+                tensors[row['attribute']].append(feat_tensor)
+
         for attr in self.active_attrs:
             combined[attr] = torch.cat(tensors[attr])
         return combined

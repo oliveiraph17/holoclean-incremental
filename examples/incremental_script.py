@@ -50,11 +50,13 @@ hc_args['estimator_type'] = 'NaiveBayes'
 ######################################################################
 
 datasets = []
-datasets.append(('hospital', None, [20] * 2, 0.99, 10000, 0.6, 0.8))
-datasets.append(('food5k_shuffled', '_tid_', [1000] * 5, 0.6, 1000, 0.2, 0.3))
+# datasets.append(('hospital', None, [20] * 2, 0.99, 10000, 0.6, 0.8))
+datasets.append(('food5k_shuffled', '_tid_', [100] * 50, 0.6, 1000, 0.2, 0.3))
 
-approaches = ['A', 'B', 'C', 'C+', 'B+', 'Full']
-avg_time_iterations = [1, 2]  # or None
+# approaches = ['A', 'B', 'C', 'C+', 'B+', 'Full']
+approaches = ['C+']
+# avg_time_iterations = [1, 2]  # or None
+avg_time_iterations = None
 
 for dataset_name, entity_col, tuples_to_read_list, weak_label_thresh, max_domain, cor_strength, nb_cor_strength in datasets:
     inc_args['dataset_name'] = dataset_name

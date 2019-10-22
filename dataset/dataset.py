@@ -27,12 +27,15 @@ class AuxTables(Enum):
     inf_values_dom = 7
     training_cells = 8
     repaired_table_copy = 9
-
+    cell_domain_previous = 10
+    previous_training = 11
 
 class CellStatus(Enum):
     NOT_SET        = 0
     WEAK_LABEL     = 1
     SINGLE_VALUE   = 2
+    PREVIOUS_TRAINING = 3
+    PREVIOUS_TRAINING_SINGLE_VALUE = 4
 
 class Dataset:
     """
@@ -103,6 +106,8 @@ class Dataset:
         self.repair_previous_errors = env['repair_previous_errors']
         # Boolean flag for recomputing statistics and retraining model from scratch in incremental scenarios.
         self.recompute_from_scratch = env['recompute_from_scratch']
+
+        self.previous_training_df = None
 
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
@@ -533,7 +538,13 @@ class Dataset:
         query = 'SELECT count(_vid_) FROM %s'%AuxTables.cell_domain.name
         res = self.engine.execute_query(query)
         total_vars = int(res[0][0])
-        query = 'SELECT attribute, max(domain_size) FROM %s GROUP BY attribute' % AuxTables.cell_domain.name
+        if self.previous_training_df is None:
+            query = 'SELECT attribute, max(domain_size) FROM %s GROUP BY attribute' % AuxTables.cell_domain.name
+        else:
+            query = 'WITH all_domains AS (SELECT * FROM "{}" UNION SELECT * FROM "{}") ' \
+                    'SELECT attribute, max(domain_size) FROM all_domains GROUP BY attribute'.format(
+                        AuxTables.cell_domain.name, AuxTables.cell_domain_previous.name)
+
         res = self.engine.execute_query(query)
         classes = {}
         for row in res:
@@ -1078,4 +1089,16 @@ class Dataset:
         if self._embedding_model is None:
             raise Exception("cannot retrieve embedding model: it was never trained and loaded!")
         return self._embedding_model
+
+    def get_previuos_training_data(self):
+        if self.previous_training_df is None:
+            if not self.is_first_batch():
+                query = 'SELECT t1.*, t2.attribute FROM "{}" AS t1, "{}" AS t2 WHERE t1._tid_ = t2._tid_ '.format(
+                    self.raw_data.name + '_repaired',
+                    AuxTables.previous_training.name)
+
+                results = self.engine.execute_query(query)
+                self.previous_training_df = pd.DataFrame(results, columns=results[0].keys())
+
+        return self.previous_training_df
 

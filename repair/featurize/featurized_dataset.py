@@ -1,3 +1,4 @@
+import random
 from collections import namedtuple
 import logging
 
@@ -6,6 +7,8 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+
+import pandas as pd
 
 from dataset import AuxTables, CellStatus
 from utils import NULL_REPR
@@ -49,7 +52,7 @@ class FeaturizedDataset:
         self.in_features = next(iter(self.tensor.values())).size(2)  # Gets the first tensor in the dict.
         logging.debug("generating weak labels...")
         if not self.env['ignore_previous_training_cells'] or self.ds.is_first_batch():
-            self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels()
+            self.weak_labels, self.is_clean, self.train_cid, self.weak_label_classes = self.generate_weak_labels()
         else:
             self.weak_labels, self.is_clean, self.train_cid = self.generate_weak_labels_with_reduced_cells()
         logging.debug("DONE generating weak labels.")
@@ -76,17 +79,29 @@ class FeaturizedDataset:
         # Generate weak labels for clean cells AND cells that have been weak
         # labelled. Do not train on cells with NULL weak labels (i.e.
         # NULL init values that were not weak labelled).
-        query = """
-        SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_
-        FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
-        ORDER BY _vid_;
-        """.format(cell_domain=AuxTables.cell_domain.name,
-                   dk_cells=AuxTables.dk_cells.name)
+        if self.ds.previous_training_df is None:
+            query = """
+            SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1.weak_label, t1._tid_
+            FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
+            ORDER BY _vid_;
+            """.format(cell_domain=AuxTables.cell_domain.name,
+                       dk_cells=AuxTables.dk_cells.name)
+        else:
+            query = """
+            WITH all_cell_domain AS (SELECT * FROM {cell_domain} UNION SELECT * FROM {cell_domain_previous})
+            SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1.weak_label, t1._tid_
+            FROM all_cell_domain AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
+            ORDER BY _vid_;
+            """.format(cell_domain=AuxTables.cell_domain.name,
+                       cell_domain_previous=AuxTables.cell_domain_previous.name,
+                       dk_cells=AuxTables.dk_cells.name)
+
         res = self.ds.engine.execute_query(query)
         if len(res) == 0:
             logging.warning("No weak labels available. Reduce pruning threshold.")
         labels = {}
         is_clean = {}
+        label_classes = {}
         current_training_cells = []
         # count[attr] will match _vid_ in the featurizers because both are generated ordered by _vid_.
         count = {}
@@ -95,6 +110,7 @@ class FeaturizedDataset:
             num_instances = self.tensor[attr].size(0)
             labels[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
             is_clean[attr] = torch.zeros(num_instances, 1).type(torch.LongTensor)
+            label_classes[attr] = {}
 
         for tuple in tqdm(res):
             attr = tuple[0]
@@ -102,13 +118,19 @@ class FeaturizedDataset:
             fixed = int(tuple[2])
             clean = int(tuple[3])
             cid = int(tuple[4])
+            label_class = tuple[5]
+            tid = tuple[6]
             if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
                 # Considers only not null and clean or fixed cells as weak labels.
                 labels[attr][count[attr]] = label
                 is_clean[attr][count[attr]] = clean
+                if label_class in label_classes[attr].keys():
+                    label_classes[attr][label_class].append((tid, count[attr]))
+                else:
+                    label_classes[attr][label_class] = [(tid, count[attr])]
             count[attr] += 1
             current_training_cells.append(cid)
-        return labels, is_clean, current_training_cells
+        return labels, is_clean, current_training_cells, label_classes
 
     def generate_weak_labels_with_reduced_cells(self):
         """
@@ -231,7 +253,8 @@ class FeaturizedDataset:
         Y_train = {}
         mask_train = {}
         for attr in self.ds.get_active_attributes():
-            train_idx = (self.weak_labels[attr] != -1).nonzero()[:, 0]
+            # train_idx = (self.weak_labels[attr] != -1).nonzero()[:, 0]
+            train_idx = self.get_train_idx(attr, 15, 'random')
             X_train[attr] = self.tensor[attr].index_select(0, train_idx)
             Y_train[attr] = self.weak_labels[attr].index_select(0, train_idx)
             mask_train[attr] = self.var_class_mask[attr].index_select(0, train_idx)
@@ -253,3 +276,33 @@ class FeaturizedDataset:
             X_infer[attr] = self.tensor[attr].index_select(0, infer_idx[attr])
             mask_infer[attr] = self.var_class_mask[attr].index_select(0, infer_idx[attr])
         return X_infer, mask_infer, infer_idx
+
+    def get_train_idx(self, attr, budget_per_class=0, choose_option='random'):
+        if budget_per_class > 0:
+            # Chooses a number of instances per class
+            train_idx = (self.weak_labels[attr] != -1)
+            for val, instance_list in self.weak_label_classes[attr].items():
+                if len(instance_list) > budget_per_class:
+                    logging.debug("%s[%s]=%d", attr, val, len(instance_list))
+                    if choose_option == 'random':
+                        random.shuffle(instance_list)
+                    while len(instance_list) > budget_per_class:
+                        _, idx = instance_list.pop()  # Removes to keep the instance list up-to-date
+                        train_idx[idx] = 0  # Marks entry to not be used for training
+            train_idx = train_idx.nonzero()[:, 0]
+        else:
+            # Default behavior: use all weak labeled cells
+            train_idx = (self.weak_labels[attr] != -1).nonzero()[:, 0]
+
+        return train_idx
+
+    def save_train_data(self):
+        rows = []
+        for attr in self.ds.get_active_attributes():
+            for tid_list in self.weak_label_classes[attr].values():
+                for tid, _ in tid_list:
+                    rows.append({'_tid_': tid, 'attribute': attr})
+
+        # label_classes[attr][label_class] = [(tid, count[attr])]
+        previous_train_df = pd.DataFrame(data=rows)
+        self.ds.generate_aux_table(AuxTables.previous_training, previous_train_df, store=True)

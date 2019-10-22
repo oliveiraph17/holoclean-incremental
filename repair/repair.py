@@ -40,6 +40,9 @@ class RepairEngine:
         toc = time.clock()
         status = "DONE setting up repair model."
         setup_time = toc - tic
+
+        self.feat_dataset.save_train_data()
+
         return status, setup_time
 
     def fit_repair_model(self):

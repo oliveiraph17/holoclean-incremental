@@ -51,6 +51,12 @@ class DomainEngine:
         self.store_domains(self.domain_df)
         status = "DONE with domain preparation."
         toc = time.time()
+
+        self.domain_df_previous_training = self.generate_domain_previous_training()
+        if self.domain_df_previous_training is not None:
+            self.store_domains_previous_training(self.domain_df_previous_training)
+        status = "DONE with PREVIOUS domain preparation."
+
         return status, toc - tic
 
     def store_domains(self, domain):
@@ -72,6 +78,21 @@ class DomainEngine:
         self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_cid_'])
         query = "SELECT _vid_, _cid_, _tid_, attribute, a.rv_val, a.val_id from %s , unnest(string_to_array(regexp_replace(domain,\'[{\"\"}]\',\'\',\'gi\'),\'|||\')) WITH ORDINALITY a(rv_val,val_id)" % AuxTables.cell_domain.name
         self.ds.generate_aux_table_sql(AuxTables.pos_values, query, index_attrs=['_tid_', 'attribute'])
+
+    def store_domains_previous_training(self, domain):
+        """
+        store_domains stores the 'domain' DataFrame as the 'cell_domain'
+        auxiliary table as well as generates the 'pos_values' auxiliary table,
+        a long-format of the domain values, in Postgres.
+
+        pos_values schema:
+            _tid_: entity/tuple ID
+            _cid_: cell ID
+            _vid_: random variable ID (all cells with more than 1 domain value)
+        """
+        if domain.empty:
+            raise Exception("ERROR: Generated domain is empty.")
+        self.ds.generate_aux_table(AuxTables.cell_domain_previous, domain, store=True)
 
     def setup_attributes(self):
         total, single_stats, pair_stats = self.ds.get_statistics()
@@ -190,7 +211,7 @@ class DomainEngine:
         tic = time.clock()
         # Iterate over dataset rows.
         cells = []
-        vid = 0
+        self.vid = 0
 
         raw_df = self.ds.get_quantized_data() if self.do_quantization else self.ds.get_raw_data()
         if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
@@ -246,7 +267,7 @@ class DomainEngine:
                 cells.append({"_tid_": tid,
                               "attribute": attr,
                               "_cid_": cid,
-                              "_vid_": vid,
+                              "_vid_": self.vid,
                               "domain": dom_vals,
                               "domain_size": len(dom),
                               "init_value": init_value,
@@ -256,11 +277,94 @@ class DomainEngine:
                               "fixed": cell_status,
                               "is_dk": (tid, attr) in dk_lookup,
                               })
-                vid += 1
+                self.vid += 1
         domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
         logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
         logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
         logging.debug('DONE generating initial set of domain values in %.2fs', time.clock() - tic)
+
+        return domain_df
+
+    def generate_domain_previous_training(self):
+        if not self.setup_complete:
+            raise Exception(
+                "Call <setup_attributes> to setup active attributes. Error detection should be performed before setup.")
+
+        logging.debug('generating initial set of un-pruned domain values...')
+        tic = time.clock()
+        # Iterate over dataset rows.
+        cells = []
+
+        raw_df = self.ds.get_previuos_training_data()
+        if raw_df is None:
+            return
+
+        records = raw_df.to_records()
+
+        for row in tqdm(list(records)):
+            tid = row['_tid_']
+            attr = row['attribute']
+
+            if attr not in self.ds._active_attributes:
+                self.ds._active_attributes.append(attr)
+
+            init_value, init_value_idx, dom = self.get_domain_cell(attr, row)
+
+            # We will use an estimator model for additional weak labelling
+            # below, which requires an initial pruned domain first.
+            # Weak labels will be trained on the init values.
+            cid = self.ds.get_cell_id(tid, attr)
+
+            # Originally, all cells have a NOT_SET status to be considered
+            # in weak labelling.
+            cell_status = CellStatus.PREVIOUS_TRAINING.value
+
+            if len(dom) <= 1:
+                # Initial  value is NULL and we cannot come up with
+                # a domain (note that NULL is not included in the domain);
+                # Note if len(dom) == 1, then we generated a single correct
+                # value (since NULL is not included in the domain).
+                # This would be a "SINGLE_VALUE" example and we'd still
+                # like to generate a random domain for it.
+                if init_value == NULL_REPR and len(dom) == 0:
+                   continue
+
+                # Not enough domain values, we need to get some random
+                # values (other than 'init_value') for training. However,
+                # this might still get us zero domain values.
+                rand_dom_values = self.get_random_domain(attr, dom)
+
+                # We still want to add cells with only 1 single value and no
+                # additional random domain # they are required in the output.
+
+                # Otherwise, just add the random domain values to the domain
+                # and set the cell status accordingly.
+                dom.extend(rand_dom_values)
+
+                # Set the cell status that this is a single value and was
+                # randomly assigned other values in the domain. These will
+                # not be modified by the estimator.
+                cell_status = CellStatus.PREVIOUS_TRAINING_SINGLE_VALUE.value
+
+            dom_vals = "|||".join(dom)
+            cells.append({"_tid_": tid,
+                          "attribute": attr,
+                          "_cid_": cid,
+                          "_vid_": self.vid,
+                          "domain": dom_vals,
+                          "domain_size": len(dom),
+                          "init_value": init_value,
+                          "init_index": init_value_idx,
+                          "weak_label": init_value,
+                          "weak_label_idx": init_value_idx,
+                          "fixed": cell_status,
+                          "is_dk": False,
+                          })
+            self.vid += 1
+        domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
+        logging.debug('PREVIOUS TRAINING domain size stats: %s', domain_df['domain_size'].describe())
+        logging.debug('PREVIOUS TRAINING domain count by attr: %s', domain_df['attribute'].value_counts())
+        logging.debug('PREVIOUS TRAINING DONE generating initial set of domain values in %.2fs', time.clock() - tic)
 
         return domain_df
 
