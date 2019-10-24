@@ -701,6 +701,7 @@ class Session:
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_correct')))
             self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_incorrect')))
+            self.repairing_quality_metrics.append(str(getattr(eval_report, 'rmse')))
 
             self.experiment_quality_logger.info(';'.join(self.repairing_quality_metrics))
 

@@ -38,6 +38,7 @@ inc_args = {
     'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
     'dataset_name': None,
     'entity_col': None,
+    'numerical_attrs': None,
     'approach': 'co_a',
     'tuples_to_read_list': [250] * 4,
     'iterations': [0],
