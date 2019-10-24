@@ -654,6 +654,9 @@ class Dataset:
         repaired_df = pd.DataFrame.from_records(init_records)
         repaired_table_name = self.raw_data.name + '_repaired'
 
+        for attr in self.numerical_attrs:
+            repaired_df[attr] = repaired_df[attr].astype(float)
+
         # Keeps track of the time spent to generate a copy of the current repaired table, if needed.
         repaired_table_copy_time = 0
         if not self.is_first_batch():
