@@ -423,7 +423,7 @@ class Session:
             quality_header = 'batch;dk_cells;training_cells;' \
                              'precision;recall;repairing_recall;f1;repairing_f1;' \
                              'detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;' \
-                             'repairs_on_correct_cells;repairs_on_incorrect_cells'
+                             'repairs_on_correct_cells;repairs_on_incorrect_cells;rmse'
             self.experiment_quality_logger = repairing_quality_logger
         time_header = ''
         if self.env['log_execution_times']:
