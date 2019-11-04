@@ -80,6 +80,11 @@ class Executor:
                     ]
                     hc.detect_errors(detectors)
 
+                    _ = hc.quantize_numericals(
+                        [zip([self.hc_args['max_domain']] * len(self.inc_args['numerical_attrs']),
+                             self.inc_args['numerical_attrs'])]
+                    )
+
                     # Repairs errors based on the defined features.
                     hc.generate_domain()
                     hc.run_estimator()
@@ -102,48 +107,49 @@ class Executor:
 
 
 if __name__ == "__main__":
-    # Default parameters for HoloClean.
     hc_args = {
         'detectors': {'nulldetector': 'NullDetector', 'violationdetector': 'ViolationDetector'},
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
-        'domain_thresh_1': 0,
-        'weak_label_thresh': 0.99,
+        'domain_thresh_1': 0.0,
+        'domain_thresh_2': 0.0,
+        'weak_label_thresh': 0.9,
         'max_domain': 50,
-        'cor_strength': 0.6,
-        'nb_cor_strength': 0.8,
-        'epochs': 20,
+        'cor_strength': 0.0,
+        # 'nb_cor_strength': 0.8,
+        'weight_decay': 0.0,
+        'batch_size': 32,
+        'epochs': 5,
         'threads': 1,
         'verbose': True,
         'timeout': 3 * 60000,
-        'estimator_type': 'NaiveBayes',
-        'epochs_convergence': 3,
+        'estimator_type': 'Logistic',
+        'epochs_convergence': 5,
         'convergence_thresh': 0.01,
         'current_iteration': None,
         'current_batch_number': None,
         'log_repairing_quality': True,
-        'log_execution_times': False,
+        'log_execution_times': True,
         'incremental': True,
         'incremental_entropy': False,
         'default_entropy': False,
-        'repair_previous_errors': False,
-        'recompute_from_scratch': False,
+        'repair_previous_errors': True,
+        'recompute_from_scratch': True,
         'skip_training': False,
         'ignore_previous_training_cells': False,
-        'save_load_checkpoint': True,
+        'save_load_checkpoint': False,
         'append': True
     }
 
-    # Default parameters for Executor.
     inc_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-        'dataset_name': 'hospital',
+        'dataset_name': 'nypd6',
         'entity_col': None,
-        'numerical_attrs': None,
-        'approach': 'co_a',
-        'tuples_to_read_list': [250] * 4,
+        'approach': 'co_b',
+        'tuples_to_read_list': [1000] * 33,
         'iterations': [0],
+        'numerical_attrs': ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude']
     }
 
     # Runs the default example.

@@ -192,12 +192,16 @@ class DomainEngine:
         cells = []
         vid = 0
 
-        raw_df = self.ds.get_quantized_data() if self.do_quantization else self.ds.get_raw_data()
+        not_quantized_data = None
         if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
-            # TODO(kaster): adjust here to properly handle quantized_data for previous dirty rows
-            records = pd.concat([self.ds.get_previous_dirty_rows(), raw_df]).to_records(index=False)
+            if not self.do_quantization:
+                not_quantized_data = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()])
         else:
-            records = raw_df.to_records()
+            if not self.do_quantization:
+                not_quantized_data = self.ds.get_raw_data()
+
+        raw_df = self.ds.get_quantized_data() if self.do_quantization else not_quantized_data
+        records = raw_df.to_records(index=False)
 
         dk_lookup = {(val[0], val[1]) for val in self.ds.aux_table[AuxTables.dk_cells].df[['_tid_', 'attribute']].values}
 
@@ -222,8 +226,8 @@ class DomainEngine:
                     # value (since NULL is not included in the domain).
                     # This would be a "SINGLE_VALUE" example and we'd still
                     # like to generate a random domain for it.
-                    if init_value == NULL_REPR and len(dom) == 0:
-                       continue
+                    if (init_value == NULL_REPR or init_value == np.nan) and len(dom) == 0:
+                        continue
 
                     # Not enough domain values, we need to get some random
                     # values (other than 'init_value') for training. However,
@@ -308,6 +312,9 @@ class DomainEngine:
             if cond_val == NULL_REPR or self.pair_stats[cond_attr][attr][cond_val] == [NULL_REPR]:
                 continue
 
+            if cond_val == np.nan or self.pair_stats[cond_attr][attr][cond_val] == np.nan:
+                continue
+
             # update domain with top co-occuring values with the cond init value.
             candidates = self.pair_stats[cond_attr][attr][cond_val]
             for val, freq in candidates:
@@ -321,8 +328,12 @@ class DomainEngine:
             del domain[NULL_REPR] # (kaster) Added because incremental statistics store NULLs
         assert NULL_REPR not in domain
 
+        if np.nan in domain:
+            del domain[np.nan]
+        assert np.nan not in domain
+
         # Add the initial value to the domain if it is not NULL.
-        if init_value != NULL_REPR:
+        if init_value != NULL_REPR and init_value != np.nan:
             domain[init_value] = 1
 
         domain = [val for (val, freq) in reversed(sorted(domain.items(), key=lambda t: t[1]))][:self.max_domain]
@@ -333,7 +344,7 @@ class DomainEngine:
         # Get the index of the initial value.
         # NULL values are not in the domain so we set their index to -1.
         init_value_idx = -1
-        if init_value != NULL_REPR:
+        if init_value != NULL_REPR and init_value != np.nan:
             init_value_idx = domain_lst.index(init_value)
 
         return init_value, init_value_idx, domain_lst
@@ -347,7 +358,9 @@ class DomainEngine:
         # We should not have any NULLs since we do not keep track of their
         # counts.
         domain_pool.discard(NULL_REPR) # (kaster) Added because incremental statistics store NULLs
+        domain_pool.discard(np.nan)
         assert NULL_REPR not in domain_pool
+        assert np.nan not in domain_pool
         domain_pool = domain_pool.difference(cur_dom)
         domain_pool = sorted(list(domain_pool))
         size = len(domain_pool)
@@ -474,7 +487,7 @@ class DomainEngine:
 
             # ensure the initial value is included even if its probability is low.
             init_val = row['init_value']
-            if init_val not in domain_values and init_val != NULL_REPR:
+            if init_val not in domain_values and init_val != NULL_REPR and init_val != np.nan:
                 domain_values.append(init_val)
             domain_values = sorted(domain_values)
             # update our memoized domain values for this row again
@@ -484,7 +497,7 @@ class DomainEngine:
             if row['init_value'] in domain_values:
                 row['init_index'] = domain_values.index(row['init_value'])
             # update weak label index based on new domain
-            if row['weak_label'] != NULL_REPR:
+            if row['weak_label'] != NULL_REPR and row['weak_label'] != np.nan:
                 row['weak_label_idx'] = domain_values.index(row['weak_label'])
 
             weak_label, weak_label_prob = max(preds, key=lambda pred: pred[1])

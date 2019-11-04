@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -121,6 +122,7 @@ class OccurAttrFeaturizer(Featurizer):
 
         # We should not have any NULLs in our domain.
         assert NULL_REPR not in rv_domain_idx
+        assert np.nan not in rv_domain_idx
         rv_attr_idx = self.active_attr_to_idx[rv_attr]
         # Iterate through all /given/ or /conditional/ attributes
         for attr in self.all_attrs:
@@ -131,8 +133,10 @@ class OccurAttrFeaturizer(Featurizer):
             # with NULL values.
             if attr == rv_attr \
                     or val == NULL_REPR \
+                    or val == np.nan \
                     or val not in self.pair_stats[attr][rv_attr] \
-                    or self.pair_stats[attr][rv_attr][val] == [NULL_REPR]:
+                    or self.pair_stats[attr][rv_attr][val] == [NULL_REPR] \
+                    or self.pair_stats[attr][rv_attr][val] == [np.nan]:
                 continue
             attr_idx = self.ds.attr_to_idx[attr]
             count1 = float(self.single_stats[attr][val])

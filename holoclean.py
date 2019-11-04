@@ -175,7 +175,7 @@ arguments = [
     (('-ee', '--estimator_epochs'),
      {'metavar': 'ESTIMATOR_EPOCHS',
       'dest': 'estimator_epochs',
-      'default': 10,
+      'default': 2,
       'type': int,
       'help': 'Number of epochs to run the weak labelling and domain generation estimator.'}),
     (('-ebs', '--estimator_batch_size'),
@@ -526,14 +526,18 @@ class Session:
         self.ds.do_quantization = True
         self.domain_engine.do_quantization = True
 
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+            raw_df = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()])
+        else:
+            raw_df = self.ds.get_raw_data()
+
         status, quantize_time, quantized_data = \
-            quantize_km(self.env, self.ds.get_raw_data(), num_attr_groups_bins)
+            quantize_km(self.env, raw_df, num_attr_groups_bins)
 
         logging.info(status)
         logging.debug('Time to quantize the dataset: %.2f secs' % quantize_time)
 
-        self.load_quantized_data(quantized_data)
-
+        # self.load_quantized_data(quantized_data)
 
         return quantized_data
 

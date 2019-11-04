@@ -149,7 +149,7 @@ class LookupDataset(Dataset):
         # Mean-0 variance 1 normalize all numerical attributes in the raw data
         for num_attr in self._init_num_attrs:
             temp = self._raw_data[num_attr].copy()
-            fil_notnull = temp != NULL_REPR
+            fil_notnull = temp != np.nan
             self._num_attrs_mean[num_attr] = temp[fil_notnull].astype(np.float).mean(axis=0)
             self._num_attrs_std[num_attr] = temp[fil_notnull].astype(np.float).std(axis=0)
             temp[fil_notnull] = ((temp[fil_notnull].astype(np.float) \
@@ -211,7 +211,7 @@ class LookupDataset(Dataset):
                 continue
 
             # Use special index 0 for NULL values
-            if val == NULL_REPR:
+            if val == NULL_REPR or val == np.nan:
                 self._train_val_idxs[attr][val] = 0
                 continue
 
@@ -338,7 +338,7 @@ class LookupDataset(Dataset):
         # Compute co-occurrence statistics.
         for attr_idx, attr in enumerate(self._all_attrs):
             ctx_val = self._qtized_raw_data_dict[cur['_tid_']][attr]
-            if attr == cur['attribute'] or ctx_val == NULL_REPR or \
+            if attr == cur['attribute'] or ctx_val == NULL_REPR or ctx_val == np.nan or \
                     ctx_val not in self._pair_stats[attr][cur['attribute']]:
                 continue
 
@@ -363,7 +363,8 @@ class LookupDataset(Dataset):
 
             # We can skip this if we are in inference mode and any of the
             # target/current values in the numerical group are NULL.
-            if not (self.inference_mode and any(val == NULL_REPR for val in target_val_strs)):
+            if not (self.inference_mode and (any(val == NULL_REPR for val in target_val_strs) or
+                    any(val == np.nan for val in target_val_strs))):
                 target_numvals[:len(attr_group)] = torch.FloatTensor(np.array(target_val_strs, dtype=np.float32))
 
             if not self.memoize:
@@ -432,7 +433,7 @@ class LookupDataset(Dataset):
             init_nummask = torch.ones(self._n_init_num_attrs)
             for attr_idx, attr in enumerate(self._init_num_attrs):
                 val_str = self._raw_data_dict[cur['_tid_']][attr]
-                if attr == cur['attribute'] or val_str == NULL_REPR:
+                if attr == cur['attribute'] or val_str == np.nan:
                     init_nummask[attr_idx] = 0.
                     continue
 
@@ -624,7 +625,7 @@ class VidSampler(Sampler):
                 # Non-numerical cell: return true
                 if cur_attr not in attr_to_group:
                     return True
-                return all(raw_data_dict[tid][attr] != NULL_REPR
+                return all(raw_data_dict[tid][attr] != np.nan
                         for attr in attr_to_group[cur_attr])
             fil_notnull = domain_df.apply(group_notnull, axis=1)
 

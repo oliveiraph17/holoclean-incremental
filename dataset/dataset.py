@@ -160,24 +160,24 @@ class Dataset:
             all_attrs = self.raw_data.get_attributes()
             self.categorical_attrs = [attr for attr in all_attrs if attr not in self.numerical_attrs]
 
-            if store_to_db:
-                # Now df is all in str type, make a copy of df and then
-                # 1. replace the null values in categorical data
-                # 2. make the numerical attrs as float
-                # 3. store the correct type into db (categorical->str, numerical->float)
-                df_correct_type = df.copy()
-                for attr in self.categorical_attrs:
-                    df_correct_type.loc[df_correct_type[attr].isnull(), attr] = NULL_REPR
-                for attr in self.numerical_attrs:
-                    df_correct_type[attr] =  df_correct_type[attr].astype(float)
+            # Now df is all in str type, make a copy of df and then
+            # 1. replace the null values in categorical data
+            # 2. make the numerical attrs as float
+            # 3. store the correct type into db (categorical->str, numerical->float)
+            # df_correct_type = df.copy()
+            for attr in self.categorical_attrs:
+                df.loc[df[attr].isnull(), attr] = NULL_REPR
+            for attr in self.numerical_attrs:
+                df.loc[df[attr].isnull(), attr] = np.nan
+                df[attr] = df[attr].astype(float)
 
-                df_correct_type.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False,
-                                       index_label=None)
+            if store_to_db:
+                df.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False, index_label=None)
 
             # for df, which is all str
             # Use NULL_REPR to represent NULL values
-            df.replace('', NULL_REPR, inplace=True)
-            df.fillna(NULL_REPR, inplace=True)
+            # df.replace('', NULL_REPR, inplace=True)
+            # df.fillna(NULL_REPR, inplace=True)
 
             logging.info("Loaded %d rows with %d cells", self.raw_data.df.shape[0],
                          self.raw_data.df.shape[0] * self.raw_data.df.shape[1])
@@ -402,9 +402,6 @@ class Dataset:
 
         entropy_tic = time.clock()
 
-        # TODO(kaster): adjust the correlation computation to use correctly the quantized_data as indicated below.
-        # data_df = self.ds.get_quantized_data() if self.do_quantization \
-        #    else self.ds.get_raw_data()
         if not self.incremental or self.is_first_batch():
             correlations = self.compute_norm_cond_entropy_corr()
         else:
@@ -460,10 +457,21 @@ class Dataset:
         """
         # need to decode values into unicode strings since we do lookups via
         # unicode strings from Postgres
+        not_quantized_data = None
+        if not self.is_first_batch() and self.env['repair_previous_errors']:
+            if not self.do_quantization:
+                not_quantized_data = pd.concat([self.previous_dirty_rows_df, self.raw_data.df])
+        else:
+            if not self.do_quantization:
+                not_quantized_data = self.raw_data.df
+
+        raw_df = self.get_quantized_data() if self.do_quantization else not_quantized_data
+
         if not self.is_first_batch() and self.recompute_from_scratch:
             data_df = self.raw_data_with_previous_repaired_data_df
         else:
             data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
+
         return data_df[[attr]].groupby([attr]).size().to_dict()
 
     def get_stats_pair(self, first_attr, second_attr):
@@ -850,8 +858,9 @@ class Dataset:
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
                 if self.default_entropy:
                     # Uses the implementation of pyitlib.
-                    corr[x][y] = 1.0 - drv.entropy_conditional(self.raw_data.df[x],
-                                                               self.raw_data.df[y],
+                    raw_df = self.quantized_data if self.do_quantization else self.raw_data.df
+                    corr[x][y] = 1.0 - drv.entropy_conditional(raw_df[x],
+                                                               raw_df[y],
                                                                base=x_domain_size).item()
                 else:
                     # Uses our implementation.
