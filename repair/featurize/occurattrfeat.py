@@ -146,4 +146,4 @@ class OccurAttrFeaturizer(Featurizer):
         return tensor
 
     def feature_names(self):
-        return ["{} | {}".format(attr1, attr2) for attr1 in self.active_attrs for attr2 in self.all_attrs]
+        return ["{}".format(attr) for attr in self.all_attrs]

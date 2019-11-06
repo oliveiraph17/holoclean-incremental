@@ -189,8 +189,16 @@ class RepairEngine:
     def get_featurizer_weights(self):
         tic = time.clock()
         report = {}
+        df_per_attr = []
         for attr in self.ds.get_active_attributes():
-            report[attr] = self.repair_model[attr].get_featurizer_weights(self.feat_dataset.featurizer_info)
+            report[attr], df_list = self.repair_model[attr]\
+                .get_featurizer_weights(self.feat_dataset.featurizer_info)
+            # One df per featurizer in df_list.
+            df = pd.concat(df_list)
+            df.insert(loc=1, column='attribute', value=[attr] * len(df.index))
+            df.insert(loc=0, column='batch', value=[self.env['current_batch_number'] + 1] * len(df.index))
+            df_per_attr.append(df)
+        complete_df = pd.concat(df_per_attr)
         toc = time.clock()
         report_time = toc - tic
-        return report, report_time
+        return report, report_time, complete_df
