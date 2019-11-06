@@ -577,6 +577,10 @@ class Dataset:
             for attr in repaired_vals[tid]:
                 init_records[idx][attr] = repaired_vals[tid][attr]
         repaired_df = pd.DataFrame.from_records(init_records)
+
+        for attr in self.numerical_attrs:
+            repaired_df[attr] = repaired_df[attr].astype(float)
+
         name = self.raw_data.name+'_repaired'
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
         if not self.env['append']:
@@ -649,6 +653,9 @@ class Dataset:
 
         repaired_df = pd.DataFrame.from_records(init_records)
         repaired_table_name = self.raw_data.name + '_repaired'
+
+        for attr in self.numerical_attrs:
+            repaired_df[attr] = repaired_df[attr].astype(float)
 
         # Keeps track of the time spent to generate a copy of the current repaired table, if needed.
         repaired_table_copy_time = 0
