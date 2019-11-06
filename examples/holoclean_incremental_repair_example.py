@@ -71,7 +71,9 @@ class Executor:
 
                     # Loads existing data and Denial Constraints.
                     hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
-                                 '/tmp/current_batch.csv', entity_col=self.inc_args['entity_col'])
+                                 '/tmp/current_batch.csv',
+                                 entity_col=self.inc_args['entity_col'],
+                                 numerical_attrs=self.inc_args['numerical_attrs'])
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
@@ -145,6 +147,7 @@ if __name__ == "__main__":
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
         'dataset_name': 'hospital',
         'entity_col': None,
+        'numerical_attrs': None,
         'approach': 'one',
         'tuples_to_read_list': [1000],
         'iterations': [0],
