@@ -46,10 +46,10 @@ class ErrorsLoaderDetector(Detector):
         else:
             raise Exception("ERROR while intializing ErrorsLoaderDetector. Please provide (<fpath>), (<db_engine> and <table_name>), OR <df>")
 
-        self.errors_table = Table(dataset_name, src, 
-                                  exclude_attr_cols=[attr_col],
+        self.errors_table = Table(dataset_name, src,
                                   fpath=fpath, df=df,
-                                  schema_name=schema_name, db_engine=db_engine)
+                                  schema_name=schema_name, db_engine=db_engine,
+                                  lowercase=False)
                                 
         expected_schema = [id_col, attr_col]
         if list(self.errors_table.df.columns) != expected_schema:

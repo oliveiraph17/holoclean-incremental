@@ -23,7 +23,7 @@ class Executor:
         # Imports modules to dynamically instantiate HoloClean components (detectors and featurizers).
         modules = {
             'detect': {detector_file: importlib.import_module('detect.' + detector_file)
-                       for detector_file in self.hc_args['detectors'].keys()},
+                       for detector_file, _, _ in self.hc_args['detectors']},
             'featurize': {featurizer_file: importlib.import_module('repair.featurize.' + featurizer_file)
                           for featurizer_file in self.hc_args['featurizers'].keys()}
         }
@@ -73,11 +73,15 @@ class Executor:
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
 
-                    # Detects erroneous cells using these two detectors.
-                    detectors = [
-                        getattr(modules['detect'][detector_file], detector_class)()
-                        for detector_file, detector_class in self.hc_args['detectors'].items()
-                    ]
+                    # Detects erroneous cells.
+                    detectors = []
+                    for detector_file, detector_class, detector_has_params in self.hc_args['detectors']:
+                        if detector_has_params:
+                            params = {'fpath': (self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
+                                                self.inc_args['dataset_name'] + '_errors.csv')}
+                            detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
+                        else:
+                            detectors.append(getattr(modules['detect'][detector_file], detector_class)())
                     hc.detect_errors(detectors)
 
                     # Repairs errors based on the defined features.
@@ -104,7 +108,9 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        'detectors': {'nulldetector': 'NullDetector', 'violationdetector': 'ViolationDetector'},
+        # 'detectors': [('nulldetector', 'NullDetector', False),
+        #               ('violationdetector', 'ViolationDetector', False)],
+        'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
         'weak_label_thresh': 0.99,
@@ -141,8 +147,8 @@ if __name__ == "__main__":
         'dataset_name': 'hospital',
         'entity_col': None,
         'numerical_attrs': None,
-        'approach': 'co_a',
-        'tuples_to_read_list': [250] * 4,
+        'approach': 'one',
+        'tuples_to_read_list': [1000],
         'iterations': [0],
     }
 
