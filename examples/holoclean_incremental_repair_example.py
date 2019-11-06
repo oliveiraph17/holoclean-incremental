@@ -19,6 +19,11 @@ class Executor:
             self.time_log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
                                     self.inc_args['approach'] + '_time_log.csv')
 
+        self.weight_log_fpath = ''
+        if self.hc_args['log_feature_weights']:
+            self.weight_log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
+                                      self.inc_args['approach'] + '_weight_log.csv')
+
     def run(self):
         # Imports modules to dynamically instantiate HoloClean components (detectors and featurizers).
         modules = {
@@ -62,7 +67,7 @@ class Executor:
                         hc.ds.engine.drop_tables(table_list)
 
                     # Sets up loggers for the experiments.
-                    hc.setup_experiment_loggers(self.quality_log_fpath, self.time_log_fpath)
+                    hc.setup_experiment_loggers(self.quality_log_fpath, self.time_log_fpath, self.weight_log_fpath)
 
                     # Loads existing data and Denial Constraints.
                     hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
@@ -112,14 +117,16 @@ if __name__ == "__main__":
         'epochs': 20,
         'threads': 1,
         'verbose': True,
+        'print_fw': False,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
         'epochs_convergence': 3,
         'convergence_thresh': 0.01,
         'current_iteration': None,
         'current_batch_number': None,
-        'log_repairing_quality': True,
-        'log_execution_times': True,
+        'log_repairing_quality': False,
+        'log_execution_times': False,
+        'log_feature_weights': False,
         'incremental': False,
         'incremental_entropy': False,
         'default_entropy': False,
@@ -138,8 +145,8 @@ if __name__ == "__main__":
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
         'dataset_name': 'hospital',
         'entity_col': None,
-        'approach': 'co_a',
-        'tuples_to_read_list': [250] * 4,
+        'approach': 'one',
+        'tuples_to_read_list': [1000],
         'iterations': [0],
     }
 

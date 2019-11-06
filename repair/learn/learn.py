@@ -6,6 +6,7 @@ from torch.nn import Parameter, ParameterList, ReLU
 from torch.nn.functional import softmax
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 
 
 class TiedLinear(torch.nn.Module):
@@ -223,6 +224,7 @@ class RepairModel:
 
     def get_featurizer_weights(self, feat_info):
         report = ""
+        df_list = []
         for i, f in enumerate(feat_info):
             # TODO: fix this since we now have 200 weights (second layer size)
             # per feature
@@ -233,6 +235,10 @@ class RepairModel:
                                    for name, weight in
                                    zip(f.feature_names,
                                        map(str, np.around(this_weight, 3))))
+            df_list.append(pd.DataFrame(list(zip([f.name] * f.size,
+                                                 f.feature_names,
+                                                 map(str, np.around(this_weight, 3)))),
+                                        columns=['featurizer', 'feature', 'weight']))
             feat_name = f.name
             feat_size = f.size
             max_w = max(this_weight)
@@ -252,7 +258,7 @@ class RepairModel:
                 'weights': this_weight,
                 'size': feat_size
             }
-        return report
+        return report, df_list
 
     def save_checkpoint(self, file_path='/tmp/checkpoint.tar'):
         torch.save({

@@ -214,18 +214,24 @@ arguments = [
       'default': 0,
       'type': int,
       'help': 'Current batch number in experiments.'}),
-    (('-q', '--log-repairing-quality'),
+    (('-lrq', '--log-repairing-quality'),
      {'metavar': 'LOG_REPAIRING_QUALITY',
       'dest': 'log_repairing_quality',
       'default': False,
       'type': bool,
       'help': 'Logs results regarding repairing quality in experiments.'}),
-    (('-et', '--log-execution-times'),
+    (('-let', '--log-execution-times'),
      {'metavar': 'LOG_EXECUTION_TIMES',
       'dest': 'log_execution_times',
       'default': False,
       'type': bool,
       'help': 'Logs results regarding execution time in experiments.'}),
+    (('-lfw', '--log-feature-weights'),
+     {'metavar': 'LOG_FEATURE_WEIGHTS',
+      'dest': 'log_feature_weights',
+      'default': False,
+      'type': bool,
+      'help': 'Logs results regarding feature weights in experiments.'}),
     (('-inc', '--incremental'),
      {'metavar': 'INCREMENTAL',
       'dest': 'incremental',
@@ -404,6 +410,7 @@ class Session:
         self.env = env
         self.experiment_quality_logger = None
         self.experiment_time_logger = None
+        self.weight_log_path = None
         self.repairing_quality_metrics = []
         self.execution_times = []
         self.ds = Dataset(name, env)
@@ -413,8 +420,10 @@ class Session:
         self.repair_engine = RepairEngine(env, self.ds)
         self.eval_engine = EvalEngine(env, self.ds)
 
-    def setup_experiment_loggers(self, quality_log_fpath, time_log_fpath):
-        if not self.env['log_repairing_quality'] and not self.env['log_execution_times']:
+    def setup_experiment_loggers(self, quality_log_fpath, time_log_fpath, weight_log_path):
+        if (not self.env['log_repairing_quality']
+                and not self.env['log_execution_times']
+                and not self.env['log_feature_weights']):
             # Nothing needs to be logged.
             return
 
@@ -443,6 +452,7 @@ class Session:
 
                 # Writes header to quality log file.
                 self.experiment_quality_logger.info(quality_header)
+
             if self.env['log_execution_times']:
                 time_handler = logging.FileHandler(time_log_fpath)
                 time_handler.setFormatter(experiment_logger_formatter)
@@ -453,6 +463,8 @@ class Session:
 
                 # Writes header to time log file.
                 self.experiment_time_logger.info(time_header)
+
+        self.weight_log_path = weight_log_path
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
                   exclude_attr_cols=None, numerical_attrs=None):
@@ -661,9 +673,13 @@ class Session:
         if self.env['log_execution_times']:
             self.experiment_time_logger.info(';'.join(self.execution_times))
 
-        if self.env['print_fw']:
-            status, time = self.repair_engine.get_featurizer_weights()
-            logging.info(status)
+        if self.env['log_feature_weights']:
+            status, time, complete_df = self.repair_engine.get_featurizer_weights()
+            if self.env['print_fw']:
+                logging.info(status)
+            with open(self.weight_log_path, 'a') as f:
+                complete_df.to_csv(path_or_buf=f, mode='a',
+                                   index=False, header=f.tell() == 0, sep=';', line_terminator='')
             logging.debug('Time to store featurizer weights: %.2f secs', time)
             return status
 
