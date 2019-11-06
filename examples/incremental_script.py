@@ -3,7 +3,9 @@ from examples.holoclean_incremental_repair_example import Executor
 import os
 
 hc_args = {
-    'detectors': {'nulldetector': 'NullDetector', 'violationdetector': 'ViolationDetector'},
+    # 'detectors': [('nulldetector', 'NullDetector', False),
+    #               ('violationdetector', 'ViolationDetector', False)],
+    'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
     'weak_label_thresh': 0.99,
@@ -44,20 +46,14 @@ inc_args = {
     'iterations': [0],
 }
 
-######################################################################
-# Co-occurrence featurizer
-hc_args['featurizers'] = {'occurattrfeat': 'OccurAttrFeaturizer'}
-hc_args['estimator_type'] = 'NaiveBayes'
-######################################################################
-
-datasets = []
-datasets.append(('hospital', None, [20] * 2, 0.99, 10000, 0.6, 0.8))
-datasets.append(('food5k_shuffled', '_tid_', [1000] * 5, 0.6, 1000, 0.2, 0.3))
+datasets = [('hospital', None, [20] * 2, 0.99, 10000, 0.6, 0.8),
+            ('food5k_shuffled', '_tid_', [1000] * 5, 0.6, 1000, 0.2, 0.3)]
 
 approaches = ['A', 'B', 'C', 'C+', 'B+', 'Full']
 avg_time_iterations = [1, 2]  # or None
 
-for dataset_name, entity_col, tuples_to_read_list, weak_label_thresh, max_domain, cor_strength, nb_cor_strength in datasets:
+for (dataset_name, entity_col, tuples_to_read_list,
+     weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
     inc_args['dataset_name'] = dataset_name
     inc_args['entity_col'] = entity_col
     inc_args['tuples_to_read_list'] = tuples_to_read_list

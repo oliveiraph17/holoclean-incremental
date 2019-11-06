@@ -16,7 +16,7 @@ class Table:
     A wrapper class for Dataset Tables.
     """
     def __init__(self, name, src, na_values=None, exclude_attr_cols=['_tid_'],
-                 fpath=None, df=None, schema_name=None, table_query=None, db_engine=None):
+                 fpath=None, df=None, schema_name=None, table_query=None, db_engine=None, lowercase=True):
         """
         :param name: (str) name to assign to dataset.
         :param na_values: (str or list[str]) values to interpret as NULL.
@@ -35,6 +35,7 @@ class Table:
         :param schema_name: (str) Schema used while loading Source.DB
         :param table_query: (str) sql query to construct table from
         :param db_engine: (DBEngine) database engine object
+        :param lowercase: (bool) Whether to convert cells to lowercase strings or not
         """
         self.name = name
         self.index_count = 0
@@ -57,7 +58,10 @@ class Table:
                 if attr in exclude_attr_cols:
                     continue
 
-                self.df[attr] = self.df[attr].str.strip().str.lower()
+                if lowercase:
+                    self.df[attr] = self.df[attr].str.strip().str.lower()
+                else:
+                    self.df[attr] = self.df[attr].str.strip()
         elif src == Source.DF:
             if df is None:
                 raise Exception("ERROR while loading table. Dataframe expected. Please provide <df> param.")
