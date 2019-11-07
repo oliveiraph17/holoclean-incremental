@@ -42,8 +42,8 @@ class Dataset:
         self.env = env
         self.id = name
         self.raw_data = None
-        # DataFrame with the incoming data appended to previous repaired data.
-        self.raw_data_with_previous_repaired_data_df = None
+        # Table with the incoming data appended to previous repaired data.
+        self.raw_data_previously_repaired = None
         self.repaired_data = None
         # DataFrame with the rows from the previous dataset that are involved in violations.
         self.previous_dirty_rows_df = None
@@ -85,6 +85,7 @@ class Dataset:
         self.categorical_attrs = None
 
         self.quantized_data = None
+        self.quantized_data_previously_repaired = None
         self.do_quantization = False
 
         # Conditional entropy of each pair of attributes using the log base 2.
@@ -103,6 +104,8 @@ class Dataset:
         self.repair_previous_errors = env['repair_previous_errors']
         # Boolean flag for recomputing statistics and retraining model from scratch in incremental scenarios.
         self.recompute_from_scratch = env['recompute_from_scratch']
+        # Boolean flag for loading statistics pre-computed using the whole dataset to generate global features.
+        self.global_features = env['global_features']
 
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
@@ -161,18 +164,21 @@ class Dataset:
             self.categorical_attrs = [attr for attr in all_attrs if attr not in self.numerical_attrs]
 
             if store_to_db:
-                # Now df is all in str type, make a copy of df and then
-                # 1. replace the null values in categorical data
-                # 2. make the numerical attrs as float
-                # 3. store the correct type into db (categorical->str, numerical->float)
-                df_correct_type = df.copy()
-                for attr in self.categorical_attrs:
-                    df_correct_type.loc[df_correct_type[attr].isnull(), attr] = NULL_REPR
-                for attr in self.numerical_attrs:
-                    df_correct_type[attr] =  df_correct_type[attr].astype(float)
+                # # Now df is all in str type, make a copy of df and then
+                # # 1. replace the null values in categorical data
+                # # 2. make the numerical attrs as float
+                # # 3. store the correct type into db (categorical->str, numerical->float)
+                # df_correct_type = df.copy()
+                # for attr in self.categorical_attrs:
+                #     df_correct_type.loc[df_correct_type[attr].isnull(), attr] = NULL_REPR
+                # for attr in self.numerical_attrs:
+                #     df_correct_type[attr] =  df_correct_type[attr].astype(float)
+                #
+                # df_correct_type.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False,
+                #                        index_label=None)
 
-                df_correct_type.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False,
-                                       index_label=None)
+                # (kaster): The code above was commented because it was not being used and it raised errors for incremental execution
+                df.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False, index_label=None)
 
             # for df, which is all str
             # Use NULL_REPR to represent NULL values
@@ -361,12 +367,27 @@ class Dataset:
         elif self.incremental_entropy and self.recompute_from_scratch:
             raise Exception('Inconsistent parameters: incremental_entropy=%r, recompute_from_scratch=%r.' %
                             (self.incremental_entropy, self.recompute_from_scratch))
+        elif self.do_quantization and self.incremental and not self.recompute_from_scratch:
+            raise Exception('Inconsistent parameters: incremental=True, do_quantization=%r, recompute_from_scratch=%r.' %
+                            (self.do_quantization, self.recompute_from_scratch))
+        elif self.global_features and self.default_entropy:
+            raise Exception('Inconsistent parameters: global_features=%r, default_entropy=%r.' %
+                            (self.global_features, self.default_entropy))
 
         total_tuples_loaded = None
         single_attr_stats_loaded = None
         pair_attr_stats_loaded = None
 
         logging.debug('Computing frequency, co-occurrence, and correlation statistics from raw data.')
+
+        if self.global_features:
+            self.total_tuples, self.single_attr_stats, self.pair_attr_stats = self.load_stats()
+            # As global_features=True implies default_entropy=False we do not need to provide a data frame.
+            correlations = self.compute_norm_cond_entropy_corr(None)
+            self.correlations = self._make_hashable(correlations)
+            logging.debug('Loaded global statistics.')
+            # TODO(kaster): Add the debug instructions to show info about the stats (at the end of this function) if they were useful.
+            return
 
         if self.incremental and not self.is_first_batch() and not self.recompute_from_scratch:
             tic = time.clock()
@@ -377,24 +398,29 @@ class Dataset:
 
         if not self.is_first_batch() and self.recompute_from_scratch:
             # We get the statistics both from previous and incoming data.
-            self.load_previous_repaired_data()
-            data_df = self.raw_data_with_previous_repaired_data_df
+            if self.do_quantization:
+                # TODO(kaster): Quantization cannot be computed incrementally yet, so it implies recompute_from_scratch.
+                data_df = pd.concat([self.get_quantized_data(),
+                                     self.get_quantized_data_previously_repaired()]).reset_index(drop=True)
+            else:
+                data_df = pd.concat([self.get_raw_data(),
+                                     self.get_raw_data_previously_repaired()]).reset_index(drop=True)
         else:
             # We get the statistics from the incoming data.
-            data_df = self.raw_data.df
+            data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
 
         # Total number of tuples.
         self.total_tuples = len(data_df.index)
 
         # Single statistics.
         for attr in self.get_attributes():
-            self.single_attr_stats[attr] = self.get_stats_single(attr)
+            self.single_attr_stats[attr] = self.get_stats_single(attr, data_df)
         # Compute co-occurrence frequencies.
         for cond_attr in self.get_attributes():
             self.pair_attr_stats[cond_attr] = {}
             for trg_attr in self.get_attributes():
                 if trg_attr != cond_attr:
-                    self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr, trg_attr)
+                    self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr, trg_attr, data_df)
 
         Stats = recordtype('Stats', 'total_tuples single_attr_stats pair_attr_stats')
         stats1 = Stats(total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded)
@@ -402,11 +428,8 @@ class Dataset:
 
         entropy_tic = time.clock()
 
-        # TODO(kaster): adjust the correlation computation to use correctly the quantized_data as indicated below.
-        # data_df = self.ds.get_quantized_data() if self.do_quantization \
-        #    else self.ds.get_raw_data()
         if not self.incremental or self.is_first_batch():
-            correlations = self.compute_norm_cond_entropy_corr()
+            correlations = self.compute_norm_cond_entropy_corr(data_df)
         else:
             if self.incremental_entropy:
                 # The incremental entropy calculation requires separate statistics.
@@ -431,7 +454,7 @@ class Dataset:
                     self.single_attr_stats = stats1.single_attr_stats
                     self.pair_attr_stats = stats1.pair_attr_stats
 
-                correlations = self.compute_norm_cond_entropy_corr()
+                correlations = self.compute_norm_cond_entropy_corr(data_df)
 
         if self.env['debug_mode']:
             corrs_df = pd.DataFrame.from_dict(correlations, orient='columns')
@@ -453,30 +476,22 @@ class Dataset:
 
         return corr_dict
 
-    def get_stats_single(self, attr):
+    def get_stats_single(self, attr, data_df):
         """
         Returns a dictionary where the keys are domain values for :param attr: and
         the values contain the frequency count of that value for this attribute.
         """
         # need to decode values into unicode strings since we do lookups via
         # unicode strings from Postgres
-        if not self.is_first_batch() and self.recompute_from_scratch:
-            data_df = self.raw_data_with_previous_repaired_data_df
-        else:
-            data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
         return data_df[[attr]].groupby([attr]).size().to_dict()
 
-    def get_stats_pair(self, first_attr, second_attr):
+    def get_stats_pair(self, first_attr, second_attr, data_df):
         """
         Returns a dictionary {first_val -> {second_val -> count } } where:
             <first_val>: all possible values for first_attr
             <second_val>: all values for second_attr that appear at least once with <first_val>
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
         """
-        if not self.is_first_batch() and self.recompute_from_scratch:
-            data_df = self.raw_data_with_previous_repaired_data_df
-        else:
-            data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
         tmp_df = data_df[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
             .size()\
@@ -636,7 +651,7 @@ class Dataset:
             for attr in inferred_values[tid]:
                 # Checks if the value was repaired.
                 if init_records[idx][attr] != inferred_values[tid][attr]:
-                    if not self.recompute_from_scratch:
+                    if not self.recompute_from_scratch and not self.global_features:
                         # Updates the statistics regarding the repaired value.
                         # This must be done before replacing the old value with the repaired one.
                         self.update_value_stats(init_records[idx],
@@ -682,7 +697,7 @@ class Dataset:
             self.repaired_data.store_to_db(self.engine.engine)
 
         save_stats_time = 0
-        if not self.recompute_from_scratch:
+        if not self.recompute_from_scratch and not self.global_features:
             # Persists the up-to-date statistics in the database.
             tic_inc = time.clock()
             self.save_stats()
@@ -810,7 +825,7 @@ class Dataset:
                         # Increments the frequency.
                         self.pair_attr_stats[other_attr][attr][other_attr_val][new_attr_val] += 1
 
-    def compute_norm_cond_entropy_corr(self):
+    def compute_norm_cond_entropy_corr(self, data_df=None):
         """
         Computes the correlations between attributes by calculating the normalized conditional entropy between them.
         The conditional entropy is asymmetric, therefore we need pairwise computations.
@@ -850,8 +865,8 @@ class Dataset:
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
                 if self.default_entropy:
                     # Uses the implementation of pyitlib.
-                    corr[x][y] = 1.0 - drv.entropy_conditional(self.raw_data.df[x],
-                                                               self.raw_data.df[y],
+                    corr[x][y] = 1.0 - drv.entropy_conditional(data_df[x],
+                                                               data_df[y],
                                                                base=x_domain_size).item()
                 else:
                     # Uses our implementation.
@@ -1023,18 +1038,26 @@ class Dataset:
 
         return first_tid
 
-    def load_previous_repaired_data(self):
-        try:
-            previous_repaired_data = Table(self.raw_data.name + '_repaired',
-                                           Source.DB,
-                                           db_engine=self.engine)
+    def get_raw_data_previously_repaired(self):
+        if self.raw_data_previously_repaired is None:
+            try:
+                self.raw_data_previously_repaired = Table(self.raw_data.name + '_repaired',
+                                               Source.DB,
+                                               db_engine=self.engine)
 
-            incoming_data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
+            except ValueError:
+                raise Exception('ERROR while trying to load previous repaired data from the database.')
 
-            self.raw_data_with_previous_repaired_data_df = pd.concat([previous_repaired_data.df,
-                                                                      incoming_data_df])
-        except ValueError:
-            raise Exception('ERROR while trying to load previous repaired data from the database.')
+        return self.raw_data_previously_repaired.df
+
+    def get_quantized_data_previously_repaired(self):
+        """
+        get_quantized_data returns a pandas.DataFrame containing the data after quantization
+        :return: the data after quantization in pandas.DataFrame
+        """
+        if self.quantized_data_previously_repaired is None:
+            raise Exception('ERROR No dataset quantized')
+        return self.quantized_data_previously_repaired.df
 
     def load_stats(self):
         try:

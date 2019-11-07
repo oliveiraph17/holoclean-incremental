@@ -307,6 +307,18 @@ arguments = [
       'default': False,
       'type': bool,
       'help': 'Sets if the repaired table should be appended to an existing one.'}),
+    (('-gf', '--global_features'),
+     {'metavar': 'GLOBAL_FEATURES',
+      'dest': 'global_features',
+      'default': False,
+      'type': bool,
+      'help': 'If True the system requires loading previously computed statistics to generate features.'}),
+    (('-gf', '--train-using-all-batches'),
+     {'metavar': 'TRAIN_USING_ALL_BATCHES',
+      'dest': 'train_using_all_batches',
+      'default': False,
+      'type': bool,
+      'help': 'Indicates if all data loaded so far should be used for training, including from the current batch.'}),
 ]
 
 # Flags for Holoclean mode
@@ -538,18 +550,22 @@ class Session:
         self.ds.do_quantization = True
         self.domain_engine.do_quantization = True
 
-        status, quantize_time, quantized_data = \
-            quantize_km(self.env, self.ds.get_raw_data(), num_attr_groups_bins)
+        if self.env['incremental'] and not self.ds.is_first_batch():
+            df_raw_previously_repaired = self.ds.get_raw_data_previously_repaired()
+        else:
+            df_raw_previously_repaired = None
+
+        status, quantize_time, quantized_data, quantized_data_previously_repaired = \
+            quantize_km(self.env, self.ds.get_raw_data(), num_attr_groups_bins, df_raw_previously_repaired)
 
         logging.info(status)
         logging.debug('Time to quantize the dataset: %.2f secs' % quantize_time)
 
-        self.load_quantized_data(quantized_data)
+        self.load_quantized_data(quantized_data, quantized_data_previously_repaired)
 
+        return quantized_data, quantized_data_previously_repaired
 
-        return quantized_data
-
-    def load_quantized_data(self, df):
+    def load_quantized_data(self, df, df_previously_repaired=None):
         tic = time.time()
         name = self.ds.raw_data.name + '_quantized'
         self.ds.quantized_data = Table(name, Source.DF, df=df)
@@ -566,7 +582,11 @@ class Session:
             self.ds.quantized_data.create_db_index(self.ds.engine, [attr])
         logging.debug('Time to load quantized dataset: %.2f secs' % (time.time() - tic))
 
-
+        if df_previously_repaired is not None:
+            # It is not needed to re-store the repaired table since it was set to store numerical values as floats in a
+            # previous batch.
+            name = self.ds.raw_data.name + '_quantized_previously_repaired'
+            self.ds.quantized_data_previously_repaired = Table(name, Source.DF, df=df_previously_repaired)
 
     def generate_domain(self):
         status, domain_time = self.domain_engine.setup()

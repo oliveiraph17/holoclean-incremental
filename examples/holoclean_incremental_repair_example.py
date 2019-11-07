@@ -89,6 +89,9 @@ class Executor:
                             detectors.append(getattr(modules['detect'][detector_file], detector_class)())
                     hc.detect_errors(detectors)
 
+                    if self.inc_args['do_quantization']:
+                        hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
+
                     # Repairs errors based on the defined features.
                     hc.generate_domain()
                     hc.run_estimator()
@@ -113,9 +116,9 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        # 'detectors': [('nulldetector', 'NullDetector', False),
-        #               ('violationdetector', 'ViolationDetector', False)],
-        'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+        'detectors': [('nulldetector', 'NullDetector', False),
+                      ('violationdetector', 'ViolationDetector', False)],
+        # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
         'weak_label_thresh': 0.99,
@@ -124,7 +127,7 @@ if __name__ == "__main__":
         'nb_cor_strength': 0.8,
         'epochs': 20,
         'threads': 1,
-        'verbose': False,
+        'verbose': True,
         'print_fw': False,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
@@ -154,8 +157,10 @@ if __name__ == "__main__":
         'dataset_name': 'hospital',
         'entity_col': None,
         'numerical_attrs': None,
-        'approach': 'one',
-        'tuples_to_read_list': [1000],
+        'do_quantization': False,
+        'num_attr_groups_bins': None,
+        'approach': 'co_a',
+        'tuples_to_read_list': [250] * 4,
         'iterations': [0],
     }
 
