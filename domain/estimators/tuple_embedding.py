@@ -133,11 +133,20 @@ class LookupDataset(Dataset):
         # Make copy of raw data
         # Quantized data is used for co-occurrence statistics in the last layer
         # for categorical targets.
-        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
-            self._raw_data = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data().copy()])
+
+        if not self.ds.is_first_batch():
+            if self.env['train_using_all_batches']:
+                self._raw_data = pd.concat([self.ds.get_raw_data_previously_repaired(),
+                                            self.ds.get_raw_data()]).reset_index(drop=True)
+            elif self.env['repair_previous_errors']:
+                self._raw_data = pd.concat([self.ds.get_previous_dirty_rows(),
+                                            self.ds.get_raw_data()]).reset_index(drop=True)
+            else:
+                self._raw_data = self.ds.get_raw_data().copy()
         else:
             self._raw_data = self.ds.get_raw_data().copy()
-        self._qtized_raw_data = self.ds.get_quantized_data() if self.ds.do_quantization else self._raw_data
+
+        self._qtized_raw_data = self.ds.get_prepared_raw_data()
         self._qtized_raw_data_dict = self._qtized_raw_data.set_index('_tid_').to_dict('index')
 
         # Statistics for cooccurrences.
@@ -1145,8 +1154,15 @@ class TupleEmbedding(Estimator, torch.nn.Module):
             error detection. Recommend False if error detector is very liberal.
         """
 
-        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
-            raw_df = pd.concat([self.ds.get_previous_dirty_rows(), self.ds.get_raw_data()])
+        if not self.ds.is_first_batch():
+            if self.env['train_using_all_batches']:
+                raw_df = pd.concat([self.ds.get_raw_data_previously_repaired(),
+                                    self.ds.get_raw_data()]).reset_index(drop=True)
+            elif self.env['repair_previous_errors']:
+                raw_df = pd.concat([self.ds.get_previous_dirty_rows(),
+                                    self.ds.get_raw_data()]).reset_index(drop=True)
+            else:
+                raw_df = self.ds.get_raw_data()
         else:
             raw_df = self.ds.get_raw_data()
 

@@ -588,6 +588,10 @@ class Session:
             name = self.ds.raw_data.name + '_quantized_previously_repaired'
             self.ds.quantized_data_previously_repaired = Table(name, Source.DF, df=df_previously_repaired)
 
+            if self.env['incremental'] and self.env['repair_previous_errors']:
+                df_previous_errors = df_previously_repaired[df_previously_repaired['_tid_'].isin(self.ds.get_previous_dirty_rows()['_tid_'])]
+                self.ds.quantized_previous_dirty_rows = Table(name, Source.DF, df=df_previous_errors)
+
     def generate_domain(self):
         status, domain_time = self.domain_engine.setup()
         logging.info(status)

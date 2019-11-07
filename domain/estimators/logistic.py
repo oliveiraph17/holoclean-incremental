@@ -82,8 +82,7 @@ class Logistic(Estimator, torch.nn.Module):
         to use in training. We assign Y as 1 if the value is the initial value.
         """
         sample_idx = 0
-        data_df = self.ds.get_quantized_data() if self.ds.do_quantization \
-            else self.ds.get_raw_data()
+        data_df = self.ds.get_prepared_raw_data()
         raw_data_dict = data_df.set_index('_tid_').to_dict('index')
         # Keep track of which indices correspond to a VID so we can re-use
         # self._X in prediction.

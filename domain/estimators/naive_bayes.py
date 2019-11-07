@@ -24,13 +24,7 @@ class NaiveBayes(Estimator):
 
         # TID to raw data tuple for prediction.
         self._raw_records_by_tid = {}
-        raw_df = self.ds.get_quantized_data() if self.ds.do_quantization else self.ds.get_raw_data()
-
-        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
-            # TODO(kaster): adjust here to properly handle quantized_data for previous dirty rows
-            records = pd.concat([self.ds.get_previous_dirty_rows(), raw_df]).to_records()
-        else:
-            records = raw_df.to_records()
+        records = self.ds.get_prepared_raw_data().to_records(index=False)
 
         for row in records:
             self._raw_records_by_tid[row['_tid_']] = row

@@ -12,7 +12,7 @@ class LangModelFeaturizer(Featurizer):
         self.all_attrs = self.ds.get_attributes()
         self.attrs_number = len(self.all_attrs)
         self.attr_language_model = {}
-        raw_data = self.ds.get_raw_data()
+        raw_data = self.ds.get_prepared_raw_data()
         for attr in self.all_attrs:
             attr_corpus = list(zip(raw_data[attr].tolist()))
             model = FastText(attr_corpus, min_count=1, size=self.emb_size)

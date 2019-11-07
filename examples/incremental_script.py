@@ -32,7 +32,8 @@ hc_args = {
     'ignore_previous_training_cells': False,
     'save_load_checkpoint': False,
     'append': True,
-    'infer_mode': 'dk'
+    'infer_mode': 'dk',
+    'log_feature_weights': False
 }
 
 inc_args = {
