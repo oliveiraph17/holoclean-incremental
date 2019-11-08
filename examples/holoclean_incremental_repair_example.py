@@ -116,9 +116,9 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        'detectors': [('nulldetector', 'NullDetector', False),
-                      ('violationdetector', 'ViolationDetector', False)],
-        # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+        # 'detectors': [('nulldetector', 'NullDetector', False),
+        #               ('violationdetector', 'ViolationDetector', False)],
+        'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
         'weak_label_thresh': 0.99,
