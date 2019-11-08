@@ -313,7 +313,7 @@ arguments = [
       'default': False,
       'type': bool,
       'help': 'If True the system requires loading previously computed statistics to generate features.'}),
-    (('-gf', '--train-using-all-batches'),
+    (('-tab', '--train-using-all-batches'),
      {'metavar': 'TRAIN_USING_ALL_BATCHES',
       'dest': 'train_using_all_batches',
       'default': False,

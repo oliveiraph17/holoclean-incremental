@@ -270,11 +270,11 @@ class Dataset:
 
     def get_prepared_raw_data(self):
         """
-        get_raw_data returns a pandas.DataFrame containing the raw data as it was initially loaded.
+        get_prepared_raw_data returns a pandas.DataFrame containing the raw data
+        after being prepared according to the input flags.
         """
 
         if self.prepared_raw_data_df is None:
-
             if not self.do_quantization:
                 if not self.is_first_batch():
                     if self.env['train_using_all_batches']:
@@ -292,7 +292,6 @@ class Dataset:
                         self.prepared_raw_data_df = self.get_raw_data()
                 else:
                     self.prepared_raw_data_df = self.get_raw_data()
-
             else:
                 if self.quantized_data is None:
                     raise Exception('ERROR No dataset quantized')
@@ -409,8 +408,8 @@ class Dataset:
             raise Exception('Inconsistent parameters: incremental_entropy=%r, recompute_from_scratch=%r.' %
                             (self.incremental_entropy, self.recompute_from_scratch))
         elif self.do_quantization and self.incremental and not self.recompute_from_scratch:
-            raise Exception('Inconsistent parameters: incremental=True, do_quantization=%r, recompute_from_scratch=%r.' %
-                            (self.do_quantization, self.recompute_from_scratch))
+            raise Exception('Inconsistent parameters: incremental=%r, do_quantization=%r, recompute_from_scratch=%r.' %
+                            (self.incremental, self.do_quantization, self.recompute_from_scratch))
         elif self.global_features and self.default_entropy:
             raise Exception('Inconsistent parameters: global_features=%r, default_entropy=%r.' %
                             (self.global_features, self.default_entropy))
@@ -448,7 +447,7 @@ class Dataset:
                                      self.quantized_data_previously_repaired.df]).reset_index(drop=True)
             else:
                 data_df = pd.concat([self.raw_data.df,
-                                     self.get_raw_data_previously_repaired()]).reset_index(drop=True)
+                                     self.raw_data_previously_repaired.df]).reset_index(drop=True)
         else:
             # We get the statistics from the incoming data.
             if self.do_quantization:
