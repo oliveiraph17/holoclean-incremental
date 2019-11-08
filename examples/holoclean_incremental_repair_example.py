@@ -89,6 +89,9 @@ class Executor:
                             detectors.append(getattr(modules['detect'][detector_file], detector_class)())
                     hc.detect_errors(detectors)
 
+                    if self.inc_args['do_quantization']:
+                        hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
+
                     # Repairs errors based on the defined features.
                     hc.generate_domain()
                     hc.run_estimator()
@@ -113,9 +116,9 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        # 'detectors': [('nulldetector', 'NullDetector', False),
-        #               ('violationdetector', 'ViolationDetector', False)],
-        'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+        'detectors': [('nulldetector', 'NullDetector', False),
+                      ('violationdetector', 'ViolationDetector', False)],
+        # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
         'weak_label_thresh': 0.99,
@@ -124,7 +127,7 @@ if __name__ == "__main__":
         'nb_cor_strength': 0.8,
         'epochs': 20,
         'threads': 1,
-        'verbose': True,
+        'verbose': False,
         'print_fw': False,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
@@ -132,9 +135,9 @@ if __name__ == "__main__":
         'convergence_thresh': 0.01,
         'current_iteration': None,
         'current_batch_number': None,
-        'log_repairing_quality': False,
-        'log_execution_times': False,
-        'log_feature_weights': False,
+        'log_repairing_quality': True,
+        'log_execution_times': True,
+        'log_feature_weights': True,
         'incremental': False,
         'incremental_entropy': False,
         'default_entropy': False,
@@ -151,9 +154,11 @@ if __name__ == "__main__":
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-        'dataset_name': 'hospital',
+        'dataset_name': 'hospital_numerical',
         'entity_col': None,
-        'numerical_attrs': None,
+        'numerical_attrs': ['Score', 'Sample'],
+        'do_quantization': True,
+        'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
         'approach': 'one',
         'tuples_to_read_list': [1000],
         'iterations': [0],

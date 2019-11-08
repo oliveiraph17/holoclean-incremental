@@ -192,12 +192,7 @@ class DomainEngine:
         cells = []
         vid = 0
 
-        raw_df = self.ds.get_quantized_data() if self.do_quantization else self.ds.get_raw_data()
-        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
-            # TODO(kaster): adjust here to properly handle quantized_data for previous dirty rows
-            records = pd.concat([self.ds.get_previous_dirty_rows(), raw_df]).to_records(index=False)
-        else:
-            records = raw_df.to_records()
+        records = self.ds.get_prepared_raw_data().to_records(index=False)
 
         dk_lookup = {(val[0], val[1]) for val in self.ds.aux_table[AuxTables.dk_cells].df[['_tid_', 'attribute']].values}
 
@@ -379,7 +374,7 @@ class DomainEngine:
             self.setup_attributes()
 
         logging.debug('generating initial set of un-pruned domain values...')
-        records = self.ds.get_raw_data().to_records()
+        records = self.ds.get_prepared_raw_data().to_records(index=False)
         vid = 0
         domain_df = None
 

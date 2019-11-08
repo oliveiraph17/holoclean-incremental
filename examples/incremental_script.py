@@ -3,9 +3,9 @@ from examples.holoclean_incremental_repair_example import Executor
 import os
 
 hc_args = {
-    # 'detectors': [('nulldetector', 'NullDetector', False),
-    #               ('violationdetector', 'ViolationDetector', False)],
-    'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+    'detectors': [('nulldetector', 'NullDetector', False),
+                  ('violationdetector', 'ViolationDetector', False)],
+    # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
     'weak_label_thresh': 0.99,
@@ -31,7 +31,9 @@ hc_args = {
     'skip_training': False,
     'ignore_previous_training_cells': False,
     'save_load_checkpoint': False,
-    'append': True
+    'append': True,
+    'infer_mode': 'dk',
+    'log_feature_weights': False
 }
 
 inc_args = {
@@ -46,16 +48,22 @@ inc_args = {
     'iterations': [0],
 }
 
-datasets = [('hospital', None, [20] * 2, 0.99, 10000, 0.6, 0.8),
-            ('food5k_shuffled', '_tid_', [1000] * 5, 0.6, 1000, 0.2, 0.3)]
+datasets = []
+datasets.append(('hospital', None, None, False, None, [20] * 2, 0.99, 10000, 0.6, 0.8))
+datasets.append(('food5k_shuffled', '_tid_', None, False, None, [1000] * 5, 0.6, 1000, 0.2, 0.3))
+datasets.append(('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
+                 [100] * 10, 0.99, 10000, 0.6, 0.8))
 
 approaches = ['A', 'B', 'C', 'C+', 'B+', 'Full']
 avg_time_iterations = [1, 2]  # or None
 
-for (dataset_name, entity_col, tuples_to_read_list,
-     weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
+for (dataset_name, entity_col, numerical_attrs, do_quantization, num_attr_groups_bins, tuples_to_read_list,\
+        weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
     inc_args['dataset_name'] = dataset_name
     inc_args['entity_col'] = entity_col
+    inc_args['numerical_attrs'] = numerical_attrs
+    inc_args['do_quantization'] = do_quantization
+    inc_args['num_attr_groups_bins'] = num_attr_groups_bins
     inc_args['tuples_to_read_list'] = tuples_to_read_list
     hc_args['weak_label_thresh'] = weak_label_thresh
     hc_args['max_domain'] = max_domain
@@ -191,6 +199,7 @@ for (dataset_name, entity_col, tuples_to_read_list,
         # Full - Quality
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
+        inc_args['tuples_to_read_list'] = [sum(inc_args['tuples_to_read_list'])]
         inc_args['iterations'] = [0]
         executor = Executor(hc_args, inc_args)
         executor.run()
