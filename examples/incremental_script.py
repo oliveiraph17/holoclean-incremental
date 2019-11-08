@@ -48,17 +48,16 @@ inc_args = {
     'iterations': [0],
 }
 
-datasets = []
-datasets.append(('hospital', None, None, False, None, [20] * 2, 0.99, 10000, 0.6, 0.8))
-datasets.append(('food5k_shuffled', '_tid_', None, False, None, [1000] * 5, 0.6, 1000, 0.2, 0.3))
-datasets.append(('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
-                 [100] * 10, 0.99, 10000, 0.6, 0.8))
+datasets = [('hospital', None, None, False, None, [20] * 2, 0.99, 10000, 0.6, 0.8),
+            ('food5k_shuffled', '_tid_', None, False, None, [1000] * 5, 0.6, 1000, 0.2, 0.3),
+            ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
+             [100] * 10, 0.99, 10000, 0.6, 0.8)]
 
 approaches = ['A', 'B', 'C', 'C+', 'B+', 'Full']
 avg_time_iterations = [1, 2]  # or None
 
-for (dataset_name, entity_col, numerical_attrs, do_quantization, num_attr_groups_bins, tuples_to_read_list,\
-        weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
+for (dataset_name, entity_col, numerical_attrs, do_quantization, num_attr_groups_bins, tuples_to_read_list,
+     weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
     inc_args['dataset_name'] = dataset_name
     inc_args['entity_col'] = entity_col
     inc_args['numerical_attrs'] = numerical_attrs
