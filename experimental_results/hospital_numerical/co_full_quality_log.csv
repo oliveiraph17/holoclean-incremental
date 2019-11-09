@@ -1,0 +1,8 @@
+infer_mode;features;train_using_all_batches;batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;repairs_on_correct_cells;repairs_on_incorrect_cells;rmse
+dk;incremental;False;1;484;16637;1.0;0.9934065934065934;0.9934065934065934;0.9966923925027563;0.9966923925027563;455.0;455.0;452.0;452;452.0;0;452.0;13.2779647471322561
+infer_mode;features;train_using_all_batches;batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;repairs_on_correct_cells;repairs_on_incorrect_cells;rmse
+dk;fixed;False;1;484;16637;1.0;0.9934065934065934;0.9934065934065934;0.9966923925027563;0.9966923925027563;455.0;455.0;452.0;452;452.0;0;452.0;13.2779647471322561
+infer_mode;features;train_using_all_batches;batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;repairs_on_correct_cells;repairs_on_incorrect_cells;rmse
+all;incremental;False;1;0;16744;0.9300411522633745;0.9934065934065934;0;0.9606801275239107;0.0;0.0;455.0;452.0;486;486.0;34.0;452.0;26.8369359659419161
+infer_mode;features;train_using_all_batches;batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;repairs_on_correct_cells;repairs_on_incorrect_cells;rmse
+all;fixed;False;1;0;16744;0.9300411522633745;0.9934065934065934;0;0.9606801275239107;0.0;0.0;455.0;452.0;486;486.0;34.0;452.0;26.8369359659419161

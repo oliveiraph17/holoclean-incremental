@@ -195,8 +195,16 @@ class RepairEngine:
                 .get_featurizer_weights(self.feat_dataset.featurizer_info)
             # One df per featurizer in df_list.
             df = pd.concat(df_list)
-            df.insert(loc=1, column='attribute', value=[attr] * len(df.index))
-            df.insert(loc=0, column='batch', value=[self.env['current_batch_number'] + 1] * len(df.index))
+            df.insert(loc=1, column='attribute',
+                      value=[attr] * len(df.index))
+            df.insert(loc=0, column='batch',
+                      value=[self.env['current_batch_number'] + 1] * len(df.index))
+            df.insert(loc=0, column='train_using_all_batches',
+                      value=['True' if self.env['train_using_all_batches'] else 'False'] * len(df.index))
+            df.insert(loc=0, column='features',
+                      value=['fixed' if self.env['global_features'] else 'incremental'] * len(df.index))
+            df.insert(loc=0, column='infer_mode',
+                      value=[self.env['infer_mode']] * len(df.index))
             df_per_attr.append(df)
         complete_df = pd.concat(df_per_attr)
         toc = time.clock()

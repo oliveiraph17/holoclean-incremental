@@ -746,7 +746,7 @@ class Dataset:
             self.repaired_data.store_to_db(self.engine.engine)
 
         save_stats_time = 0
-        if not self.recompute_from_scratch and not self.global_features:
+        if not self.global_features:
             # Persists the up-to-date statistics in the database.
             tic_inc = time.clock()
             self.save_stats()
@@ -1099,17 +1099,20 @@ class Dataset:
 
         return self.raw_data_previously_repaired.df
 
-    def load_stats(self):
+    @staticmethod
+    def load_stats():
         try:
             with open('/tmp/single_attr_stats.ujson', encoding='utf-8') as f:
                 single_attr_stats = ujson.load(f)
             with open('/tmp/pair_attr_stats.ujson', encoding='utf-8') as f:
                 pair_attr_stats = ujson.load(f)
+            with open('/tmp/num_tuples.txt', encoding='utf-8') as f:
+                num_tuples = f.readline()
 
-            table_repaired_name = self.raw_data.name + '_repaired'
-            query = 'SELECT COUNT(*) FROM "{}"'.format(table_repaired_name)
-            result = self.engine.execute_query(query)
-            num_tuples = result[0][0]
+            # table_repaired_name = self.raw_data.name + '_repaired'
+            # query = 'SELECT COUNT(*) FROM "{}"'.format(table_repaired_name)
+            # result = self.engine.execute_query(query)
+            # num_tuples = result[0][0]
 
             return num_tuples, single_attr_stats, pair_attr_stats
         except ValueError:
@@ -1120,6 +1123,8 @@ class Dataset:
             ujson.dump(self.single_attr_stats, f, ensure_ascii=False)
         with open('/tmp/pair_attr_stats.ujson', 'w', encoding='utf-8') as f:
             ujson.dump(self.pair_attr_stats, f, ensure_ascii=False)
+        with open('/tmp/num_tuples.txt', 'w', encoding='utf-8') as f:
+            f.write(str(self.total_tuples) + '\n')
 
     def is_first_batch(self):
         # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.

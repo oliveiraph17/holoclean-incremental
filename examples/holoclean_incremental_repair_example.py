@@ -2,6 +2,9 @@ import holoclean
 import importlib
 import logging
 import os
+import pandas as pd
+
+from dataset import AuxTables
 
 
 class Executor:
@@ -78,16 +81,28 @@ class Executor:
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
 
-                    # Detects erroneous cells.
-                    detectors = []
-                    for detector_file, detector_class, detector_has_params in self.hc_args['detectors']:
-                        if detector_has_params:
-                            params = {'fpath': (self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
-                                                self.inc_args['dataset_name'] + '_errors.csv')}
-                            detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
-                        else:
-                            detectors.append(getattr(modules['detect'][detector_file], detector_class)())
-                    hc.detect_errors(detectors)
+                    if self.hc_args['infer_mode'] == 'dk':
+                        # Detects erroneous cells.
+                        detectors = []
+                        for detector_file, detector_class, detector_has_params in self.hc_args['detectors']:
+                            if detector_has_params:
+                                params = {'fpath': (self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
+                                                    self.inc_args['dataset_name'] + '_errors.csv')}
+                                detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
+                            else:
+                                detectors.append(getattr(modules['detect'][detector_file], detector_class)())
+                        hc.detect_errors(detectors)
+                    elif self.hc_args['infer_mode'] == 'all':
+                        # Skips error detection, creating an empty dk_cells table.
+                        empty_dk_cells_df = pd.DataFrame(columns=['_tid_', 'attribute', '_cid_'])
+                        empty_dk_cells_df['_tid_'] = empty_dk_cells_df['_tid_'].astype(int)
+                        empty_dk_cells_df['attribute'] = empty_dk_cells_df['attribute'].astype(str)
+                        empty_dk_cells_df['_cid_'] = empty_dk_cells_df['_cid_'].astype(int)
+
+                        hc.ds.generate_aux_table(AuxTables.dk_cells, empty_dk_cells_df, store=True)
+
+                        hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number'] + 1))
+                        hc.repairing_quality_metrics.append(str(0))
 
                     if self.inc_args['do_quantization']:
                         hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
@@ -121,8 +136,9 @@ if __name__ == "__main__":
         'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
+        'domain_thresh_2': 0,
         'weak_label_thresh': 0.99,
-        'max_domain': 50,
+        'max_domain': 10000,
         'cor_strength': 0.6,
         'nb_cor_strength': 0.8,
         'epochs': 20,
@@ -131,22 +147,17 @@ if __name__ == "__main__":
         'print_fw': False,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
-        'epochs_convergence': 3,
-        'convergence_thresh': 0.01,
-        'current_iteration': None,
-        'current_batch_number': None,
         'log_repairing_quality': True,
         'log_execution_times': True,
         'log_feature_weights': True,
-        'incremental': False,
-        'incremental_entropy': False,
-        'default_entropy': False,
+        'incremental': True,
         'repair_previous_errors': False,
-        'recompute_from_scratch': False,
-        'skip_training': False,
-        'ignore_previous_training_cells': False,
+        'recompute_from_scratch': True,
         'save_load_checkpoint': False,
-        'append': True
+        'append': False,
+        'infer_mode': 'dk',
+        'global_features': False,
+        'train_using_all_batches': False
     }
 
     # Default parameters for Executor.
