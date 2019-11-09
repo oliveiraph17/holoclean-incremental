@@ -13,7 +13,7 @@ hc_args = {
     'max_domain': 10000,
     'cor_strength': 0.6,
     'nb_cor_strength': 0.8,
-    'epochs': 2,
+    'epochs': 20,
     'threads': 1,
     'verbose': False,
     'timeout': 3 * 60000,
@@ -48,11 +48,7 @@ datasets = [
     ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
      [1000], 0.99, 10000, 0.6, 0.8, 'dk', False, False),
     ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
-     [1000], 0.99, 10000, 0.6, 0.8, 'dk', True, False),
-    ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
-     [1000], 0.99, 10000, 0.6, 0.8, 'all', False, False),
-    ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
-     [1000], 0.99, 10000, 0.6, 0.8, 'all', True, False)
+     [1000], 0.99, 10000, 0.6, 0.8, 'all', False, False)
 ]
 
 approaches = ['Full']
