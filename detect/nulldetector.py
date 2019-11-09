@@ -6,7 +6,7 @@ from .detector import Detector
 from utils import NULL_REPR
 
 query_template = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE t1."$attribute" = \'$null\'')
-query_template_num = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE t1."$attribute" IS NULL')
+# query_template_num = Template('SELECT t1._tid_ FROM "$table_repaired" as t1 WHERE t1."$attribute" IS NULL')
 
 
 class NullDetector(Detector):
@@ -42,13 +42,13 @@ class NullDetector(Detector):
             table_repaired_name = self.ds.raw_data.name + '_repaired'
 
             for attr in self.ds.get_attributes():
-                if attr in self.ds.numerical_attrs:
-                    query = query_template_num.substitute(table_repaired=table_repaired_name,
-                                                          attribute=attr)
-                else:
-                    query = query_template.substitute(table_repaired=table_repaired_name,
-                                                      attribute=attr,
-                                                      null=NULL_REPR)
+                # if attr in self.ds.numerical_attrs:
+                #     query = query_template_num.substitute(table_repaired=table_repaired_name,
+                #                                           attribute=attr)
+                # else:
+                query = query_template.substitute(table_repaired=table_repaired_name,
+                                                  attribute=attr,
+                                                  null=NULL_REPR)
 
                 results = self.ds.engine.execute_query(query)
                 tmp_df = self._gen_tid_attr_output(results, [attr])

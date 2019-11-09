@@ -3,9 +3,9 @@ from examples.holoclean_incremental_repair_example import Executor
 import os
 
 hc_args = {
-    'detectors': [('nulldetector', 'NullDetector', False),
-                  ('violationdetector', 'ViolationDetector', False)],
-    # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+    # 'detectors': [('nulldetector', 'NullDetector', False),
+    #               ('violationdetector', 'ViolationDetector', False)],
+    'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
     'weak_label_thresh': 0.99,
@@ -33,7 +33,8 @@ hc_args = {
     'save_load_checkpoint': False,
     'append': True,
     'infer_mode': 'dk',
-    'log_feature_weights': False
+    'log_feature_weights': False,
+    'train_using_all_batches': False
 }
 
 inc_args = {
@@ -46,12 +47,13 @@ inc_args = {
     'approach': 'co_a',
     'tuples_to_read_list': [250] * 4,
     'iterations': [0],
+    'skip_training_starting_batch': -1
 }
 
-datasets = [('hospital', None, None, False, None, [20] * 2, 0.99, 10000, 0.6, 0.8),
+datasets = [('hospital', None, None, False, None, [240] * 4, 0.99, 10000, 0.6, 0.8),
             ('food5k_shuffled', '_tid_', None, False, None, [1000] * 5, 0.6, 1000, 0.2, 0.3),
             ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
-             [100] * 10, 0.99, 10000, 0.6, 0.8)]
+             [250] * 4, 0.99, 10000, 0.6, 0.8)]
 
 approaches = ['A', 'B', 'C', 'C+', 'B+', 'Full']
 avg_time_iterations = [1, 2]  # or None

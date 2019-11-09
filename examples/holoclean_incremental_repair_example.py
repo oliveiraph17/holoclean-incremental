@@ -53,6 +53,10 @@ class Executor:
                             line_list.append(line)
                         tmp_file.writelines(line_list)
 
+                    if self.hc_args['current_batch_number'] == self.inc_args['skip_training_starting_batch']:
+                        self.hc_args['skip_training'] = True
+                        self.hc_args['train_using_all_batches'] = False
+
                     # Sets up a HoloClean session.
                     hc = holoclean.HoloClean(
                         **self.hc_args

@@ -603,6 +603,10 @@ class Session:
         """
         Uses estimator to weak label and prune domain.
         """
+        if self.env['skip_training']:
+            logging.debug('Skipping estimator as the training phase is going to be skipped...')
+            return
+
         self.domain_engine.run_estimator()
 
     def repair_errors(self, featurizers):
