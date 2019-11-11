@@ -43,19 +43,122 @@ inc_args = {
 }
 
 datasets = [
-    # ('hospital', None, None, False, None, [20] * 2, 0.99, 10000, 0.6, 0.8, 'dk', False, False),
-    # ('food5k_shuffled', '_tid_', None, False, None, [1000] * 5, 0.6, 1000, 0.2, 0.3, 'dk', False, False),
-    ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
-     [1000], 0.99, 10000, 0.6, 0.8, 'dk', False, False),
-    ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
-     [1000], 0.99, 10000, 0.6, 0.8, 'all', False, False)
+    # ('hospital_numerical', None, ['Score', 'Sample'], True,
+    #  [(100, ['Score']), (150, ['Sample'])], [1000], 'NaiveBayes',
+    #  0.99, 10000, 0.6, 0.8,
+    #  'dk', False, False),
+
+    ('food5k', None, ['latitude', 'longitude'], True,
+     [(100, ['latitude', 'longitude'])], [5000], 'NaiveBayes',
+     0.6, 1000, 0.2, 0.3,
+     'dk', False, False),
+
+    ('food5k', None, ['latitude', 'longitude'], True,
+     [(100, ['latitude', 'longitude'])], [5000], 'NaiveBayes',
+     0.6, 1000, 0.2, 0.3,
+     'all', False, False),
+
+    ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
+     [(100, ['latitude', 'longitude'])], [5000], 'NaiveBayes',
+     0.6, 1000, 0.2, 0.3,
+     'dk', False, False),
+
+    ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
+     [(100, ['latitude', 'longitude'])], [5000], 'NaiveBayes',
+     0.6, 1000, 0.2, 0.3,
+     'all', False, False),
+
+    ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
+     0.9, 50, 0.0, None,
+     'dk', False, False),
+
+    ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
+     0.9, 50, 0.0, None,
+     'all', False, False),
+
+    ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
+     0.9, 50, 0.0, None,
+     'dk', False, False),
+
+    ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
+     0.9, 50, 0.0, None,
+     'all', False, False),
+
+    # ('soccer', None, None, False,
+    #  None, [200000], None,
+    #  _, _, _, _,
+    #  'dk', False, False),
+    #
+    # ('soccer', None, None, False,
+    #  None, [200000], None,
+    #  _, _, _, _,
+    #  'all', False, False),
+    #
+    # ('soccer_shuffled', None, None, False,
+    #  None, [200000], None,
+    #  _, _, _, _,
+    #  'dk', False, False),
+    #
+    # ('soccer_shuffled', None, None, False,
+    #  None, [200000], None,
+    #  _, _, _, _,
+    #  'all', False, False),
+    #
+    # ('chicago_num', None, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
+    #                        'Dropoff Centroid Latitude', 'Dropoff Centroid Longitude',
+    #                        'Fare', 'Tips', 'Tolls', 'Extras',
+    #                        'Trip Total', 'Trip Seconds', 'Trip Miles'], True,
+    #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
+    #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
+    #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], _,
+    #  _, _, _, _,
+    #  'dk', False, False),
+    #
+    # ('chicago_num', None, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
+    #                        'Dropoff Centroid Latitude', 'Dropoff Centroid Longitude',
+    #                        'Fare', 'Tips', 'Tolls', 'Extras',
+    #                        'Trip Total', 'Trip Seconds', 'Trip Miles'], True,
+    #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
+    #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
+    #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], _,
+    #  _, _, _, _,
+    #  'all', False, False),
+    #
+    # ('chicago_num_shuffled', '_tid_', ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
+    #                                    'Dropoff Centroid Latitude', 'Dropoff Centroid Longitude',
+    #                                    'Fare', 'Tips', 'Tolls', 'Extras',
+    #                                    'Trip Total', 'Trip Seconds', 'Trip Miles'], True,
+    #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
+    #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
+    #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], _,
+    #  _, _, _, _,
+    #  'dk', False, False),
+    #
+    # ('chicago_num_shuffled', '_tid_', ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
+    #                                    'Dropoff Centroid Latitude', 'Dropoff Centroid Longitude',
+    #                                    'Fare', 'Tips', 'Tolls', 'Extras',
+    #                                    'Trip Total', 'Trip Seconds', 'Trip Miles'], True,
+    #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
+    #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
+    #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], _,
+    #  _, _, _, _,
+    #  'all', False, False),
 ]
 
 approaches = ['Full']
 avg_time_iterations = None
 
-for (dataset_name, entity_col, numerical_attrs, do_quantization, num_attr_groups_bins,
-     tuples_to_read_list, weak_label_thresh, max_domain, cor_strength, nb_cor_strength,
+for (dataset_name, entity_col, numerical_attrs, do_quantization,
+     num_attr_groups_bins, tuples_to_read_list, estimator_type,
+     weak_label_thresh, max_domain, cor_strength, nb_cor_strength,
      infer_mode, global_features, train_using_all_batches) in datasets:
     inc_args['dataset_name'] = dataset_name
     inc_args['entity_col'] = entity_col
@@ -63,6 +166,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization, num_attr_groups
     inc_args['do_quantization'] = do_quantization
     inc_args['num_attr_groups_bins'] = num_attr_groups_bins
     inc_args['tuples_to_read_list'] = tuples_to_read_list
+    hc_args['estimator_type'] = estimator_type
     hc_args['weak_label_thresh'] = weak_label_thresh
     hc_args['max_domain'] = max_domain
     hc_args['cor_strength'] = cor_strength
