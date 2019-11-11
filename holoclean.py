@@ -696,11 +696,10 @@ class Session:
             self.execution_times.append(str(time))
 
         repaired_table_copy_time = 0
-        save_stats_time = 0
         if self.env['incremental']:
             status, time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
         else:
-            status, time = self.ds.get_repaired_dataset()
+            status, time, save_stats_time = self.ds.get_repaired_dataset()
         logging.info(status)
         logging.debug('Time to store repaired dataset: %.2f secs', time)
         if self.env['log_execution_times']:

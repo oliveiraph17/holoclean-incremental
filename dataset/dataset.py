@@ -132,6 +132,7 @@ class Dataset:
             entity.
         :param exclude_attr_cols:
         :param numerical_attrs:
+        :param store_to_db:
         """
         tic = time.clock()
 
@@ -648,10 +649,19 @@ class Dataset:
             self.repaired_data.store_to_db(self.engine.engine)
         else:
             self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
+
+        save_stats_time = 0
+        if not self.global_features:
+            # Persists the statistics in the database.
+            tic_inc = time.clock()
+            self.save_stats()
+            save_stats_time = time.clock() - tic_inc
+            logging.debug('DONE storing computed statistics in the database in %.2f secs.', save_stats_time)
+
         status = "DONE generating repaired dataset"
         toc = time.clock()
-        total_time = toc - tic
-        return status, total_time
+        total_time = toc - tic - save_stats_time
+        return status, total_time, save_stats_time
 
     def get_repaired_dataset_incremental(self):
         tic = time.clock()
@@ -684,7 +694,6 @@ class Dataset:
 
         # Dictionary to keep track of previous dirty values that had their values changed after inference.
         updated_previous_values = {}
-        max_previous_tid = 0
 
         for tid in inferred_values:
             idx = tid_to_idx['index'][tid]
@@ -758,7 +767,7 @@ class Dataset:
 
         save_stats_time = 0
         if not self.global_features:
-            # Persists the up-to-date statistics in the database.
+            # Persists the statistics in the database.
             tic_inc = time.clock()
             self.save_stats()
             save_stats_time = time.clock() - tic_inc
@@ -1110,14 +1119,16 @@ class Dataset:
 
         return self.raw_data_previously_repaired.df
 
-    @staticmethod
-    def load_stats():
+    def load_stats(self):
         try:
-            with open('/tmp/single_attr_stats.ujson', encoding='utf-8') as f:
+            with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_single_attr_stats.ujson',
+                      encoding='utf-8') as f:
                 single_attr_stats = ujson.load(f)
-            with open('/tmp/pair_attr_stats.ujson', encoding='utf-8') as f:
+            with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_pair_attr_stats.ujson',
+                      encoding='utf-8') as f:
                 pair_attr_stats = ujson.load(f)
-            with open('/tmp/num_tuples.txt', encoding='utf-8') as f:
+            with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_num_tuples.txt',
+                      encoding='utf-8') as f:
                 num_tuples = f.readline()
 
             # table_repaired_name = self.raw_data.name + '_repaired'
@@ -1130,11 +1141,14 @@ class Dataset:
             raise Exception('ERROR while trying to load statistics.')
 
     def save_stats(self):
-        with open('/tmp/single_attr_stats.ujson', 'w', encoding='utf-8') as f:
+        with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_single_attr_stats.ujson', 'w',
+                  encoding='utf-8') as f:
             ujson.dump(self.single_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/pair_attr_stats.ujson', 'w', encoding='utf-8') as f:
+        with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_pair_attr_stats.ujson', 'w',
+                  encoding='utf-8') as f:
             ujson.dump(self.pair_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/num_tuples.txt', 'w', encoding='utf-8') as f:
+        with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_num_tuples.txt', 'w',
+                  encoding='utf-8') as f:
             f.write(str(self.total_tuples) + '\n')
 
     def is_first_batch(self):
