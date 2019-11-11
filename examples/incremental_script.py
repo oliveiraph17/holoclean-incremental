@@ -43,8 +43,6 @@ inc_args = {
     'skip_training_starting_batch': -1
 }
 
-}
-
 datasets = [
     # ('hospital_numerical', None, ['Score', 'Sample'], True,
     #  [(100, ['Score']), (150, ['Sample'])], [1000], 'NaiveBayes',
