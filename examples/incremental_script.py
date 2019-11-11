@@ -15,7 +15,7 @@ hc_args = {
     'nb_cor_strength': 0.8,
     'epochs': 20,
     'threads': 1,
-    'verbose': False,
+    'verbose': True,
     'timeout': 3 * 60000,
     'estimator_type': 'NaiveBayes',
     'log_repairing_quality': True,

@@ -147,7 +147,7 @@ if __name__ == "__main__":
         'nb_cor_strength': 0.8,
         'epochs': 20,
         'threads': 1,
-        'verbose': False,
+        'verbose': True,
         'print_fw': False,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
