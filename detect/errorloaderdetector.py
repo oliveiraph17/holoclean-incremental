@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 
 from dataset.table import Table, Source
 from .detector import Detector
@@ -60,6 +61,8 @@ class ErrorsLoaderDetector(Detector):
             attr_col: str
         })
 
+        self.id_col = id_col
+
 
     def setup(self, dataset=None, env=None):
         self.ds = dataset
@@ -73,4 +76,13 @@ class ErrorsLoaderDetector(Detector):
             id_col: entity ID
             attr_col: attribute in violation
         """
+        if not self.ds.is_first_batch():
+            if self.env['repair_previous_errors']:
+                logging.info('Using the ErrorLoaderDetector with the repair_previous_errors option implies spotting as '
+                             'errors cells that may be repaired in previous batches.')
+            else:
+                # Spot errors only for tuples from the current batch.
+                self.errors_table.df = self.errors_table.df[
+                    self.errors_table.df[self.id_col].isin(self.ds.get_raw_data()['_tid_'])]
+
         return self.errors_table.df

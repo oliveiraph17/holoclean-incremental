@@ -276,39 +276,33 @@ class Dataset:
 
         if self.prepared_raw_data_df is None:
             if not self.do_quantization:
-                if not self.is_first_batch():
-                    if self.env['train_using_all_batches']:
-                        # Notice that we can both train_using_all_batches and repair_previous_errors. In this case, we
-                        # use the previously repaired dataset for domain generation and featurization but infer on
-                        # dk_cells, which, in this case, contains dirty cells from the current and previous batches.
-                        self.prepared_raw_data_df = pd.concat([self.get_raw_data_previously_repaired(),
-                                                               self.get_raw_data()]).reset_index(drop=True)
-                    elif self.env['repair_previous_errors']:
-                        # Adds only rows that have dirty cells detected.
-                        self.prepared_raw_data_df = pd.concat([self.get_previous_dirty_rows(),
-                                                               self.get_raw_data()]).reset_index(drop=True)
-                    else:
-                        # Isolated batch execution; considers only the current batch.
-                        self.prepared_raw_data_df = self.get_raw_data()
+                if not self.is_first_batch() and self.env['train_using_all_batches']:
+                    # Notice that we can both train_using_all_batches and repair_previous_errors. In this case, we
+                    # use the previously repaired dataset for domain generation and featurization but infer on
+                    # dk_cells, which, in this case, contains dirty cells from the current and previous batches.
+                    self.prepared_raw_data_df = pd.concat([self.get_raw_data_previously_repaired(),
+                                                           self.get_raw_data()]).reset_index(drop=True)
+                elif not self.is_first_batch() and self.env['repair_previous_errors']:
+                    # Adds only rows that have dirty cells detected.
+                    self.prepared_raw_data_df = pd.concat([self.get_previous_dirty_rows(),
+                                                           self.get_raw_data()]).reset_index(drop=True)
                 else:
+                    # Isolated batch execution; considers only the current batch.
                     self.prepared_raw_data_df = self.get_raw_data()
             else:
                 if self.quantized_data is None:
                     raise Exception('ERROR No dataset quantized')
 
-                if not self.is_first_batch():
-                    if self.env['train_using_all_batches']:
-                        if self.quantized_data_previously_repaired is None:
-                            raise Exception('ERROR No previously repaired dataset quantized')
-                        self.prepared_raw_data_df = pd.concat([self.quantized_data_previously_repaired.df,
-                                                               self.quantized_data.df]).reset_index(drop=True)
-                    elif self.env['repair_previous_errors']:
-                        if self.quantized_previous_dirty_rows is None:
-                            raise Exception('ERROR No previous dirty rows quantized')
-                        self.prepared_raw_data_df = pd.concat([self.quantized_previous_dirty_rows.df,
-                                                               self.quantized_data.df]).reset_index(drop=True)
-                    else:
-                        self.prepared_raw_data_df = self.quantized_data.df
+                if not self.is_first_batch() and self.env['train_using_all_batches']:
+                    if self.quantized_data_previously_repaired is None:
+                        raise Exception('ERROR No previously repaired dataset quantized')
+                    self.prepared_raw_data_df = pd.concat([self.quantized_data_previously_repaired.df,
+                                                           self.quantized_data.df]).reset_index(drop=True)
+                elif not self.is_first_batch() and self.env['repair_previous_errors']:
+                    if self.quantized_previous_dirty_rows is None:
+                        raise Exception('ERROR No previous dirty rows quantized')
+                    self.prepared_raw_data_df = pd.concat([self.quantized_previous_dirty_rows.df,
+                                                           self.quantized_data.df]).reset_index(drop=True)
                 else:
                     self.prepared_raw_data_df = self.quantized_data.df
 
@@ -404,6 +398,9 @@ class Dataset:
         if not self.incremental and self.recompute_from_scratch:
             raise Exception('Inconsistent parameters: incremental=%r, recompute_from_scratch=%r.' %
                             (self.incremental, self.recompute_from_scratch))
+        if not self.incremental and self.env['train_using_all_batches']:
+            raise Exception('Inconsistent parameters: incremental=%r, train_using_all_batches=%r.' %
+                            (self.incremental, self.env['train_using_all_batches']))
         elif self.incremental_entropy and self.recompute_from_scratch:
             raise Exception('Inconsistent parameters: incremental_entropy=%r, recompute_from_scratch=%r.' %
                             (self.incremental_entropy, self.recompute_from_scratch))
@@ -659,7 +656,10 @@ class Dataset:
     def get_repaired_dataset_incremental(self):
         tic = time.clock()
 
-        if not self.is_first_batch() and self.repair_previous_errors:
+        if not self.is_first_batch() and self.env['train_using_all_batches']:
+            # Gets all rows from previous batches and rows from the current batch for repairing.
+            df_by_tid = pd.concat([self.raw_data_previously_repaired.df, self.raw_data.df]).sort_values(['_tid_'])
+        elif not self.is_first_batch() and self.repair_previous_errors:
             # Gets dirty rows from previous batches and rows from the current batch for repairing.
             df_by_tid = pd.concat([self.previous_dirty_rows_df, self.raw_data.df]).sort_values(['_tid_'])
         else:
@@ -686,14 +686,15 @@ class Dataset:
         updated_previous_values = {}
         max_previous_tid = 0
 
-        if not self.is_first_batch() and self.repair_previous_errors:
-            max_previous_tid = self.previous_dirty_rows_df['_tid_'].max(axis=0)
-
         for tid in inferred_values:
             idx = tid_to_idx['index'][tid]
             is_previous = False
             if not self.is_first_batch() and self.repair_previous_errors:
-                is_previous = self.previous_dirty_rows_df.loc[self.previous_dirty_rows_df['_tid_'] == tid].size > 0
+                if self.env['train_using_all_batches']:
+                    is_previous = self.raw_data_previously_repaired.df.loc[
+                                      self.raw_data_previously_repaired.df['_tid_'] == tid].size > 0
+                else:
+                    is_previous = self.previous_dirty_rows_df.loc[self.previous_dirty_rows_df['_tid_'] == tid].size > 0
                 if is_previous:
                     updated_previous_values[tid] = []
 
@@ -735,9 +736,19 @@ class Dataset:
                 self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
 
                 # Picks only tuples from the current batch (i.e., not (~) isin previous).
-                repaired_incoming_rows_df = repaired_df[~repaired_df['_tid_'].isin(self.previous_dirty_rows_df['_tid_'])]
+                if self.env['train_using_all_batches']:
+                    repaired_incoming_rows_df = repaired_df[
+                        ~repaired_df['_tid_'].isin(self.raw_data_previously_repaired.df['_tid_'])]
+                else:
+                    repaired_incoming_rows_df = repaired_df[~repaired_df['_tid_'].isin(
+                        self.previous_dirty_rows_df['_tid_'])]
             else:
-                repaired_incoming_rows_df = repaired_df
+                if self.env['train_using_all_batches']:
+                    # Picks only tuples from the current batch (i.e., not (~) isin previous).
+                    repaired_incoming_rows_df = repaired_df[
+                        ~repaired_df['_tid_'].isin(self.raw_data_previously_repaired.df['_tid_'])]
+                else:
+                    repaired_incoming_rows_df = repaired_df
 
             self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_incoming_rows_df)
             self.repaired_data.store_to_db(self.engine.engine, if_exists='append')

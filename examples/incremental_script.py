@@ -40,6 +40,9 @@ inc_args = {
     'numerical_attrs': None,
     'tuples_to_read_list': [1000],
     'iterations': [0],
+    'skip_training_starting_batch': -1
+}
+
 }
 
 datasets = [
