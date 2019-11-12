@@ -99,12 +99,12 @@ datasets = [
      0.9, 10000, 0.05, 0.3,
      'all', False, False),
 
-    ('soccer_shuffled', None, None, False,
-     None, [200000], 'NaiveBayes',
+    ('soccer_shuffled', '_tid_', None, False,
+     None, [20000], 'NaiveBayes',
      0.9, 10000, 0.05, 0.3,
      'dk', False, False),
 
-    ('soccer_shuffled', None, None, False,
+    ('soccer_shuffled', '_tid_', None, False,
      None, [200000], 'NaiveBayes',
      0.9, 10000, 0.05, 0.3,
      'all', False, False),
