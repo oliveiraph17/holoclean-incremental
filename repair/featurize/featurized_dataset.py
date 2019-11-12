@@ -96,7 +96,13 @@ class FeaturizedDataset:
             labels[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
             is_clean[attr] = torch.zeros(num_instances, 1).type(torch.LongTensor)
 
-        previous_batches_size = 0 if self.ds.is_first_batch() else len(self.ds.get_raw_data_previously_repaired().index)
+        tids_from_previous_batches = None
+        if not self.ds.is_first_batch():
+            if self.env['train_using_all_batches']:
+                tids_from_previous_batches = self.ds.get_raw_data_previously_repaired()['_tid_'].tolist()
+            elif self.env['repair_previous_errors']:
+                tids_from_previous_batches = self.ds.get_previous_dirty_rows()['_tid_'].tolist()
+
         for tuple in tqdm(res):
             attr = tuple[0]
             label = int(tuple[1])
@@ -117,7 +123,7 @@ class FeaturizedDataset:
                         is_clean[attr][count[attr]] = clean
                 else:
                     # Checks if the vid is from current batch
-                    if tid >= previous_batches_size:
+                    if tids_from_previous_batches is None or tid not in tids_from_previous_batches:
                         if self.env['infer_mode'] == 'dk':
                             # Sets clean cells accordingly.
                             is_clean[attr][count[attr]] = clean

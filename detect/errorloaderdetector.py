@@ -76,13 +76,17 @@ class ErrorsLoaderDetector(Detector):
             id_col: entity ID
             attr_col: attribute in violation
         """
-        if not self.ds.is_first_batch():
-            if self.env['repair_previous_errors']:
-                logging.info('Using the ErrorLoaderDetector with the repair_previous_errors option implies spotting as '
-                             'errors cells that may be repaired in previous batches.')
-            else:
-                # Spot errors only for tuples from the current batch.
-                self.errors_table.df = self.errors_table.df[
-                    self.errors_table.df[self.id_col].isin(self.ds.get_raw_data()['_tid_'])]
+        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+            logging.info('Using the ErrorLoaderDetector with the repair_previous_errors option implies spotting as '
+                         'errors cells that may be repaired in previous batches.')
+            # Spot errors for tuples from all batches so far.
+            all_tids = pd.concat([self.ds.get_raw_data_previously_repaired()['_tid_'],
+                                  self.ds.get_raw_data()['_tid_']])
+            self.errors_table.df = self.errors_table.df[
+                self.errors_table.df[self.id_col].isin(all_tids)]
+        else:
+            # Spot errors only for tuples from the current batch.
+            self.errors_table.df = self.errors_table.df[
+                self.errors_table.df[self.id_col].isin(self.ds.get_raw_data()['_tid_'])]
 
         return self.errors_table.df
