@@ -173,8 +173,8 @@ class Dataset:
                 # # 2. make the numerical attrs as float
                 # # 3. store the correct type into db (categorical->str, numerical->float)
                 # df_correct_type = df.copy()
-                # for attr in self.categorical_attrs:
-                #     df_correct_type.loc[df_correct_type[attr].isnull(), attr] = NULL_REPR
+                for attr in self.categorical_attrs:
+                    df.loc[df[attr].isnull(), attr] = NULL_REPR
                 # for attr in self.numerical_attrs:
                 #     df_correct_type[attr] =  df_correct_type[attr].astype(float)
                 #
@@ -1121,13 +1121,13 @@ class Dataset:
 
     def load_stats(self):
         try:
-            with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_single_attr_stats.ujson',
+            with open('/tmp/' + self.raw_data.name + '_single_attr_stats.ujson',
                       encoding='utf-8') as f:
                 single_attr_stats = ujson.load(f)
-            with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_pair_attr_stats.ujson',
+            with open('/tmp/' + self.raw_data.name + '_pair_attr_stats.ujson',
                       encoding='utf-8') as f:
                 pair_attr_stats = ujson.load(f)
-            with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_num_tuples.txt',
+            with open('/tmp/' + self.raw_data.name + '_num_tuples.txt',
                       encoding='utf-8') as f:
                 num_tuples = f.readline()
 
@@ -1141,13 +1141,13 @@ class Dataset:
             raise Exception('ERROR while trying to load statistics.')
 
     def save_stats(self):
-        with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_single_attr_stats.ujson', 'w',
+        with open('/tmp/' + self.raw_data.name + '_single_attr_stats.ujson', 'w',
                   encoding='utf-8') as f:
             ujson.dump(self.single_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_pair_attr_stats.ujson', 'w',
+        with open('/tmp/' + self.raw_data.name + '_pair_attr_stats.ujson', 'w',
                   encoding='utf-8') as f:
             ujson.dump(self.pair_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/' + self.env['approach'] + '_' + self.raw_data.name + '_num_tuples.txt', 'w',
+        with open('/tmp/' + self.raw_data.name + '_num_tuples.txt', 'w',
                   encoding='utf-8') as f:
             f.write(str(self.total_tuples) + '\n')
 

@@ -15,17 +15,17 @@ class Executor:
         self.quality_log_fpath = ''
         if self.hc_args['log_repairing_quality']:
             self.quality_log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
-                                       self.hc_args['approach'] + '_quality_log.csv')
+                                       self.inc_args['approach'] + '_quality_log.csv')
 
         self.time_log_fpath = ''
         if self.hc_args['log_execution_times']:
             self.time_log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
-                                    self.hc_args['approach'] + '_time_log.csv')
+                                    self.inc_args['approach'] + '_time_log.csv')
 
         self.weight_log_fpath = ''
         if self.hc_args['log_feature_weights']:
             self.weight_log_fpath += (self.inc_args['log_dir'] + self.inc_args['dataset_name'] + '/' +
-                                      self.hc_args['approach'] + '_weight_log.csv')
+                                      self.inc_args['approach'] + '_weight_log.csv')
 
     def run(self):
         # Imports modules to dynamically instantiate HoloClean components (detectors and featurizers).
@@ -67,7 +67,7 @@ class Executor:
 
                     # Drops metatables in the first batch.
                     if self.hc_args['current_batch_number'] == 0:
-                        table_list = [self.inc_args['dataset_name'] + '_' + self.hc_args['approach'] + '_repaired',
+                        table_list = [self.inc_args['dataset_name'] + '_' + self.inc_args['approach'] + '_repaired',
                                       'training_cells',
                                       'repaired_table_copy']
 
@@ -77,7 +77,7 @@ class Executor:
                     hc.setup_experiment_loggers(self.quality_log_fpath, self.time_log_fpath, self.weight_log_fpath)
 
                     # Loads existing data and Denial Constraints.
-                    hc.load_data(self.inc_args['dataset_name'] + '_' + self.hc_args['approach'],
+                    hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
                                  '/tmp/current_batch.csv',
                                  entity_col=self.inc_args['entity_col'],
                                  numerical_attrs=self.inc_args['numerical_attrs'])
@@ -162,7 +162,6 @@ if __name__ == "__main__":
         'infer_mode': 'dk',
         'global_features': False,
         'train_using_all_batches': False,
-        'approach': 'co_full'
     }
 
     # Default parameters for Executor.
@@ -177,6 +176,7 @@ if __name__ == "__main__":
         'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
         'tuples_to_read_list': [1000],
         'iterations': [0],
+        'approach': 'co_full'
     }
 
     # Runs the default example.
