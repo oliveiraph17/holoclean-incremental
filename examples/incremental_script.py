@@ -73,43 +73,43 @@ datasets = [
      'all', False, False),
 
     ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
-     0.9, 1000, 0.0, None,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'NaiveBayes',
+     0.9, 100, 0.05, 0.3,
      'dk', False, False),
 
     ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
-     0.9, 1000, 0.0, None,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'NaiveBayes',
+     0.9, 100, 0.05, 0.3,
      'all', False, False),
 
     ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
-     0.9, 1000, 0.0, None,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'NaiveBayes',
+     0.9, 100, 0.05, 0.3,
      'dk', False, False),
 
     ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'Logistic',
-     0.9, 1000, 0.0, None,
+     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [32400], 'NaiveBayes',
+     0.9, 100, 0.05, 0.3,
      'all', False, False),
 
     ('soccer', None, None, False,
      None, [200000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'dk', False, False),
 
     ('soccer', None, None, False,
      None, [200000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'all', False, False),
 
     ('soccer_shuffled', '_tid_', None, False,
      None, [20000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'dk', False, False),
 
     ('soccer_shuffled', '_tid_', None, False,
      None, [200000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'all', False, False),
 
     ('chicago_num', None, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
@@ -120,7 +120,7 @@ datasets = [
       (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
       (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
       (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'dk', False, False),
 
     ('chicago_num', None, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
@@ -131,7 +131,7 @@ datasets = [
       (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
       (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
       (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'all', False, False),
 
     ('chicago_num_shuffled', '_tid_', ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
@@ -142,7 +142,7 @@ datasets = [
       (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
       (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
       (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'dk', False, False),
 
     ('chicago_num_shuffled', '_tid_', ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
@@ -153,7 +153,7 @@ datasets = [
       (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
       (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
       (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
-     0.9, 1000, 0.05, 0.3,
+     0.9, 100, 0.05, 0.3,
      'all', False, False),
 ]
 
