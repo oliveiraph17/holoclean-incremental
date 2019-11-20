@@ -441,7 +441,7 @@ class Session:
 
         quality_header = ''
         if self.env['log_repairing_quality']:
-            quality_header = 'batch;dk_cells;training_cells;' \
+            quality_header = 'infer_mode;features;train_using_all_batches;batch;dk_cells;training_cells;' \
                              'precision;recall;repairing_recall;f1;repairing_f1;' \
                              'detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;' \
                              'repairs_on_correct_cells;repairs_on_incorrect_cells;rmse'
@@ -505,6 +505,16 @@ class Session:
                                               numerical_attrs=numerical_attrs)
         logging.info(status)
         logging.debug('Time to load dataset: %.2f secs', load_time)
+        if self.env['log_repairing_quality']:
+            self.repairing_quality_metrics.append(self.env['infer_mode'])
+            if self.env['global_features']:
+                self.repairing_quality_metrics.append('fixed')
+            else:
+                self.repairing_quality_metrics.append('incremental')
+            if self.env['train_using_all_batches']:
+                self.repairing_quality_metrics.append('True')
+            else:
+                self.repairing_quality_metrics.append('False')
         if self.env['log_execution_times']:
             self.execution_times.append(str(self.env['current_iteration'] + 1))
             self.execution_times.append(str(self.env['current_batch_number'] + 1))
@@ -686,11 +696,10 @@ class Session:
             self.execution_times.append(str(time))
 
         repaired_table_copy_time = 0
-        save_stats_time = 0
         if self.env['incremental']:
             status, time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
         else:
-            status, time = self.ds.get_repaired_dataset()
+            status, time, save_stats_time = self.ds.get_repaired_dataset()
         logging.info(status)
         logging.debug('Time to store repaired dataset: %.2f secs', time)
         if self.env['log_execution_times']:

@@ -132,6 +132,7 @@ class Dataset:
             entity.
         :param exclude_attr_cols:
         :param numerical_attrs:
+        :param store_to_db:
         """
         tic = time.clock()
 
@@ -172,8 +173,8 @@ class Dataset:
                 # # 2. make the numerical attrs as float
                 # # 3. store the correct type into db (categorical->str, numerical->float)
                 # df_correct_type = df.copy()
-                # for attr in self.categorical_attrs:
-                #     df_correct_type.loc[df_correct_type[attr].isnull(), attr] = NULL_REPR
+                for attr in self.categorical_attrs:
+                    df.loc[df[attr].isnull(), attr] = NULL_REPR
                 # for attr in self.numerical_attrs:
                 #     df_correct_type[attr] =  df_correct_type[attr].astype(float)
                 #
@@ -648,10 +649,19 @@ class Dataset:
             self.repaired_data.store_to_db(self.engine.engine)
         else:
             self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
+
+        save_stats_time = 0
+        if not self.global_features:
+            # Persists the statistics in the database.
+            tic_inc = time.clock()
+            self.save_stats()
+            save_stats_time = time.clock() - tic_inc
+            logging.debug('DONE storing computed statistics in the database in %.2f secs.', save_stats_time)
+
         status = "DONE generating repaired dataset"
         toc = time.clock()
-        total_time = toc - tic
-        return status, total_time
+        total_time = toc - tic - save_stats_time
+        return status, total_time, save_stats_time
 
     def get_repaired_dataset_incremental(self):
         tic = time.clock()
@@ -684,7 +694,6 @@ class Dataset:
 
         # Dictionary to keep track of previous dirty values that had their values changed after inference.
         updated_previous_values = {}
-        max_previous_tid = 0
 
         for tid in inferred_values:
             idx = tid_to_idx['index'][tid]
@@ -757,8 +766,8 @@ class Dataset:
             self.repaired_data.store_to_db(self.engine.engine)
 
         save_stats_time = 0
-        if not self.recompute_from_scratch and not self.global_features:
-            # Persists the up-to-date statistics in the database.
+        if not self.global_features:
+            # Persists the statistics in the database.
             tic_inc = time.clock()
             self.save_stats()
             save_stats_time = time.clock() - tic_inc
@@ -1112,25 +1121,35 @@ class Dataset:
 
     def load_stats(self):
         try:
-            with open('/tmp/single_attr_stats.ujson', encoding='utf-8') as f:
+            with open('/tmp/' + self.raw_data.name + '_single_attr_stats.ujson',
+                      encoding='utf-8') as f:
                 single_attr_stats = ujson.load(f)
-            with open('/tmp/pair_attr_stats.ujson', encoding='utf-8') as f:
+            with open('/tmp/' + self.raw_data.name + '_pair_attr_stats.ujson',
+                      encoding='utf-8') as f:
                 pair_attr_stats = ujson.load(f)
+            with open('/tmp/' + self.raw_data.name + '_num_tuples.txt',
+                      encoding='utf-8') as f:
+                num_tuples = f.readline()
 
-            table_repaired_name = self.raw_data.name + '_repaired'
-            query = 'SELECT COUNT(*) FROM "{}"'.format(table_repaired_name)
-            result = self.engine.execute_query(query)
-            num_tuples = result[0][0]
+            # table_repaired_name = self.raw_data.name + '_repaired'
+            # query = 'SELECT COUNT(*) FROM "{}"'.format(table_repaired_name)
+            # result = self.engine.execute_query(query)
+            # num_tuples = result[0][0]
 
             return num_tuples, single_attr_stats, pair_attr_stats
         except ValueError:
             raise Exception('ERROR while trying to load statistics.')
 
     def save_stats(self):
-        with open('/tmp/single_attr_stats.ujson', 'w', encoding='utf-8') as f:
+        with open('/tmp/' + self.raw_data.name + '_single_attr_stats.ujson', 'w',
+                  encoding='utf-8') as f:
             ujson.dump(self.single_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/pair_attr_stats.ujson', 'w', encoding='utf-8') as f:
+        with open('/tmp/' + self.raw_data.name + '_pair_attr_stats.ujson', 'w',
+                  encoding='utf-8') as f:
             ujson.dump(self.pair_attr_stats, f, ensure_ascii=False)
+        with open('/tmp/' + self.raw_data.name + '_num_tuples.txt', 'w',
+                  encoding='utf-8') as f:
+            f.write(str(self.total_tuples) + '\n')
 
     def is_first_batch(self):
         # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.
