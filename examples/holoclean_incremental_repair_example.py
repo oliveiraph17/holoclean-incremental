@@ -81,6 +81,10 @@ class Executor:
                                  '/tmp/current_batch.csv',
                                  entity_col=self.inc_args['entity_col'],
                                  numerical_attrs=self.inc_args['numerical_attrs'])
+
+                    if self.hc_args['log_repairing_quality']:
+                        hc.repairing_quality_metrics.append(str(self.inc_args['skip_training_starting_batch']))
+
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
@@ -105,8 +109,11 @@ class Executor:
 
                         hc.ds.generate_aux_table(AuxTables.dk_cells, empty_dk_cells_df, store=True)
 
-                        hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number'] + 1))
-                        hc.repairing_quality_metrics.append(str(0))
+                        if self.hc_args['log_repairing_quality']:
+                            hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number'] + 1))
+                            hc.repairing_quality_metrics.append(str(0))
+                        if self.hc_args['log_execution_times']:
+                            hc.execution_times.append(str(0))
 
                     if self.inc_args['do_quantization']:
                         hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])

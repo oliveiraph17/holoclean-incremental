@@ -441,7 +441,8 @@ class Session:
 
         quality_header = ''
         if self.env['log_repairing_quality']:
-            quality_header = 'infer_mode;features;train_using_all_batches;batch;dk_cells;training_cells;' \
+            quality_header = 'infer_mode;features;train_using_all_batches;' \
+                             'skip_training_starting_batch;batch;dk_cells;training_cells;' \
                              'precision;recall;repairing_recall;f1;repairing_f1;' \
                              'detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;' \
                              'repairs_on_correct_cells;repairs_on_incorrect_cells;rmse'
@@ -508,7 +509,7 @@ class Session:
         if self.env['log_repairing_quality']:
             self.repairing_quality_metrics.append(self.env['infer_mode'])
             if self.env['global_features']:
-                self.repairing_quality_metrics.append('fixed')
+                self.repairing_quality_metrics.append('global')
             else:
                 self.repairing_quality_metrics.append('incremental')
             if self.env['train_using_all_batches']:
