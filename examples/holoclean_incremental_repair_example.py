@@ -83,7 +83,7 @@ class Executor:
                                  numerical_attrs=self.inc_args['numerical_attrs'])
 
                     if self.hc_args['log_repairing_quality']:
-                        hc.repairing_quality_metrics.append(str(self.inc_args['skip_training_starting_batch']))
+                        hc.repairing_quality_metrics.append(str(self.inc_args['skip_training_starting_batch'] + 1))
 
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
