@@ -164,6 +164,7 @@ if __name__ == "__main__":
         'incremental': True,
         'repair_previous_errors': False,
         'recompute_from_scratch': True,
+        'skip_training': False,
         'save_load_checkpoint': False,
         'append': False,
         'infer_mode': 'dk',
@@ -183,6 +184,7 @@ if __name__ == "__main__":
         'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
         'tuples_to_read_list': [1000],
         'iterations': [0],
+        'skip_training_starting_batch': -1,
         'approach': 'co_full'
     }
 
