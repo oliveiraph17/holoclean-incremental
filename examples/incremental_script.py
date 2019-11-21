@@ -48,60 +48,6 @@ inc_args = {
 
 datasets = [
     ##############################
-    # With global features
-    ##############################
-
-    ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])], [10] * 100, 'NaiveBayes',
-     0.99, 10000, 0.6, 0.8,
-     'dk', True, True),
-
-    ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])], [10] * 100, 'NaiveBayes',
-     0.99, 10000, 0.6, 0.8,
-     'all', True, True),
-
-    ('food5k', None, ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'dk', True, True),
-
-    ('food5k', None, ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'all', True, True),
-
-    ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'dk', True, True),
-
-    ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'all', True, True),
-
-    ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'dk', True, True),
-
-    ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'all', True, True),
-
-    ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'dk', True, True),
-
-    ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'all', True, True),
-
-    ##############################
     # Without global features
     ##############################
 
