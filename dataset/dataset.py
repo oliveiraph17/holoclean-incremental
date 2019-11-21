@@ -1002,7 +1002,7 @@ class Dataset:
     def get_first_tid(self):
         first_tid = 0
 
-        if self.env['append']:
+        if self.incremental or self.env['append']:
             try:
                 table_repaired_name = self.raw_data.name + '_repaired'
                 query = 'SELECT MAX(t1._tid_) FROM "{}" as t1'.format(table_repaired_name)
