@@ -689,7 +689,7 @@ class Session:
         if self.env['log_execution_times']:
             self.execution_times.append(str(infer_time))
 
-        status, time = self.ds.get_inferred_values()
+        status, get_inferred_values_time = self.ds.get_inferred_values()
         logging.info(status)
         logging.debug('Time to collect inferred values: %.2f secs', get_inferred_values_time)
         if self.env['log_execution_times']:
