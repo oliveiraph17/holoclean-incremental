@@ -112,7 +112,6 @@ class RepairEngine:
                                    index_attrs=False,
                                    append=True)
 
-
     def infer_repairs(self):
         tic = time.clock()
         X_pred, mask_pred, infer_idx = self.feat_dataset.get_infer_data()
