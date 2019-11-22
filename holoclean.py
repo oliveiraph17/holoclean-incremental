@@ -691,9 +691,9 @@ class Session:
 
         status, time = self.ds.get_inferred_values()
         logging.info(status)
-        logging.debug('Time to collect inferred values: %.2f secs', time)
+        logging.debug('Time to collect inferred values: %.2f secs', get_inferred_values_time)
         if self.env['log_execution_times']:
-            self.execution_times.append(str(time))
+            self.execution_times.append(str(get_inferred_values_time))
 
         repaired_table_copy_time = 0
         if self.env['incremental']:
