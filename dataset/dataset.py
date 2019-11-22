@@ -736,7 +736,7 @@ class Dataset:
         if not self.is_first_batch():
             if self.repair_previous_errors:
                 tic_repaired_table_copy = time.clock()
-                # Makes a copy of the current repaired table in order to properly compute the evaluation metrics later on.
+                # Makes a copy of the current repaired table in order to properly compute evaluation metrics later on.
                 repaired_table_copy_sql = 'SELECT * FROM "%s"' % (self.raw_data.name + "_repaired")
                 self.generate_aux_table_sql(AuxTables.repaired_table_copy, repaired_table_copy_sql)
                 repaired_table_copy_time = time.clock() - tic_repaired_table_copy

@@ -218,7 +218,7 @@ class DomainEngine:
                     # This would be a "SINGLE_VALUE" example and we'd still
                     # like to generate a random domain for it.
                     if init_value == NULL_REPR and len(dom) == 0:
-                       continue
+                        continue
 
                     # Not enough domain values, we need to get some random
                     # values (other than 'init_value') for training. However,

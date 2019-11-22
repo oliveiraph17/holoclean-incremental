@@ -26,6 +26,9 @@ def quantize_km(env, df_raw, num_attr_groups_bins, df_raw_previous=None):
     else:
         df_quantized = df_raw.copy()
 
+    df_quantized.replace('', NULL_REPR, inplace=True)
+    df_quantized.fillna(NULL_REPR, inplace=True)
+
     # Assert groups are disjoint
     num_attrs = [attr for _, group in num_attr_groups_bins for attr in group]
     assert len(set(num_attrs)) == len(num_attrs)
