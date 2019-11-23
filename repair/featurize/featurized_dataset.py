@@ -77,7 +77,7 @@ class FeaturizedDataset:
         # labelled. Do not train on cells with NULL weak labels (i.e.
         # NULL init values that were not weak labelled).
         query = """
-        SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1._tid_
+        SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1._tid_, t1.init_index
         FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
         ORDER BY _vid_;
         """.format(cell_domain=AuxTables.cell_domain.name,
@@ -90,11 +90,15 @@ class FeaturizedDataset:
         current_training_cells = []
         # count[attr] will match _vid_ in the featurizers because both are generated ordered by _vid_.
         count = {}
+        self.tids = {}
+        self.init_idxs = {}
         for attr in self.ds.get_active_attributes():
             count[attr] = 0
             num_instances = self.tensor[attr].size(0)
             labels[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
             is_clean[attr] = torch.zeros(num_instances, 1).type(torch.LongTensor)
+            self.tids[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
+            self.init_idxs[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
 
         tids_from_previous_batches = None
         if not self.ds.is_first_batch():
@@ -110,6 +114,7 @@ class FeaturizedDataset:
             clean = int(tuple[3])
             cid = int(tuple[4])
             tid = int(tuple[5])
+            init_idx = int(tuple[6])
             if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
                 # Considers only not null and clean or fixed cells as weak labels.
                 labels[attr][count[attr]] = label
@@ -134,6 +139,9 @@ class FeaturizedDataset:
                 if self.env['infer_mode'] == 'dk':
                     # Sets clean cells accordingly.
                     is_clean[attr][count[attr]] = clean
+
+            self.tids[attr][count[attr]] = tid
+            self.init_idxs[attr][count[attr]] = init_idx
 
             count[attr] += 1
             current_training_cells.append(cid)

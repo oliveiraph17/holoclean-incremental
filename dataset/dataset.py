@@ -1129,7 +1129,7 @@ class Dataset:
                 pair_attr_stats = ujson.load(f)
             with open('/tmp/' + self.raw_data.name + '_num_tuples.txt',
                       encoding='utf-8') as f:
-                num_tuples = f.readline()
+                num_tuples = int(f.readline())
 
             # table_repaired_name = self.raw_data.name + '_repaired'
             # query = 'SELECT COUNT(*) FROM "{}"'.format(table_repaired_name)

@@ -51,7 +51,7 @@ inc_args = {
     'skip_training_starting_batch': -1
 }
 
-datasets = [('hospital', None, None, False, None, [240] * 4, 'NaiveBayes', 0.99, 10000, 0.6, 0.8, 'dk', False, False),
+datasets = [('hospital', None, None, False, None, [250] * 4, 'NaiveBayes', 0.99, 10000, 0.6, 0.8, 'dk', False, False),
             ('food5k_shuffled', '_tid_', None, False, None, [1000] * 5, 'NaiveBayes', 0.6, 1000, 0.2, 0.3, 'dk', False, False),
             ('hospital_numerical', None, ['Score', 'Sample'], True, [(100, ['Score']), (150, ['Sample'])],
              [250] * 4, 'NaiveBayes', 0.99, 10000, 0.6, 0.8, 'dk', False, False)]
