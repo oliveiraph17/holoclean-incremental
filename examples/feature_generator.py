@@ -25,12 +25,11 @@ class Executor:
             **self.hc_args
         ).session
 
-    def run_holoclean_featurization(self):
+    def run_holoclean_featurization(self, csv_fpath):
 
         # Loads existing data and Denial Constraints.
         self.hc.load_data(self.feature_args['dataset_name'],
-                          self.feature_args['dataset_dir'] + self.feature_args['dataset_name'] + '/' +
-                          self.feature_args['dataset_name'] + '.csv',
+                          csv_fpath,
                           entity_col=self.feature_args['entity_col'],
                           numerical_attrs=self.feature_args['numerical_attrs'])
 
@@ -164,8 +163,34 @@ class Executor:
             hc_env_file.write(str(self.hc.env))
 
     def run(self):
-        self.run_holoclean_featurization()
-        self.generate_feature_files()
+        with open(feature_args['dataset_dir'] + feature_args['dataset_name'] + '/' +
+                  feature_args['dataset_name'] + '.csv') as dataset_file:
+
+            # Writes the header to a temporary file.
+            csv_fpath = '/tmp/current_dataset.csv'
+            with open(csv_fpath, 'w+') as tmp_file:
+                tmp_file.writelines([dataset_file.readline()])
+
+            total_tuples = 0
+            for tuples_to_read in feature_args['tuples_to_read_list']:
+                total_tuples += tuples_to_read
+                # Appends to the temporary file the current batch to be loaded.
+                with open(csv_fpath, 'a+') as tmp_file:
+                    line_list = []
+                    for i in range(tuples_to_read):
+                        line = dataset_file.readline()
+                        if line == '':
+                            # EOF was reached.
+                            break
+                        line_list.append(line)
+                    tmp_file.writelines(line_list)
+                    # Sets dynamically the batch size to correctly get the size of the last batch.
+                    feature_args['batch_size'] = len(line_list)
+
+                feature_args['identifier'] = '1-' + str(total_tuples)
+
+                self.run_holoclean_featurization(csv_fpath)
+                self.generate_feature_files()
 
 
 if __name__ == "__main__":
@@ -199,10 +224,11 @@ if __name__ == "__main__":
         'dataset_name': 'hospital_numerical',
         'entity_col': None,
         'numerical_attrs': ['Score', 'Sample'],
+        'do_quantization': True,
+        'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
+        'tuples_to_read_list': [250] * 4,
         'do_quantization': False,
         'num_attr_groups_bins': None,
-        'batch_size': 250,
-        'identifier': '1-1000'
     }
 
     # Runs the default example.
