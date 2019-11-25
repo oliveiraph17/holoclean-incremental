@@ -42,7 +42,7 @@ class Executor:
                 self.hc_args['current_iteration'] = current_iteration
                 list_element_position = 1
 
-                if self.hc_args['model_monitoring']:
+                if self.inc_args['model_monitoring']:
                     self.hc_args['current_batch_number'] = inc_args['skip_training_starting_batch'] - 1
                 else:
                     self.hc_args['current_batch_number'] = 1
@@ -64,7 +64,7 @@ class Executor:
                     if list_element_position == 2:
                         self.hc_args['is_first_batch'] = False
 
-                        if self.hc_args['model_monitoring']:
+                        if self.inc_args['model_monitoring']:
                             self.hc_args['skip_training'] = True
                             self.hc_args['train_using_all_batches'] = False
 
