@@ -52,12 +52,12 @@ datasets = [
     ##############################
 
     ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])], [10] * 100, 'NaiveBayes',
+     [(100, ['Score']), (150, ['Sample'])], [20] * 50, 'NaiveBayes',
      0.99, 10000, 0.6, 0.8,
      'dk', False, True),
 
     ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])], [10] * 100, 'NaiveBayes',
+     [(100, ['Score']), (150, ['Sample'])], [20] * 50, 'NaiveBayes',
      0.99, 10000, 0.6, 0.8,
      'all', False, True),
 
