@@ -43,7 +43,7 @@ class Executor:
                 list_element_position = 1
 
                 if self.inc_args['model_monitoring']:
-                    self.hc_args['current_batch_number'] = inc_args['skip_training_starting_batch'] - 1
+                    self.hc_args['current_batch_number'] = self.inc_args['skip_training_starting_batch'] - 1
                 else:
                     self.hc_args['current_batch_number'] = 1
 
