@@ -40,7 +40,13 @@ class Executor:
             with open(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                       self.inc_args['dataset_name'] + '.csv') as dataset_file:
                 self.hc_args['current_iteration'] = current_iteration
-                self.hc_args['current_batch_number'] = 0
+
+                if self.hc_args['model_monitoring']:
+                    self.hc_args['current_batch_number'] = inc_args['skip_training_starting_batch'] - 1
+                    list_element_position = 1
+                else:
+                    self.hc_args['current_batch_number'] = 1
+                    list_element_position = -1
 
                 dataset_file_header = dataset_file.readline()
 
@@ -56,7 +62,7 @@ class Executor:
                             line_list.append(line)
                         tmp_file.writelines(line_list)
 
-                    if self.hc_args['current_batch_number'] == self.inc_args['skip_training_starting_batch']:
+                    if list_element_position == 2:
                         self.hc_args['skip_training'] = True
                         self.hc_args['train_using_all_batches'] = False
 
@@ -66,7 +72,7 @@ class Executor:
                     ).session
 
                     # Drops metatables in the first batch.
-                    if self.hc_args['current_batch_number'] == 0:
+                    if self.hc_args['current_batch_number'] == 1 or list_element_position == 1:
                         table_list = [self.inc_args['dataset_name'] + '_' + self.inc_args['approach'] + '_repaired',
                                       'training_cells',
                                       'repaired_table_copy']
@@ -83,7 +89,7 @@ class Executor:
                                  numerical_attrs=self.inc_args['numerical_attrs'])
 
                     if self.hc_args['log_repairing_quality']:
-                        hc.repairing_quality_metrics.append(str(self.inc_args['skip_training_starting_batch'] + 1))
+                        hc.repairing_quality_metrics.append(str(self.inc_args['skip_training_starting_batch']))
 
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
@@ -110,7 +116,7 @@ class Executor:
                         hc.ds.generate_aux_table(AuxTables.dk_cells, empty_dk_cells_df, store=True)
 
                         if self.hc_args['log_repairing_quality']:
-                            hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number'] + 1))
+                            hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number']))
                             hc.repairing_quality_metrics.append(str(0))
                         if self.hc_args['log_execution_times']:
                             hc.execution_times.append(str(0))
@@ -135,8 +141,10 @@ class Executor:
                                 attr_col='attribute',
                                 val_col='correct_val')
 
-                    logging.info('Batch %s finished.', self.hc_args['current_batch_number'] + 1)
+                    logging.info('Batch %s finished.', self.hc_args['current_batch_number'])
+
                     self.hc_args['current_batch_number'] += 1
+                    list_element_position += 1
 
 
 if __name__ == "__main__":
@@ -183,8 +191,11 @@ if __name__ == "__main__":
         'do_quantization': True,
         'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
         'tuples_to_read_list': [1000],
-        'iterations': [0],
+        'model_monitoring': False,
+        'dataset_size': None,
+        'dataset_fraction_for_batch': None,
         'skip_training_starting_batch': -1,
+        'iterations': [0],
         'approach': 'co_full'
     }
 

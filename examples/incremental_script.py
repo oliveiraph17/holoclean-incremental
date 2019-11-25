@@ -41,10 +41,28 @@ inc_args = {
     'dataset_name': None,
     'entity_col': None,
     'numerical_attrs': None,
-    'tuples_to_read_list': [1000],
-    'iterations': [0],
-    'skip_training_starting_batch': -1
+    'tuples_to_read_list': None,
+    'model_monitoring': False,
+    'dataset_size': None,
+    'dataset_fraction_for_batch': None,
+    'skip_training_starting_batch': -1,
+    'iterations': [0]
 }
+
+
+def build_model_monitoring_input(total_tuples, percentage):
+    tuples_to_read_skipping_dict = {}
+
+    batch_size = int(total_tuples * percentage)
+    number_of_batches = int(total_tuples / batch_size)
+
+    for i in range(number_of_batches - 1):
+        tuples_to_read_skipping_dict[i + 2] = [batch_size * (i + 1)]
+        for j in range(number_of_batches - (i + 1)):
+            tuples_to_read_skipping_dict[i + 2].append(batch_size)
+
+    return tuples_to_read_skipping_dict
+
 
 datasets = [
     ##############################
@@ -52,72 +70,110 @@ datasets = [
     ##############################
 
     ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])], [20] * 50, 'NaiveBayes',
+     [(100, ['Score']), (150, ['Sample'])],
+     None, True, 1000, 0.02, 'NaiveBayes',
      0.99, 10000, 0.6, 0.8,
-     'dk', False, True),
+     'dk', False, False),
 
     ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])], [20] * 50, 'NaiveBayes',
+     [(100, ['Score']), (150, ['Sample'])],
+     None, True, 1000, 0.02, 'NaiveBayes',
      0.99, 10000, 0.6, 0.8,
-     'all', False, True),
+     'all', False, False),
 
-    ('food5k', None, ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'dk', False, True),
+    ('hospital_numerical', None, ['Score', 'Sample'], True,
+     [(100, ['Score']), (150, ['Sample'])],
+     None, True, 1000, 0.10, 'NaiveBayes',
+     0.99, 10000, 0.6, 0.8,
+     'dk', False, False),
 
-    ('food5k', None, ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'all', False, True),
+    ('hospital_numerical', None, ['Score', 'Sample'], True,
+     [(100, ['Score']), (150, ['Sample'])],
+     None, True, 1000, 0.10, 'NaiveBayes',
+     0.99, 10000, 0.6, 0.8,
+     'all', False, False),
 
-    ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'dk', False, True),
+    ('hospital_numerical', None, ['Score', 'Sample'], True,
+     [(100, ['Score']), (150, ['Sample'])],
+     None, True, 1000, 0.20, 'NaiveBayes',
+     0.99, 10000, 0.6, 0.8,
+     'dk', False, False),
 
-    ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
-     [(100, ['latitude', 'longitude'])], [50] * 100, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'all', False, True),
+    ('hospital_numerical', None, ['Score', 'Sample'], True,
+     [(100, ['Score']), (150, ['Sample'])],
+     None, True, 1000, 0.20, 'NaiveBayes',
+     0.99, 10000, 0.6, 0.8,
+     'all', False, False),
 
-    ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'dk', False, True),
-
-    ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'all', False, True),
-
-    ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'dk', False, True),
-
-    ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
-     [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])], [324] * 100, 'NaiveBayes',
-     0.9, 100, 0.05, 0.3,
-     'all', False, True),
-
+    # ('food5k', None, ['latitude', 'longitude'], True,
+    #  [(100, ['latitude', 'longitude'])],
+    #  None, True, 5000, 0.01, 'NaiveBayes',
+    #  0.6, 1000, 0.2, 0.3,
+    #  'dk', False, False),
+    #
+    # ('food5k', None, ['latitude', 'longitude'], True,
+    #  [(100, ['latitude', 'longitude'])],
+    #  None, True, 5000, 0.01, 'NaiveBayes',
+    #  0.6, 1000, 0.2, 0.3,
+    #  'all', False, False),
+    #
+    # ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
+    #  [(100, ['latitude', 'longitude'])],
+    #  None, True, 5000, 0.01, 'NaiveBayes',
+    #  0.6, 1000, 0.2, 0.3,
+    #  'dk', False, False),
+    #
+    # ('food5k_shuffled', '_tid_', ['latitude', 'longitude'], True,
+    #  [(100, ['latitude', 'longitude'])],
+    #  None, True, 5000, 0.01, 'NaiveBayes',
+    #  0.6, 1000, 0.2, 0.3,
+    #  'all', False, False),
+    #
+    # ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+    #  [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])],
+    #  None, True, 32400, 0.01, 'NaiveBayes',
+    #  0.9, 100, 0.05, 0.3,
+    #  'dk', False, False),
+    #
+    # ('nypd6', None, ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+    #  [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])],
+    #  None, True, 32400, 0.01, 'NaiveBayes',
+    #  0.9, 100, 0.05, 0.3,
+    #  'all', False, False),
+    #
+    # ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+    #  [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])],
+    #  None, True, 32400, 0.01, 'NaiveBayes',
+    #  0.9, 100, 0.05, 0.3,
+    #  'dk', False, False),
+    #
+    # ('nypd6_shuffled', '_tid_', ['X_COORD_CD', 'Y_COORD_CD', 'Latitude', 'Longitude'], True,
+    #  [(100, ['X_COORD_CD', 'Y_COORD_CD']), (100, ['Latitude', 'Longitude'])],
+    #  None, True, 32400, 0.01, 'NaiveBayes',
+    #  0.9, 100, 0.05, 0.3,
+    #  'all', False, False),
+    #
     # ('soccer', None, None, False,
-    #  None, [200000], 'NaiveBayes',
+    #  None,
+    #  None, True, 200000, 0.01, 'NaiveBayes',
     #  0.9, 100, 0.05, 0.3,
     #  'dk', False, False),
     #
     # ('soccer', None, None, False,
-    #  None, [200000], 'NaiveBayes',
+    #  None,
+    #  None, True, 200000, 0.01,
     #  0.9, 100, 0.05, 0.3,
     #  'all', False, False),
     #
     # ('soccer_shuffled', '_tid_', None, False,
-    #  None, [20000], 'NaiveBayes',
+    #  None,
+    #  None, True, 200000, 0.01, 'NaiveBayes',
     #  0.9, 100, 0.05, 0.3,
     #  'dk', False, False),
     #
     # ('soccer_shuffled', '_tid_', None, False,
-    #  None, [200000], 'NaiveBayes',
+    #  None,
+    #  None, True, 200000, 0.01, 'NaiveBayes',
     #  0.9, 100, 0.05, 0.3,
     #  'all', False, False),
     #
@@ -128,7 +184,8 @@ datasets = [
     #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
     #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
     #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
-    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])],
+    #  None, True, 400000, 0.01, 'NaiveBayes',
     #  0.9, 100, 0.05, 0.3,
     #  'dk', False, False),
     #
@@ -139,7 +196,8 @@ datasets = [
     #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
     #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
     #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
-    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])],
+    #  None, True, 400000, 0.01, 'NaiveBayes',
     #  0.9, 100, 0.05, 0.3,
     #  'all', False, False),
     #
@@ -150,7 +208,8 @@ datasets = [
     #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
     #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
     #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
-    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])],
+    #  None, True, 400000, 0.01, 'NaiveBayes',
     #  0.9, 100, 0.05, 0.3,
     #  'dk', False, False),
     #
@@ -161,7 +220,8 @@ datasets = [
     #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
     #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
     #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
-    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])], [400000], 'NaiveBayes',
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])],
+    #  None, True, 400000, 0.01, 'NaiveBayes',
     #  0.9, 100, 0.05, 0.3,
     #  'all', False, False),
 ]
@@ -170,7 +230,8 @@ approaches = ['C']
 avg_time_iterations = None
 
 for (dataset_name, entity_col, numerical_attrs, do_quantization,
-     num_attr_groups_bins, tuples_to_read_list, estimator_type,
+     num_attr_groups_bins,
+     tuples_to_read_list, model_monitoring, dataset_size, dataset_fraction_for_batch, estimator_type,
      weak_label_thresh, max_domain, cor_strength, nb_cor_strength,
      infer_mode, global_features, train_using_all_batches) in datasets:
     inc_args['dataset_name'] = dataset_name
@@ -179,6 +240,9 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
     inc_args['do_quantization'] = do_quantization
     inc_args['num_attr_groups_bins'] = num_attr_groups_bins
     inc_args['tuples_to_read_list'] = tuples_to_read_list
+    inc_args['model_monitoring'] = model_monitoring
+    inc_args['dataset_size'] = dataset_size
+    inc_args['dataset_fraction_for_batch'] = dataset_fraction_for_batch
     hc_args['estimator_type'] = estimator_type
     hc_args['weak_label_thresh'] = weak_label_thresh
     hc_args['max_domain'] = max_domain
@@ -243,9 +307,14 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
     if 'C' in approaches:
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = False
-        # hc_args['recompute_from_scratch'] = False
-        hc_args['recompute_from_scratch'] = True
-        hc_args['save_load_checkpoint'] = False
+
+        if inc_args['model_monitoring']:
+            hc_args['recompute_from_scratch'] = True
+            hc_args['save_load_checkpoint'] = True
+        else:
+            hc_args['recompute_from_scratch'] = False
+            hc_args['save_load_checkpoint'] = False
+
         hc_args['append'] = False
         inc_args['approach'] = 'co_c'
 
@@ -253,10 +322,20 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['iterations'] = [0]
-        for batch in range(100):
-            hc_args['skip_training'] = False
-            hc_args['train_using_all_batches'] = True
-            inc_args['skip_training_starting_batch'] = batch + 1
+
+        if inc_args['model_monitoring']:
+            model_monitoring_input = build_model_monitoring_input(dataset_size, dataset_fraction_for_batch)
+
+            for skip_training_starting_batch, tuples_to_read in model_monitoring_input.items():
+                inc_args['skip_training_starting_batch'] = skip_training_starting_batch
+                inc_args['tuples_to_read_list'] = tuples_to_read
+
+                executor = Executor(hc_args, inc_args)
+                executor.run()
+
+                hc_args['skip_training'] = False
+                hc_args['train_using_all_batches'] = train_using_all_batches
+        else:
             executor = Executor(hc_args, inc_args)
             executor.run()
 
