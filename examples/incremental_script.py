@@ -31,7 +31,8 @@ hc_args = {
     'append': None,
     'infer_mode': None,
     'global_features': None,
-    'train_using_all_batches': None
+    'train_using_all_batches': None,
+    'is_first_batch': True
 }
 
 inc_args = {

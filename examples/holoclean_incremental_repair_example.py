@@ -185,6 +185,7 @@ if __name__ == "__main__":
         'infer_mode': 'dk',
         'global_features': False,
         'train_using_all_batches': False,
+        'is_first_batch': True
     }
 
     # Default parameters for Executor.
