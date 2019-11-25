@@ -46,7 +46,7 @@ inc_args = {
     'dataset_size': None,
     'dataset_fraction_for_batch': None,
     'skip_training_starting_batch': -1,
-    'iterations': [0]
+    'iterations': [1]
 }
 
 
@@ -265,7 +265,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         # A - Quality
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
+        inc_args['iterations'] = [1]
         executor = Executor(hc_args, inc_args)
         executor.run()
 
@@ -290,7 +290,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         # B - Quality
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
+        inc_args['iterations'] = [1]
         executor = Executor(hc_args, inc_args)
         executor.run()
 
@@ -321,7 +321,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         # C - Quality
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
+        inc_args['iterations'] = [1]
 
         if inc_args['model_monitoring']:
             model_monitoring_input = build_model_monitoring_input(dataset_size, dataset_fraction_for_batch)
@@ -335,6 +335,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
 
                 hc_args['skip_training'] = False
                 hc_args['train_using_all_batches'] = train_using_all_batches
+                hc_args['is_first_batch'] = True
         else:
             executor = Executor(hc_args, inc_args)
             executor.run()
@@ -360,7 +361,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         # B+ - Quality
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
+        inc_args['iterations'] = [1]
         executor = Executor(hc_args, inc_args)
         executor.run()
 
@@ -385,7 +386,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         # C+ - Quality
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
+        inc_args['iterations'] = [1]
         executor = Executor(hc_args, inc_args)
         executor.run()
 
@@ -411,7 +412,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['tuples_to_read_list'] = [sum(inc_args['tuples_to_read_list'])]
-        inc_args['iterations'] = [0]
+        inc_args['iterations'] = [1]
         executor = Executor(hc_args, inc_args)
         executor.run()
 

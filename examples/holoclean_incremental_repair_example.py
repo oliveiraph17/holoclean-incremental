@@ -40,13 +40,12 @@ class Executor:
             with open(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                       self.inc_args['dataset_name'] + '.csv') as dataset_file:
                 self.hc_args['current_iteration'] = current_iteration
+                list_element_position = 1
 
                 if self.hc_args['model_monitoring']:
                     self.hc_args['current_batch_number'] = inc_args['skip_training_starting_batch'] - 1
-                    list_element_position = 1
                 else:
                     self.hc_args['current_batch_number'] = 1
-                    list_element_position = -1
 
                 dataset_file_header = dataset_file.readline()
 
@@ -63,8 +62,11 @@ class Executor:
                         tmp_file.writelines(line_list)
 
                     if list_element_position == 2:
-                        self.hc_args['skip_training'] = True
-                        self.hc_args['train_using_all_batches'] = False
+                        self.hc_args['is_first_batch'] = False
+
+                        if self.hc_args['model_monitoring']:
+                            self.hc_args['skip_training'] = True
+                            self.hc_args['train_using_all_batches'] = False
 
                     # Sets up a HoloClean session.
                     hc = holoclean.HoloClean(
@@ -72,7 +74,7 @@ class Executor:
                     ).session
 
                     # Drops metatables in the first batch.
-                    if self.hc_args['current_batch_number'] == 1 or list_element_position == 1:
+                    if self.hc_args['is_first_batch']:
                         table_list = [self.inc_args['dataset_name'] + '_' + self.inc_args['approach'] + '_repaired',
                                       'training_cells',
                                       'repaired_table_copy']
@@ -83,13 +85,18 @@ class Executor:
                     hc.setup_experiment_loggers(self.quality_log_fpath, self.time_log_fpath, self.weight_log_fpath)
 
                     # Loads existing data and Denial Constraints.
-                    hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
-                                 '/tmp/current_batch.csv',
-                                 entity_col=self.inc_args['entity_col'],
-                                 numerical_attrs=self.inc_args['numerical_attrs'])
+                    load_time = hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
+                                             '/tmp/current_batch.csv',
+                                             entity_col=self.inc_args['entity_col'],
+                                             numerical_attrs=self.inc_args['numerical_attrs'])
 
                     if self.hc_args['log_repairing_quality']:
                         hc.repairing_quality_metrics.append(str(self.inc_args['skip_training_starting_batch']))
+                    if self.hc_args['log_execution_times']:
+                        hc.execution_times.append(str(self.hc_args['current_iteration']))
+                        hc.execution_times.append(str(self.inc_args['skip_training_starting_batch']))
+                        hc.execution_times.append(str(self.hc_args['current_batch_number']))
+                        hc.execution_times.append(str(load_time))
 
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
@@ -195,7 +202,7 @@ if __name__ == "__main__":
         'dataset_size': None,
         'dataset_fraction_for_batch': None,
         'skip_training_starting_batch': -1,
-        'iterations': [0],
+        'iterations': [1],
         'approach': 'co_full'
     }
 
