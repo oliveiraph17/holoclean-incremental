@@ -20,12 +20,11 @@ class Executor:
                           for featurizer_file in self.hc_args['featurizers'].keys()}
         }
 
+    def run_holoclean_featurization(self, csv_fpath):
         # Sets up a HoloClean session.
         self.hc = holoclean.HoloClean(
             **self.hc_args
         ).session
-
-    def run_holoclean_featurization(self, csv_fpath):
 
         # Loads existing data and Denial Constraints.
         self.hc.load_data(self.feature_args['dataset_name'],
@@ -101,6 +100,8 @@ class Executor:
             ground_truth[attr] = t.clone()
             for i in range(0, t.size(0)):
                 tid = int(t[i])
+                if (tid, attr) not in clean_df.index:
+                    continue
                 g_truth = clean_df.loc[(tid, attr), '_value_']
                 domain = domain_df.loc[(tid, attr), 'domain']
                 domain_idx = {val: idx for idx, val in enumerate(domain.split('|||'))}
@@ -198,8 +199,8 @@ if __name__ == "__main__":
     hc_args = {
         'detectors': [
             # ('nulldetector', 'NullDetector', False),
-            ('violationdetector', 'ViolationDetector', False),
-            # ('errorloaderdetector', 'ErrorsLoaderDetector', True)
+            # ('violationdetector', 'ViolationDetector', False),
+            ('errorloaderdetector', 'ErrorsLoaderDetector', True)
         ],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
@@ -227,8 +228,6 @@ if __name__ == "__main__":
         'do_quantization': True,
         'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
         'tuples_to_read_list': [250] * 4,
-        'do_quantization': False,
-        'num_attr_groups_bins': None,
     }
 
     # Runs the default example.

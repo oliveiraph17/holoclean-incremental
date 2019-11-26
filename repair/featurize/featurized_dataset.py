@@ -141,7 +141,8 @@ class FeaturizedDataset:
                     is_clean[attr][count[attr]] = clean
 
             self.tids[attr][count[attr]] = tid
-            self.init_idxs[attr][count[attr]] = init_idx
+            if init_idx != NULL_REPR:
+                self.init_idxs[attr][count[attr]] = init_idx
 
             count[attr] += 1
             current_training_cells.append(cid)
