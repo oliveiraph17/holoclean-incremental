@@ -325,6 +325,12 @@ arguments = [
       'default': True,
       'type': bool,
       'help': 'Indicates if current batch is the first one.'}),
+    (('-stsb', '--skip-training-starting-batch'),
+     {'metavar': 'SKIP_TRAINING_STARTING_BATCH',
+      'dest': 'skip_training_starting_batch',
+      'default': -1,
+      'type': int,
+      'help': 'Current skip-training starting batch in the experiments.'}),
 ]
 
 # Flags for Holoclean mode
@@ -528,6 +534,8 @@ class Session:
             else:
                 self.repairing_quality_metrics.append('False')
 
+            self.repairing_quality_metrics.append(str(self.env['skip_training_starting_batch']))
+
         if self.env['log_execution_times']:
             self.execution_times.append(self.env['infer_mode'])
 
@@ -541,7 +549,10 @@ class Session:
             else:
                 self.execution_times.append('False')
 
-        return load_time
+            self.execution_times.append(str(self.env['current_iteration']))
+            self.execution_times.append(str(self.env['skip_training_starting_batch']))
+            self.execution_times.append(str(self.env['current_batch_number']))
+            self.execution_times.append(str(load_time))
 
     def load_dcs(self, fpath):
         """
@@ -563,7 +574,7 @@ class Session:
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
         if self.env['log_repairing_quality']:
-            self.repairing_quality_metrics.append(str(self.env['current_batch_number'] + 1))
+            self.repairing_quality_metrics.append(str(self.env['current_batch_number']))
             self.repairing_quality_metrics.append(str(dk_cells_count))
         if self.env['log_execution_times']:
             self.execution_times.append(str(detect_time))
@@ -733,7 +744,7 @@ class Session:
         if self.env['log_execution_times']:
             self.experiment_time_logger.info(';'.join(self.execution_times))
 
-        if self.env['log_feature_weights']:
+        if self.env['log_feature_weights'] and not self.env['skip_training']:
             status, time, complete_df = self.repair_engine.get_featurizer_weights()
             if self.env['print_fw']:
                 logging.info(status)

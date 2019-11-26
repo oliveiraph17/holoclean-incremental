@@ -32,7 +32,8 @@ hc_args = {
     'infer_mode': None,
     'global_features': None,
     'train_using_all_batches': None,
-    'is_first_batch': True
+    'is_first_batch': True,
+    'skip_training_starting_batch': -1
 }
 
 inc_args = {
@@ -46,7 +47,6 @@ inc_args = {
     'model_monitoring': False,
     'dataset_size': None,
     'dataset_fraction_for_batch': None,
-    'skip_training_starting_batch': -1,
     'iterations': [1]
 }
 
@@ -328,7 +328,7 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
             model_monitoring_input = build_model_monitoring_input(dataset_size, dataset_fraction_for_batch)
 
             for skip_training_starting_batch, tuples_to_read in model_monitoring_input.items():
-                inc_args['skip_training_starting_batch'] = skip_training_starting_batch
+                hc_args['skip_training_starting_batch'] = skip_training_starting_batch
                 inc_args['tuples_to_read_list'] = tuples_to_read
 
                 executor = Executor(hc_args, inc_args)

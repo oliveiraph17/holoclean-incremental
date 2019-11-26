@@ -100,7 +100,7 @@ class RepairEngine:
                 report, _, _ = eval_engine.eval_report()
                 logging.info(report)
                 logging.info("Feature weights:")
-                weights, _ = self.get_featurizer_weights()
+                weights, _, _ = self.get_featurizer_weights()
                 logging.info(weights)
 
         toc = time.clock()
@@ -197,7 +197,9 @@ class RepairEngine:
             df.insert(loc=1, column='attribute',
                       value=[attr] * len(df.index))
             df.insert(loc=0, column='batch',
-                      value=[self.env['current_batch_number'] + 1] * len(df.index))
+                      value=[self.env['current_batch_number']] * len(df.index))
+            df.insert(loc=0, column='skip_training_starting_batch',
+                      value=[self.env['skip_training_starting_batch']] * len(df.index))
             df.insert(loc=0, column='train_using_all_batches',
                       value=['True' if self.env['train_using_all_batches'] else 'False'] * len(df.index))
             df.insert(loc=0, column='features',
