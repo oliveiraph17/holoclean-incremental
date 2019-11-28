@@ -205,13 +205,13 @@ arguments = [
     (('-ci', '--current-iteration'),
      {'metavar': 'CURRENT_ITERATION',
       'dest': 'current_iteration',
-      'default': 0,
+      'default': 1,
       'type': int,
       'help': 'Current iteration in experiments.'}),
     (('-cdb', '--current-batch_number'),
      {'metavar': 'CURRENT_BATCH_NUMBER',
       'dest': 'current_batch_number',
-      'default': 0,
+      'default': 1,
       'type': int,
       'help': 'Current batch number in experiments.'}),
     (('-lrq', '--log-repairing-quality'),
@@ -319,6 +319,18 @@ arguments = [
       'default': False,
       'type': bool,
       'help': 'Indicates if all data loaded so far should be used for training, including from the current batch.'}),
+    (('-ifb', '--is-first-batch'),
+     {'metavar': 'IS_FIRST_BATCH',
+      'dest': 'is_first_batch',
+      'default': True,
+      'type': bool,
+      'help': 'Indicates if current batch is the first one.'}),
+    (('-stsb', '--skip-training-starting-batch'),
+     {'metavar': 'SKIP_TRAINING_STARTING_BATCH',
+      'dest': 'skip_training_starting_batch',
+      'default': -1,
+      'type': int,
+      'help': 'Current skip-training starting batch in the experiments.'}),
 ]
 
 # Flags for Holoclean mode
@@ -441,19 +453,22 @@ class Session:
 
         quality_header = ''
         if self.env['log_repairing_quality']:
-            quality_header = 'infer_mode;features;train_using_all_batches;batch;dk_cells;training_cells;' \
+            quality_header = 'infer_mode;features;train_using_all_batches;' \
+                             'skip_training_starting_batch;batch;dk_cells;training_cells;' \
                              'precision;recall;repairing_recall;f1;repairing_f1;' \
                              'detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;' \
                              'repairs_on_correct_cells;repairs_on_incorrect_cells;rmse'
             self.experiment_quality_logger = repairing_quality_logger
         time_header = ''
         if self.env['log_execution_times']:
-            time_header = 'iteration;batch;load_data;load_dcs;detect_errors;setup_domain;' \
+            time_header = 'infer_mode;features;train_using_all_batches;' \
+                          'iteration;skip_training_starting_batch;batch;' \
+                          'load_data;load_dcs;detect_errors;setup_domain;' \
                           'featurize_data;setup_model;fit_model;infer_repairs;' \
                           'get_inferred_values;generate_repaired_dataset;repaired_table_copy_time;save_stats_time'
             self.experiment_time_logger = execution_time_logger
 
-        if self.env['current_iteration'] == 0 and self.env['current_batch_number'] == 0:
+        if self.env['is_first_batch']:
             if self.env['log_repairing_quality']:
                 quality_handler = logging.FileHandler(quality_log_fpath)
                 quality_handler.setFormatter(experiment_logger_formatter)
@@ -505,19 +520,38 @@ class Session:
                                               numerical_attrs=numerical_attrs)
         logging.info(status)
         logging.debug('Time to load dataset: %.2f secs', load_time)
+
         if self.env['log_repairing_quality']:
             self.repairing_quality_metrics.append(self.env['infer_mode'])
+
             if self.env['global_features']:
-                self.repairing_quality_metrics.append('fixed')
+                self.repairing_quality_metrics.append('global')
             else:
                 self.repairing_quality_metrics.append('incremental')
+
             if self.env['train_using_all_batches']:
                 self.repairing_quality_metrics.append('True')
             else:
                 self.repairing_quality_metrics.append('False')
+
+            self.repairing_quality_metrics.append(str(self.env['skip_training_starting_batch']))
+
         if self.env['log_execution_times']:
-            self.execution_times.append(str(self.env['current_iteration'] + 1))
-            self.execution_times.append(str(self.env['current_batch_number'] + 1))
+            self.execution_times.append(self.env['infer_mode'])
+
+            if self.env['global_features']:
+                self.execution_times.append('global')
+            else:
+                self.execution_times.append('incremental')
+
+            if self.env['train_using_all_batches']:
+                self.execution_times.append('True')
+            else:
+                self.execution_times.append('False')
+
+            self.execution_times.append(str(self.env['current_iteration']))
+            self.execution_times.append(str(self.env['skip_training_starting_batch']))
+            self.execution_times.append(str(self.env['current_batch_number']))
             self.execution_times.append(str(load_time))
 
     def load_dcs(self, fpath):
@@ -540,7 +574,7 @@ class Session:
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
         if self.env['log_repairing_quality']:
-            self.repairing_quality_metrics.append(str(self.env['current_batch_number'] + 1))
+            self.repairing_quality_metrics.append(str(self.env['current_batch_number']))
             self.repairing_quality_metrics.append(str(dk_cells_count))
         if self.env['log_execution_times']:
             self.execution_times.append(str(detect_time))
@@ -710,7 +744,7 @@ class Session:
         if self.env['log_execution_times']:
             self.experiment_time_logger.info(';'.join(self.execution_times))
 
-        if self.env['log_feature_weights']:
+        if self.env['log_feature_weights'] and not self.env['skip_training']:
             status, time, complete_df = self.repair_engine.get_featurizer_weights()
             if self.env['print_fw']:
                 logging.info(status)

@@ -40,7 +40,12 @@ class Executor:
             with open(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                       self.inc_args['dataset_name'] + '.csv') as dataset_file:
                 self.hc_args['current_iteration'] = current_iteration
-                self.hc_args['current_batch_number'] = 0
+                list_element_position = 1
+
+                if self.inc_args['model_monitoring']:
+                    self.hc_args['current_batch_number'] = self.hc_args['skip_training_starting_batch'] - 1
+                else:
+                    self.hc_args['current_batch_number'] = 1
 
                 dataset_file_header = dataset_file.readline()
 
@@ -56,9 +61,12 @@ class Executor:
                             line_list.append(line)
                         tmp_file.writelines(line_list)
 
-                    if self.hc_args['current_batch_number'] == self.inc_args['skip_training_starting_batch']:
-                        self.hc_args['skip_training'] = True
-                        self.hc_args['train_using_all_batches'] = False
+                    if list_element_position == 2:
+                        self.hc_args['is_first_batch'] = False
+
+                        if self.inc_args['model_monitoring']:
+                            self.hc_args['skip_training'] = True
+                            self.hc_args['train_using_all_batches'] = False
 
                     # Sets up a HoloClean session.
                     hc = holoclean.HoloClean(
@@ -66,7 +74,7 @@ class Executor:
                     ).session
 
                     # Drops metatables in the first batch.
-                    if self.hc_args['current_batch_number'] == 0:
+                    if self.hc_args['is_first_batch']:
                         table_list = [self.inc_args['dataset_name'] + '_' + self.inc_args['approach'] + '_repaired',
                                       'training_cells',
                                       'repaired_table_copy']
@@ -81,6 +89,7 @@ class Executor:
                                  '/tmp/current_batch.csv',
                                  entity_col=self.inc_args['entity_col'],
                                  numerical_attrs=self.inc_args['numerical_attrs'])
+
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
@@ -105,8 +114,11 @@ class Executor:
 
                         hc.ds.generate_aux_table(AuxTables.dk_cells, empty_dk_cells_df, store=True)
 
-                        hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number'] + 1))
-                        hc.repairing_quality_metrics.append(str(0))
+                        if self.hc_args['log_repairing_quality']:
+                            hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number']))
+                            hc.repairing_quality_metrics.append(str(0))
+                        if self.hc_args['log_execution_times']:
+                            hc.execution_times.append(str(0))
 
                     if self.inc_args['do_quantization']:
                         hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
@@ -128,8 +140,10 @@ class Executor:
                                 attr_col='attribute',
                                 val_col='correct_val')
 
-                    logging.info('Batch %s finished.', self.hc_args['current_batch_number'] + 1)
+                    logging.info('Batch %s finished.', self.hc_args['current_batch_number'])
+
                     self.hc_args['current_batch_number'] += 1
+                    list_element_position += 1
 
 
 if __name__ == "__main__":
@@ -151,25 +165,20 @@ if __name__ == "__main__":
         'print_fw': False,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
-        'epochs_convergence': 3,
-        'convergence_thresh': 0.01,
-        'current_iteration': None,
-        'current_batch_number': None,
         'log_repairing_quality': True,
         'log_execution_times': True,
         'log_feature_weights': True,
         'incremental': True,
-        'incremental_entropy': False,
-        'default_entropy': False,
         'repair_previous_errors': False,
         'recompute_from_scratch': True,
         'skip_training': False,
-        'ignore_previous_training_cells': False,
         'save_load_checkpoint': False,
-        'append': True,
+        'append': False,
         'infer_mode': 'dk',
         'global_features': False,
         'train_using_all_batches': False,
+        'is_first_batch': True,
+        'skip_training_starting_batch': -1
     }
 
     # Default parameters for Executor.
@@ -183,8 +192,10 @@ if __name__ == "__main__":
         'do_quantization': True,
         'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
         'tuples_to_read_list': [1000],
-        'iterations': [0],
-        'skip_training_starting_batch': -1,
+        'model_monitoring': False,
+        'dataset_size': None,
+        'dataset_fraction_for_batch': None,
+        'iterations': [1],
         'approach': 'co_full'
     }
 
