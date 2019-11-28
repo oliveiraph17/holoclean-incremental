@@ -70,7 +70,7 @@ class LoadFeatFeaturizedDataset:
 
         return X_train, Y_train, mask_train, self.train_cid
 
-    def get_infer_data(self, detector='AllDetectors'):
+    def get_infer_data(self, detectors):
         """
         Retrieves the samples to be inferred and the corresponding ground truth.
         """
@@ -84,10 +84,15 @@ class LoadFeatFeaturizedDataset:
 
         for attr in self.ds.get_active_attributes():
             if self.env['infer_mode'] == 'dk':
-                if detector == 'AllDetectors':
-                    infer_idx[attr] = (self.feat_last['is_clean'][attr] == 0).nonzero()[:, 0]
-                else:
-                    infer_idx[attr] = (self.feat_last['errors'][detector][attr] == 1).nonzero()[:, 0]
+                assert detectors, "No error detector provided for infer_mode='dk'."
+                for detector in detectors:
+                    # Generates a tensor per attribute with the number of error detections per cell.
+                    if attr not in infer_idx:
+                        infer_idx[attr] = (self.feat_last['errors'][detector][attr] == 1)
+                    else:
+                        infer_idx[attr] = infer_idx[attr].add(self.feat_last['errors'][detector][attr] == 1)
+                # Gets the positions which were spot as dirty by at least one error detector.
+                infer_idx[attr] = infer_idx[attr].nonzero()[:, 0]
             else:
                 infer_idx[attr] = torch.arange(0, self.feat_last['tensors'][attr].size(0))
 

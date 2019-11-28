@@ -85,7 +85,7 @@ class Executor:
 
     def infer(self):
         X_pred, mask_pred, infer_idx, Y_truth = self.hc.repair_engine.feat_dataset.get_infer_data(
-            self.feature_args['detector_name'])
+            self.feature_args['detectors'])
         Y_pred = {}
         for attr in self.hc.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
@@ -137,8 +137,8 @@ if __name__ == "__main__":
         'active_attributes': ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
                               'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
                               'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg'],
-        'labels': 'weak',  # ['weak', 'init', 'truth']
-        'detector_name': 'AllDetectors',  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector', 'AllDetectors']
+        'labels': 'weak',  # one of 'weak', 'init' or 'truth'
+        'detectors': ['ErrorLoaderDetector']  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector'],
     }
 
     # Runs the default example.
