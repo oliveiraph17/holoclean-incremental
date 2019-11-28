@@ -108,6 +108,24 @@ class Executor:
                 # -1 means the ground truth is not part of the domain generated for the cell
                 ground_truth[attr][i] = domain_idx.get(g_truth, -1)
 
+        # Computes error tensors.
+        errors = {}
+        errors_df = {}
+        for detector in self.hc.detect_engine.detectors:
+            errors[detector.name] = {}
+            errors_df[detector.name] = detector.detect_noisy_cells().reset_index()
+            if not errors_df[detector.name].empty:
+                errors_df[detector.name] = errors_df[detector.name].set_index(['_tid_', 'attribute'])
+                errors_df[detector.name].sort_index(inplace=True)
+
+            for attr, t in tids.items():
+                errors[detector.name][attr] = t.clone().fill_(0)
+                if not errors_df[detector.name].empty:
+                    for i in range(0, t.size(0)):
+                        tid = int(t[i])
+                        if (tid, attr) in errors_df[detector.name].index:
+                            errors[detector.name][attr][i] = 1
+
         # Get tensors for the 'current' batch of the execution.
         # Gets tids from the 'current' batch.
         batch_tids = self.hc.ds.raw_data.df['_tid_'].tail(self.feature_args['batch_size']).tolist()
@@ -120,28 +138,32 @@ class Executor:
         tids_last = {}
         init_idxs_last = {}
         ground_truth_last = {}
+        errors_last = {key: {} for key in errors.keys()}
         for attr, t in tids.items():
             tids_index = []
             for i in range(0, t.size(0)):
                 tid = int(t[i])
                 if tid in batch_tids:
                     tids_index.append(i)
-            tensors_last[attr] = tensors[attr].index_select(0, torch.LongTensor(tids_index))
-            weak_labels_last[attr] = weak_labels[attr].index_select(0, torch.LongTensor(tids_index))
-            is_clean_last[attr] = is_clean[attr].index_select(0, torch.LongTensor(tids_index))
-            class_masks_last[attr] = class_masks[attr].index_select(0, torch.LongTensor(tids_index))
-            tids_last[attr] = tids[attr].index_select(0, torch.LongTensor(tids_index))
-            init_idxs_last[attr] = init_idxs[attr].index_select(0, torch.LongTensor(tids_index))
-            ground_truth_last[attr] = ground_truth[attr].index_select(0, torch.LongTensor(tids_index))
+            tids_index_tensor = torch.LongTensor(tids_index)
+            tensors_last[attr] = tensors[attr].index_select(0, tids_index_tensor)
+            weak_labels_last[attr] = weak_labels[attr].index_select(0, tids_index_tensor)
+            is_clean_last[attr] = is_clean[attr].index_select(0, tids_index_tensor)
+            class_masks_last[attr] = class_masks[attr].index_select(0, tids_index_tensor)
+            tids_last[attr] = tids[attr].index_select(0, tids_index_tensor)
+            init_idxs_last[attr] = init_idxs[attr].index_select(0, tids_index_tensor)
+            ground_truth_last[attr] = ground_truth[attr].index_select(0, tids_index_tensor)
+            for detector_name in errors.keys():
+                errors_last[detector_name][attr] = errors[detector_name][attr].index_select(0, tids_index_tensor)
 
         # Wraps tensors in dictionaries.
-        feat = {'tensors': tensors, 'weak_labels': weak_labels, 'is_clean': is_clean,
-                'class_masks': class_masks, 'tids': tids, 'init_idxs': init_idxs,
-                'ground_truth': ground_truth}
+        feat = {'tensors': tensors, 'errors': errors,
+                'labels': {'weak': weak_labels, 'init': init_idxs, 'truth': ground_truth},
+                'is_clean': is_clean, 'class_masks': class_masks, 'tids': tids}
 
-        feat_last = {'tensors': tensors_last, 'weak_labels': weak_labels_last, 'is_clean': is_clean_last,
-                     'class_masks': class_masks_last, 'tids': tids_last, 'init_idxs': init_idxs_last,
-                     'ground_truth': ground_truth_last}
+        feat_last = {'tensors': tensors_last, 'errors': errors_last,
+                     'labels': {'weak': weak_labels_last, 'init': init_idxs_last, 'truth': ground_truth_last},
+                     'is_clean': is_clean_last, 'class_masks': class_masks_last, 'tids': tids_last}
 
         # Sets the output file names.
         base_path = self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '_' + self.feature_args['identifier']
@@ -198,8 +220,8 @@ if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
         'detectors': [
-            # ('nulldetector', 'NullDetector', False),
-            # ('violationdetector', 'ViolationDetector', False),
+            ('nulldetector', 'NullDetector', False),
+            ('violationdetector', 'ViolationDetector', False),
             ('errorloaderdetector', 'ErrorsLoaderDetector', True)
         ],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
@@ -215,6 +237,7 @@ if __name__ == "__main__":
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
         'incremental': False,
+        'infer_mode': 'all',
     }
 
     # Default parameters for Executor.
@@ -222,11 +245,10 @@ if __name__ == "__main__":
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-        'dataset_name': 'hospital_numerical',
+        'dataset_name': 'hospital',
         'entity_col': None,
-        'numerical_attrs': ['Score', 'Sample'],
-        'do_quantization': True,
-        'num_attr_groups_bins': [(100, ['Score']), (150, ['Sample'])],
+        'numerical_attrs': None,
+        'do_quantization': False,
         'tuples_to_read_list': [250] * 4,
     }
 

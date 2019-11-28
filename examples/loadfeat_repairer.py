@@ -25,9 +25,13 @@ class Executor:
         with open(feature_args['dataset_dir'] + feature_args['dataset_name'] + '/' +
                   feature_args['dataset_name'] + '.csv') as dataset_file:
 
-            # Writes the header and the first tuple to a temporary file.
+            # Generates a non-empty sample file that has the same structure of the data file.
             csv_fpath = '/tmp/current_dataset.csv'
-            line_list = [dataset_file.readline(), dataset_file.readline()]
+            # Adds the header.
+            line_list = [dataset_file.readline()]
+            # Adds a sample of the tuples.
+            for i in range(100):
+                line_list.append(dataset_file.readline())
 
             with open(csv_fpath, 'w+') as tmp_file:
                 tmp_file.writelines(line_list)
@@ -50,14 +54,38 @@ class Executor:
         self.hc.repair_engine.feat_dataset.load_feat(base_path, self.feature_args['batch_size'])
 
     def train(self):
+        # Sets up the models.
         self.hc.repair_engine.setup_repair_model()
-        status, fit_time, training_cells_count = self.hc.repair_engine.fit_repair_model()
-        logging.info(status)
-        logging.debug('Time to fit repair model: %.2f secs', fit_time)
-        logging.debug('Number of training elements: %d', training_cells_count)
+
+        # Trains.
+        tic = time.clock()
+        total_training_cells = 0
+        X_train, Y_train, mask_train, train_cid = \
+            self.hc.repair_engine.feat_dataset.get_training_data(self.feature_args['labels'])
+        for attr in self.hc.ds.get_active_attributes():
+            logging.info('Training model for %s with %d training examples (cells)', attr, X_train[attr].size(0))
+            tic_attr = time.clock()
+
+            self.hc.repair_engine.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr],
+                                                               self.hc.env['epochs'])
+
+            if self.hc.env['save_load_checkpoint']:
+                tic_checkpoint = time.clock()
+                self.hc.repair_engine.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.hc.ds.raw_data.name
+                                                                         + '-' + attr)
+                logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
+
+            logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
+            total_training_cells += X_train[attr].size(0)
+        toc = time.clock()
+
+        logging.info('DONE training repair model')
+        logging.debug('Time to fit repair model: %.2f secs', toc - tic)
+        logging.debug('Number of training elements: %d', total_training_cells)
 
     def infer(self):
-        X_pred, mask_pred, infer_idx, Y_truth = self.hc.repair_engine.feat_dataset.get_infer_data()
+        X_pred, mask_pred, infer_idx, Y_truth = self.hc.repair_engine.feat_dataset.get_infer_data(
+            self.feature_args['detector_name'])
         Y_pred = {}
         for attr in self.hc.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
@@ -84,10 +112,11 @@ class Executor:
 
             batch_number += 1
 
+
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        'epochs': 20,
+        'epochs': 2,
         'threads': 1,
         'verbose': True,
         'print_fw': False,
@@ -101,13 +130,15 @@ if __name__ == "__main__":
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'feat_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-        'dataset_name': 'hospital_numerical',
+        'dataset_name': 'hospital',
         'entity_col': None,
-        'numerical_attrs': ['Score', 'Sample'],
+        'numerical_attrs': None,
         'tuples_to_read_list': [250] * 4,
         'active_attributes': ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
                               'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
-                              'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg']
+                              'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg'],
+        'labels': 'weak',  # ['weak', 'init', 'truth']
+        'detector_name': 'AllDetectors',  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector', 'AllDetectors']
     }
 
     # Runs the default example.

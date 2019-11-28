@@ -10,6 +10,7 @@ class DetectEngine:
     def __init__(self, env, dataset):
         self.env = env
         self.ds = dataset
+        self.detectors = None
 
         if env['repair_previous_errors'] and not env['incremental']:
             raise Exception('Inconsistent parameters: repair_previous_errors=%r, incremental=%r.' %
@@ -21,14 +22,15 @@ class DetectEngine:
         :param detectors: (list) of ErrorDetector objects
         """
         errors = []
+        self.detectors = detectors
         tic_total = time.clock()
 
         # Initialize all error detectors.
-        for detector in detectors:
+        for detector in self.detectors:
             detector.setup(self.ds, self.env)
 
         # Run detection using each detector.
-        for detector in detectors:
+        for detector in self.detectors:
             tic = time.clock()
             error_df = detector.detect_noisy_cells()
             toc = time.clock()

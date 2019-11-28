@@ -43,7 +43,7 @@ class LoadFeatFeaturizedDataset:
         for attr in self.ds.get_active_attributes():
             self.classes[attr] = self.feat['tensors'][attr].size(1)
 
-    def get_training_data(self, labels='weak'):
+    def get_training_data(self, label_type='weak'):
         """
         get_training_data returns X_train, y_train, and mask_train
         where each row of each tensor is a variable/VID and
@@ -54,7 +54,7 @@ class LoadFeatFeaturizedDataset:
         and only a small amount of incorrect initial values which allow us
         to train to convergence.
         """
-        assert labels in ['weak', 'init', 'truth'], \
+        assert label_type in ['weak', 'init', 'truth'], \
             "Labels must be 'weak' for estimated weak labels, 'init' for initial values or 'truth' for ground truth."
 
         X_train = {}
@@ -62,23 +62,15 @@ class LoadFeatFeaturizedDataset:
         mask_train = {}
 
         for attr in self.ds.get_active_attributes():
-            # Train using either weak labels or init values
-            if labels == 'weak':
-                train_idx = (self.feat['weak_labels'][attr] != -1).nonzero()[:, 0]
-                Y_train[attr] = self.feat['weak_labels'][attr].index_select(0, train_idx)
-            elif labels == 'init':
-                train_idx = (self.feat['init_idxs'][attr] != -1).nonzero()[:, 0]
-                Y_train[attr] = self.feat['init_idxs'][attr].index_select(0, train_idx)
-            else:
-                train_idx = (self.feat['ground_truth'][attr] != -1).nonzero()[:, 0]
-                Y_train[attr] = self.feat['ground_truth'][attr].index_select(0, train_idx)
-
+            # Train using label_type
+            train_idx = (self.feat['labels'][label_type][attr] != -1).nonzero()[:, 0]
+            Y_train[attr] = self.feat['labels'][label_type][attr].index_select(0, train_idx)
             X_train[attr] = self.feat['tensors'][attr].index_select(0, train_idx)
             mask_train[attr] = self.feat['class_masks'][attr].index_select(0, train_idx)
 
         return X_train, Y_train, mask_train, self.train_cid
 
-    def get_infer_data(self):
+    def get_infer_data(self, detector='AllDetectors'):
         """
         Retrieves the samples to be inferred and the corresponding ground truth.
         """
@@ -92,12 +84,15 @@ class LoadFeatFeaturizedDataset:
 
         for attr in self.ds.get_active_attributes():
             if self.env['infer_mode'] == 'dk':
-                infer_idx[attr] = (self.feat_last['is_clean'][attr] == 0).nonzero()[:, 0]
+                if detector == 'AllDetectors':
+                    infer_idx[attr] = (self.feat_last['is_clean'][attr] == 0).nonzero()[:, 0]
+                else:
+                    infer_idx[attr] = (self.feat_last['errors'][detector][attr] == 1).nonzero()[:, 0]
             else:
                 infer_idx[attr] = torch.arange(0, self.feat_last['tensors'][attr].size(0))
 
             X_infer[attr] = self.feat_last['tensors'][attr].index_select(0, infer_idx[attr])
             mask_infer[attr] = self.feat_last['class_masks'][attr].index_select(0, infer_idx[attr])
-            Y_ground_truth[attr] = self.feat_last['ground_truth'][attr].index_select(0, infer_idx[attr])
+            Y_ground_truth[attr] = self.feat_last['labels']['truth'][attr].index_select(0, infer_idx[attr])
 
         return X_infer, mask_infer, infer_idx, Y_ground_truth

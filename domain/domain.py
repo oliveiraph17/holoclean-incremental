@@ -194,7 +194,11 @@ class DomainEngine:
 
         records = self.ds.get_prepared_raw_data().to_records(index=False)
 
-        dk_lookup = {(val[0], val[1]) for val in self.ds.aux_table[AuxTables.dk_cells].df[['_tid_', 'attribute']].values}
+        if not self.ds.aux_table[AuxTables.dk_cells].df.empty:
+            dk_lookup = {(val[0], val[1])
+                         for val in self.ds.aux_table[AuxTables.dk_cells].df[['_tid_', 'attribute']].values}
+        else:
+            dk_lookup = None
 
         for row in tqdm(list(records)):
             tid = row['_tid_']
@@ -249,7 +253,7 @@ class DomainEngine:
                               "weak_label": init_value,
                               "weak_label_idx": init_value_idx,
                               "fixed": cell_status,
-                              "is_dk": (tid, attr) in dk_lookup,
+                              "is_dk": (tid, attr) in dk_lookup if dk_lookup is not None else False,
                               })
                 vid += 1
         domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
