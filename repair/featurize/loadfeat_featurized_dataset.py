@@ -56,17 +56,17 @@ class LoadFeatFeaturizedDataset:
         # Loads the tensors regarding global features.
         if skipping:
             # As we are skipping training, we only need to memoize `self.feat_skipping`.
-            current_batch_range = str(starting_tuple) + '_' + str(ending_tuple)
+            current_batch_range = str(starting_tuple) + '-' + str(ending_tuple)
             path = self.base_path + '1-' + str(dataset_size) + '_' + current_batch_range + '.feat'
             logging.info('Loading features from: %s', path)
             self.feat_skipping = torch.load(path)
         else:
-            number_of_tensors = (ending_tuple - starting_tuple + 1) / batch_size
+            number_of_tensors = int((ending_tuple - starting_tuple + 1) / batch_size)
             feat_list = []
             current_starting_tuple = starting_tuple
 
             for i in range(number_of_tensors):
-                current_batch_range = str(current_starting_tuple) + '_' + str(current_starting_tuple + batch_size)
+                current_batch_range = str(current_starting_tuple) + '-' + str(current_starting_tuple + batch_size - 1)
                 path = self.base_path + '1-' + str(dataset_size) + '_' + current_batch_range + '.feat'
                 logging.info('Loading features from: %s', path)
                 feat_list.append(torch.load(path))
@@ -74,37 +74,49 @@ class LoadFeatFeaturizedDataset:
 
             if len(feat_list) > 1:
                 # Stitches the features into a single variable.
+                stitched_feat = {key: {} for key in feat_list[0].keys()}
+                stitched_feat['errors'] = {key: {} for key in feat_list[0]['errors'].keys()}
+                stitched_feat['labels'] = {key: {} for key in feat_list[0]['labels'].keys()}
+
+                for attr in self.ds.get_active_attributes():
+                    stitched_feat['tensors'][attr] = torch.cat(
+                        tuple([feat['tensors'][attr] for feat in feat_list])
+                    )
+                    for error_type in stitched_feat['errors'].keys():
+                        stitched_feat['errors'][error_type][attr] = torch.cat(
+                            tuple([feat['errors'][error_type][attr] for feat in feat_list])
+                        )
+                    for label_type in stitched_feat['labels'].keys():
+                        stitched_feat['labels'][label_type][attr] = torch.cat(
+                            tuple([feat['labels'][label_type][attr] for feat in feat_list])
+                        )
+                    stitched_feat['is_clean'][attr] = torch.cat(
+                        tuple([feat['is_clean'][attr] for feat in feat_list])
+                    )
+                    stitched_feat['class_masks'][attr] = torch.cat(
+                        tuple([feat['class_masks'][attr] for feat in feat_list])
+                    )
+                    stitched_feat['tids'][attr] = torch.cat(
+                        tuple([feat['tids'][attr] for feat in feat_list])
+                    )
+
+                self.feat = stitched_feat
                 self.feat_last = feat_list[len(feat_list) - 1]
-
-                tensors_list = [feat['tensors'] for feat in feat_list]
-                errors_list = [feat['errors'] for feat in feat_list]
-                weak_labels_list = [feat['labels']['weak'] for feat in feat_list]
-                init_labels_list = [feat['labels']['init'] for feat in feat_list]
-                truth_labels_list = [feat['labels']['truth'] for feat in feat_list]
-                is_clean_list = [feat['is_clean'] for feat in feat_list]
-                class_masks_list = [feat['class_masks'] for feat in feat_list]
-                tids_list = [feat['tids'] for feat in feat_list]
-
-                stitched_tensors = torch.cat(tuple(tensors_list), dim=0)
-                stitched_errors = torch.cat(tuple(errors_list), dim=0)
-                stitched_weak_labels = torch.cat(tuple(weak_labels_list), dim=0)
-                stitched_init_labels = torch.cat(tuple(init_labels_list), dim=0)
-                stitched_truth_labels = torch.cat(tuple(truth_labels_list), dim=0)
-                stitched_is_clean = torch.cat(tuple(is_clean_list), dim=0)
-                stitched_class_masks = torch.cat(tuple(class_masks_list), dim=0)
-                stitched_tids = torch.cat(tuple(tids_list), dim=0)
-
-                self.feat = {'tensors': stitched_tensors,
-                             'errors': stitched_errors,
-                             'labels': {'weak': stitched_weak_labels,
-                                        'init': stitched_init_labels,
-                                        'truth': stitched_truth_labels},
-                             'is_clean': stitched_is_clean,
-                             'class_masks': stitched_class_masks,
-                             'tids': stitched_tids}
             else:
                 self.feat = feat_list[0]
                 self.feat_last = feat_list[0]
+
+            # Sets feat_info to a single featurizer regardless of whether the features
+            # were generated using one or several featurizers.
+            self.featurizer_info = [FeatInfo('loadfeat',  # name
+                                             next(iter(self.feat['tensors'].values())).size(2),  # size
+                                             True,  # learnable
+                                             1.0,  # init_weight
+                                             [])]  # feature_names
+
+            # Sets the number of classes per attribute from the tensors.
+            for attr in self.ds.get_active_attributes():
+                self.classes[attr] = self.feat['tensors'][attr].size(1)
 
     # noinspection PyPep8Naming
     def get_training_data(self, label_type='weak'):

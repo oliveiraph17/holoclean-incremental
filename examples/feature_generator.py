@@ -70,7 +70,8 @@ class Executor:
         ]
         self.hc.repair_engine.setup_featurized_ds(featurizers)
 
-    def generate_feature_files(self):
+    # noinspection PyUnresolvedReferences
+    def generate_feature_files(self, batches_read):
         # Gets the generated tensors from FeaturizedDataset.
         tensors = self.hc.repair_engine.feat_dataset.tensor
         weak_labels = self.hc.repair_engine.feat_dataset.weak_labels
@@ -81,8 +82,8 @@ class Executor:
 
         # Gets the ground truth.
         self.hc.eval_engine.load_data(name=self.feature_args['dataset_name'] + '_clean',
-                                      fpath=(self.feature_args['dataset_dir'] + self.feature_args[
-                                          'dataset_name'] + '/' +
+                                      fpath=(self.feature_args['dataset_dir'] +
+                                             self.feature_args['dataset_name'] + '/' +
                                              self.feature_args['dataset_name'] + '_clean.csv'),
                                       tid_col='tid',
                                       attr_col='attribute',
@@ -90,12 +91,12 @@ class Executor:
         clean_df = self.hc.eval_engine.clean_data.df.set_index(['_tid_', '_attribute_'])
         clean_df.sort_index(inplace=True)
 
-        # Index cell_domain table by _tid_ and attribute to lookup domain.
+        # Indexes cell_domain table by _tid_ and attribute to lookup domain.
         domain_df = self.hc.ds.aux_table[AuxTables.cell_domain].df[['_tid_', 'attribute', 'domain']]
         domain_df = domain_df.set_index(['_tid_', 'attribute'])
         domain_df.sort_index(inplace=True)
 
-        # Creates tensors for ground truth.
+        # Creates tensors for ground-truth.
         ground_truth = {}
         for attr, t in tids.items():
             ground_truth[attr] = t.clone()
@@ -106,7 +107,7 @@ class Executor:
                 g_truth = clean_df.loc[(tid, attr), '_value_']
                 domain = domain_df.loc[(tid, attr), 'domain']
                 domain_idx = {val: idx for idx, val in enumerate(domain.split('|||'))}
-                # -1 means the ground truth is not part of the domain generated for the cell
+                # -1 means the ground-truth is not part of the domain generated for the cell.
                 ground_truth[attr][i] = domain_idx.get(g_truth, -1)
 
         # Computes error tensors.
@@ -127,11 +128,17 @@ class Executor:
                         if (tid, attr) in errors_df[detector.name].index:
                             errors[detector.name][attr][i] = 1
 
-        # Get tensors for the 'current' batch of the execution.
-        # Gets tids from the 'current' batch.
-        batch_tids = self.hc.ds.raw_data.df['_tid_'].tail(self.feature_args['batch_size']).tolist()
+        # Sets the output file names.
+        base_path = (self.feature_args['log_dir'] +
+                     self.feature_args['dataset_name'] + '_' +
+                     self.feature_args['identifier'])
 
-        # Gets the tensor entries from the 'current' batch.
+        batch_size = batches_read[-1]
+
+        # Gets tids from the 'current' batch.
+        batch_tids = self.hc.ds.raw_data.df['_tid_'].tail(batch_size).tolist()
+
+        # Gets tensor entries from the 'current' batch.
         tensors_last = {}
         weak_labels_last = {}
         is_clean_last = {}
@@ -166,15 +173,59 @@ class Executor:
                      'labels': {'weak': weak_labels_last, 'init': init_idxs_last, 'truth': ground_truth_last},
                      'is_clean': is_clean_last, 'class_masks': class_masks_last, 'tids': tids_last}
 
-        # Sets the output file names.
-        base_path = (self.feature_args['log_dir'] +
-                     self.feature_args['dataset_name'] + '_' +
-                     self.feature_args['identifier'])
-
-        # Dump the files.
+        # Dumps the files.
         torch.save(feat, base_path + '.feat')
-        torch.save(feat_last, base_path + '_last' + str(self.feature_args['batch_size']) + '.feat')
+        # The file name includes the standard batch size even if the last batch has less tuples to be easier to find
+        # the file in the loadfeat repairer.
+        torch.save(feat_last, base_path + '_last' + str(self.feature_args['tuples_to_read_list'][-1]) + '.feat')
 
+        # Dumps the tensors for every batch to a different file if 'current' batch is the last one regarding the full
+        # dataset to save the features that correspond to the statistics for the whole dataset.
+        if len(batches_read) == len(self.feature_args['tuples_to_read_list']):
+            total_tuples = 0
+            for batch_size in batches_read:
+                total_tuples += batch_size
+
+                # Gets tids from the 'current' batch.
+                batch_tids = self.hc.ds.raw_data.df['_tid_'].head(total_tuples).tail(batch_size).tolist()
+
+                # Gets tensor entries from the 'current' batch.
+                tensors_last = {}
+                weak_labels_last = {}
+                is_clean_last = {}
+                class_masks_last = {}
+                tids_last = {}
+                init_idxs_last = {}
+                ground_truth_last = {}
+                errors_last = {key: {} for key in errors.keys()}
+                for attr, t in tids.items():
+                    tids_index = []
+                    for i in range(0, t.size(0)):
+                        tid = int(t[i])
+                        if tid in batch_tids:
+                            tids_index.append(i)
+                    tids_index_tensor = torch.LongTensor(tids_index)
+                    tensors_last[attr] = tensors[attr].index_select(0, tids_index_tensor)
+                    weak_labels_last[attr] = weak_labels[attr].index_select(0, tids_index_tensor)
+                    is_clean_last[attr] = is_clean[attr].index_select(0, tids_index_tensor)
+                    class_masks_last[attr] = class_masks[attr].index_select(0, tids_index_tensor)
+                    tids_last[attr] = tids[attr].index_select(0, tids_index_tensor)
+                    init_idxs_last[attr] = init_idxs[attr].index_select(0, tids_index_tensor)
+                    ground_truth_last[attr] = ground_truth[attr].index_select(0, tids_index_tensor)
+                    for detector_name in errors.keys():
+                        errors_last[detector_name][attr] = errors[detector_name][attr].index_select(0,
+                                                                                                    tids_index_tensor)
+
+                # Wraps tensors in a dictionary.
+                feat_last = {'tensors': tensors_last, 'errors': errors_last,
+                             'labels': {'weak': weak_labels_last, 'init': init_idxs_last, 'truth': ground_truth_last},
+                             'is_clean': is_clean_last, 'class_masks': class_masks_last, 'tids': tids_last}
+
+                # Dumps the file.
+                torch.save(feat_last, base_path + '_' + str(total_tuples - batch_size + 1) + '-' +
+                           str(total_tuples) + '.feat')
+
+        # Saves stats and environment variables.
         cell_domain = self.hc.ds.aux_table[AuxTables.cell_domain].df.sort_values(by=['_vid_'])
         cell_domain.to_csv(base_path + '_cell_domain.csv', header=True, index=False)
 
@@ -189,17 +240,17 @@ class Executor:
             hc_env_file.write(str(self.hc.env))
 
     def run(self):
-        with open(feature_args['dataset_dir'] + feature_args['dataset_name'] + '/' +
-                  feature_args['dataset_name'] + '.csv') as dataset_file:
+        with open(self.feature_args['dataset_dir'] + self.feature_args['dataset_name'] + '/' +
+                  self.feature_args['dataset_name'] + '.csv') as dataset_file:
 
             # Writes the header to a temporary file.
             csv_fpath = '/tmp/current_dataset.csv'
             with open(csv_fpath, 'w+') as tmp_file:
                 tmp_file.writelines([dataset_file.readline()])
 
-            total_tuples = 0
-            for tuples_to_read in feature_args['tuples_to_read_list']:
-                total_tuples += tuples_to_read
+            batches_read = []
+            for tuples_to_read in self.feature_args['tuples_to_read_list']:
+                batches_read.append(tuples_to_read)
                 # Appends to the temporary file the current batch to be loaded.
                 with open(csv_fpath, 'a+') as tmp_file:
                     line_list = []
@@ -211,12 +262,12 @@ class Executor:
                         line_list.append(line)
                     tmp_file.writelines(line_list)
                     # Sets dynamically the batch size to correctly get the size of the last batch.
-                    feature_args['batch_size'] = len(line_list)
+                    batches_read[-1] = len(line_list)
 
-                feature_args['identifier'] = '1-' + str(total_tuples)
+                self.feature_args['identifier'] = '1-' + str(sum(batches_read))
 
                 self.run_holoclean_featurization(csv_fpath)
-                self.generate_feature_files()
+                self.generate_feature_files(batches_read)
 
 
 if __name__ == "__main__":
@@ -233,10 +284,8 @@ if __name__ == "__main__":
         'max_domain': 10000,
         'cor_strength': 0.6,
         'nb_cor_strength': 0.8,
-        'epochs': 20,
         'threads': 1,
         'verbose': True,
-        'print_fw': False,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
         'incremental': False,
