@@ -59,6 +59,7 @@ class Dataset:
             env['db_pwd'],
             env['db_name'],
             env['db_host'],
+            env['db_port'],
             pool_size=env['threads'],
             timeout=env['timeout']
         )
