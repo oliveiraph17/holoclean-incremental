@@ -11,10 +11,11 @@ from repair.featurize.loadfeat_featurized_dataset import LoadFeatFeaturizedDatas
 
 class Executor:
     def __init__(self, hc_values, feature_values):
+        self.hc = None
         self.hc_args = hc_values
         self.feature_args = feature_values
 
-    def setup_hc_repair_engine(self, batch_number):
+    def setup_hc_repair_engine(self, batch_number, batch_size):
         # Sets up a HoloClean session.
         self.hc = holoclean.HoloClean(
             **self.hc_args
@@ -37,22 +38,23 @@ class Executor:
                 tmp_file.writelines(line_list)
 
         self.hc.ds.load_data(self.feature_args['dataset_name'],
-                          csv_fpath,
-                          entity_col=self.feature_args['entity_col'],
-                          numerical_attrs=self.feature_args['numerical_attrs'],
-                          store_to_db=False)
+                             csv_fpath,
+                             entity_col=self.feature_args['entity_col'],
+                             numerical_attrs=self.feature_args['numerical_attrs'],
+                             store_to_db=False)
 
         # Sets manually the active attributes.
         self.hc.ds._active_attributes = self.feature_args['active_attributes']
         # Defines if it is the first batch ('first_tid=0')
-        self.hc.ds.first_tid = batch_number * self.feature_args['batch_size']
+        self.hc.ds.first_tid = (batch_number - 1) * batch_size
 
         # Sets the input base path.
-        base_path = self.feature_args['feat_dir'] + self.feature_args['dataset_name'] + '_' + self.feature_args['identifier']
+        base_path = (self.feature_args['feat_dir'] + self.feature_args['dataset_name'] + '_')
 
-        self.hc.repair_engine.feat_dataset = LoadFeatFeaturizedDataset(self.hc.ds, self.hc.env)
-        self.hc.repair_engine.feat_dataset.load_feat(base_path, self.feature_args['batch_size'])
+        self.hc.repair_engine.feat_dataset = LoadFeatFeaturizedDataset(self.hc.ds, self.hc.env, base_path)
+        self.hc.repair_engine.feat_dataset.load_feat(batch_number, batch_size)
 
+    # noinspection PyPep8Naming
     def train(self):
         # Sets up the models.
         self.hc.repair_engine.setup_repair_model()
@@ -83,9 +85,11 @@ class Executor:
         logging.debug('Time to fit repair model: %.2f secs', toc - tic)
         logging.debug('Number of training elements: %d', total_training_cells)
 
-    def infer(self):
-        X_pred, mask_pred, infer_idx, Y_truth = self.hc.repair_engine.feat_dataset.get_infer_data(
-            self.feature_args['detectors'])
+    # noinspection PyPep8Naming
+    def infer(self, skipping=False):
+        X_pred, mask_pred, Y_truth = self.hc.repair_engine.feat_dataset.get_infer_data(
+            self.feature_args['detectors'],
+            skipping)
         Y_pred = {}
         for attr in self.hc.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
@@ -100,15 +104,20 @@ class Executor:
 
     def run(self):
         total_tuples = 0
-        batch_number = 0
-        for tuples_to_read in feature_args['tuples_to_read_list']:
-            total_tuples += tuples_to_read
-            feature_args['batch_size'] = tuples_to_read
-            feature_args['identifier'] = '1-' + str(total_tuples)
+        batch_number = 1
+        number_of_batches = len(self.feature_args['tuples_to_read_list'])
 
-            self.setup_hc_repair_engine(batch_number)
+        for batch_size in self.feature_args['tuples_to_read_list']:
+            total_tuples += batch_size
+
+            self.setup_hc_repair_engine(batch_number, batch_size)
             self.train()
             self.infer()
+
+            number_of_skipping_batches = number_of_batches - batch_number
+            for i in range(number_of_skipping_batches):
+                self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
+                self.infer(skipping=True)
 
             batch_number += 1
 
@@ -116,7 +125,7 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        'epochs': 2,
+        'epochs': 20,
         'threads': 1,
         'verbose': True,
         'print_fw': False,
@@ -138,7 +147,7 @@ if __name__ == "__main__":
                               'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
                               'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg'],
         'labels': 'weak',  # one of 'weak', 'init' or 'truth'
-        'detectors': ['ErrorLoaderDetector']  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector'],
+        'detectors': ['ErrorLoaderDetector']  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector']
     }
 
     # Runs the default example.

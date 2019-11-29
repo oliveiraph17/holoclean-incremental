@@ -9,6 +9,7 @@ from dataset import AuxTables
 
 class Executor:
     def __init__(self, hc_values, feature_values):
+        self.hc = None
         self.hc_args = hc_values
         self.feature_args = feature_values
 
@@ -166,7 +167,9 @@ class Executor:
                      'is_clean': is_clean_last, 'class_masks': class_masks_last, 'tids': tids_last}
 
         # Sets the output file names.
-        base_path = self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '_' + self.feature_args['identifier']
+        base_path = (self.feature_args['log_dir'] +
+                     self.feature_args['dataset_name'] + '_' +
+                     self.feature_args['identifier'])
 
         # Dump the files.
         torch.save(feat, base_path + '.feat')
