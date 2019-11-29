@@ -50,16 +50,11 @@ class Executor:
 
         # Sets the input base path.
         base_path = (self.feature_args['feat_dir'] + self.feature_args['dataset_name'] + '_')
+        if self.hc_args['global_features']:
+            base_path += 'global_'
 
         self.hc.repair_engine.feat_dataset = LoadFeatFeaturizedDataset(self.hc.ds, self.hc.env, base_path)
-
-        if self.hc_args['global_features']:
-            self.hc.repair_engine.feat_dataset.load_global_feat(sum(self.feature_args['tuples_to_read_list']),
-                                                                batch_size,
-                                                                1,
-                                                                batch_number * batch_size)
-        else:
-            self.hc.repair_engine.feat_dataset.load_feat(batch_number, batch_size)
+        self.hc.repair_engine.feat_dataset.load_feat(batch_number, batch_size)
 
     # noinspection PyPep8Naming
     def train(self):
@@ -123,16 +118,7 @@ class Executor:
 
             number_of_skipping_batches = number_of_batches - batch_number
             for i in range(number_of_skipping_batches):
-                if self.hc_args['global_features']:
-                    starting_tuple = 1 + (batch_number * batch_size) + (i * batch_size)
-                    self.hc.repair_engine.feat_dataset.load_global_feat(sum(self.feature_args['tuples_to_read_list']),
-                                                                        batch_size,
-                                                                        starting_tuple,
-                                                                        starting_tuple + batch_size - 1,
-                                                                        skipping=True)
-                else:
-                    self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
-
+                self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
                 self.infer(skipping=True)
 
             batch_number += 1
@@ -148,7 +134,7 @@ if __name__ == "__main__":
         'timeout': 3 * 60000,
         'incremental': False,
         'infer_mode': 'dk',
-        'global_features': True
+        'global_features': False
     }
 
     # Default parameters for Executor.

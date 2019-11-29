@@ -138,92 +138,37 @@ class Executor:
         # Gets tids from the 'current' batch.
         batch_tids = self.hc.ds.raw_data.df['_tid_'].tail(batch_size).tolist()
 
-        # Gets tensor entries from the 'current' batch.
-        tensors_last = {}
-        weak_labels_last = {}
-        is_clean_last = {}
-        class_masks_last = {}
-        tids_last = {}
-        init_idxs_last = {}
-        ground_truth_last = {}
-        errors_last = {key: {} for key in errors.keys()}
-        for attr, t in tids.items():
+        # Wraps tensors in a dictionary.
+        feat = {'tensors': tensors, 'errors': errors,
+                'labels': {'weak': weak_labels, 'init': init_idxs, 'truth': ground_truth},
+                'is_clean': is_clean, 'class_masks': class_masks, 'tids': tids}
+
+        # Gets the tensor entries from the 'current' batch.
+        feat_last = {key: {} for key in feat.keys()}
+        feat_last['labels'] = {label_type: {} for label_type in feat['labels'].keys()}
+        feat_last['errors'] = {error_type: {} for error_type in feat['errors'].keys()}
+
+        for attr, t in feat['tids'].items():
             tids_index = []
             for i in range(0, t.size(0)):
                 tid = int(t[i])
                 if tid in batch_tids:
                     tids_index.append(i)
             tids_index_tensor = torch.LongTensor(tids_index)
-            tensors_last[attr] = tensors[attr].index_select(0, tids_index_tensor)
-            weak_labels_last[attr] = weak_labels[attr].index_select(0, tids_index_tensor)
-            is_clean_last[attr] = is_clean[attr].index_select(0, tids_index_tensor)
-            class_masks_last[attr] = class_masks[attr].index_select(0, tids_index_tensor)
-            tids_last[attr] = tids[attr].index_select(0, tids_index_tensor)
-            init_idxs_last[attr] = init_idxs[attr].index_select(0, tids_index_tensor)
-            ground_truth_last[attr] = ground_truth[attr].index_select(0, tids_index_tensor)
-            for detector_name in errors.keys():
-                errors_last[detector_name][attr] = errors[detector_name][attr].index_select(0, tids_index_tensor)
-
-        # Wraps tensors in dictionaries.
-        feat = {'tensors': tensors, 'errors': errors,
-                'labels': {'weak': weak_labels, 'init': init_idxs, 'truth': ground_truth},
-                'is_clean': is_clean, 'class_masks': class_masks, 'tids': tids}
-
-        feat_last = {'tensors': tensors_last, 'errors': errors_last,
-                     'labels': {'weak': weak_labels_last, 'init': init_idxs_last, 'truth': ground_truth_last},
-                     'is_clean': is_clean_last, 'class_masks': class_masks_last, 'tids': tids_last}
+            feat_last['tensors'][attr] = feat['tensors'][attr].index_select(0, tids_index_tensor)
+            for detector_name in feat['errors'].keys():
+                feat_last['errors'][detector_name][attr] = feat['errors'][detector_name][attr].index_select(0, tids_index_tensor)
+            for label_type in feat['labels'].keys():
+                feat_last['labels'][label_type][attr] = feat['labels'][label_type][attr].index_select(0, tids_index_tensor)
+            feat_last['is_clean'][attr] = feat['is_clean'][attr].index_select(0, tids_index_tensor)
+            feat_last['class_masks'][attr] = feat['class_masks'][attr].index_select(0, tids_index_tensor)
+            feat_last['tids'][attr] = feat['tids'][attr].index_select(0, tids_index_tensor)
 
         # Dumps the files.
         torch.save(feat, base_path + '.feat')
         # The file name includes the standard batch size even if the last batch has less tuples to be easier to find
         # the file in the loadfeat repairer.
         torch.save(feat_last, base_path + '_last' + str(self.feature_args['tuples_to_read_list'][-1]) + '.feat')
-
-        # Dumps the tensors for every batch to a different file if 'current' batch is the last one regarding the full
-        # dataset to save the features that correspond to the statistics for the whole dataset.
-        if len(batches_read) == len(self.feature_args['tuples_to_read_list']):
-            total_tuples = 0
-            for batch_size in batches_read:
-                total_tuples += batch_size
-
-                # Gets tids from the 'current' batch.
-                batch_tids = self.hc.ds.raw_data.df['_tid_'].head(total_tuples).tail(batch_size).tolist()
-
-                # Gets tensor entries from the 'current' batch.
-                tensors_last = {}
-                weak_labels_last = {}
-                is_clean_last = {}
-                class_masks_last = {}
-                tids_last = {}
-                init_idxs_last = {}
-                ground_truth_last = {}
-                errors_last = {key: {} for key in errors.keys()}
-                for attr, t in tids.items():
-                    tids_index = []
-                    for i in range(0, t.size(0)):
-                        tid = int(t[i])
-                        if tid in batch_tids:
-                            tids_index.append(i)
-                    tids_index_tensor = torch.LongTensor(tids_index)
-                    tensors_last[attr] = tensors[attr].index_select(0, tids_index_tensor)
-                    weak_labels_last[attr] = weak_labels[attr].index_select(0, tids_index_tensor)
-                    is_clean_last[attr] = is_clean[attr].index_select(0, tids_index_tensor)
-                    class_masks_last[attr] = class_masks[attr].index_select(0, tids_index_tensor)
-                    tids_last[attr] = tids[attr].index_select(0, tids_index_tensor)
-                    init_idxs_last[attr] = init_idxs[attr].index_select(0, tids_index_tensor)
-                    ground_truth_last[attr] = ground_truth[attr].index_select(0, tids_index_tensor)
-                    for detector_name in errors.keys():
-                        errors_last[detector_name][attr] = errors[detector_name][attr].index_select(0,
-                                                                                                    tids_index_tensor)
-
-                # Wraps tensors in a dictionary.
-                feat_last = {'tensors': tensors_last, 'errors': errors_last,
-                             'labels': {'weak': weak_labels_last, 'init': init_idxs_last, 'truth': ground_truth_last},
-                             'is_clean': is_clean_last, 'class_masks': class_masks_last, 'tids': tids_last}
-
-                # Dumps the file.
-                torch.save(feat_last, base_path + '_' + str(total_tuples - batch_size + 1) + '-' +
-                           str(total_tuples) + '.feat')
 
         # Saves stats and environment variables.
         cell_domain = self.hc.ds.aux_table[AuxTables.cell_domain].df.sort_values(by=['_vid_'])
@@ -238,6 +183,54 @@ class Executor:
 
         with open(base_path + '_hc_env.txt', 'w') as hc_env_file:
             hc_env_file.write(str(self.hc.env))
+
+        # Dumps the tensors for every batch to a different file if 'current' batch is the last one regarding the full
+        # dataset to save global features that correspond to the statistics for the whole dataset.
+        if len(batches_read) == len(self.feature_args['tuples_to_read_list']):
+            base_path = self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '_global_'
+
+            # Dumps again the files regarding the last batch but with different names.
+            torch.save(feat, base_path + self.feature_args['identifier'] + '.feat')
+            # The file name includes the standard batch size even if the last batch has less tuples to be easier to find
+            # the file in the loadfeat repairer.
+            torch.save(feat_last, base_path + self.feature_args['identifier'] + '_last' +
+                       str(self.feature_args['tuples_to_read_list'][-1]) + '.feat')
+
+            # Generates feat and feat_last tensor files for all batches except the last one.
+            total_tuples = 0
+            for batch_size in batches_read[:len(batches_read)-1]:
+                total_tuples += batch_size
+
+                # Gets tids from the 'all' and 'last' batches.
+                batch_tids = {'all': self.hc.ds.raw_data.df['_tid_'].head(total_tuples).tolist(),
+                              'last': self.hc.ds.raw_data.df['_tid_'].head(total_tuples).tail(batch_size).tolist()}
+
+                for batch_tid in batch_tids.keys():
+                    # Reuses feat_last to generate global features.
+                    for attr, t in feat['tids'].items():
+                        tids_index = []
+                        for i in range(0, t.size(0)):
+                            tid = int(t[i])
+                            if tid in batch_tids[batch_tid]:
+                                tids_index.append(i)
+                        tids_index_tensor = torch.LongTensor(tids_index)
+                        feat_last['tensors'][attr] = feat['tensors'][attr].index_select(0, tids_index_tensor)
+                        for detector_name in feat['errors'].keys():
+                            feat_last['errors'][detector_name][attr] = feat['errors'][detector_name][attr]\
+                                .index_select(0, tids_index_tensor)
+                        for label_type in feat['labels'].keys():
+                            feat_last['labels'][label_type][attr] = feat['labels'][label_type][attr]\
+                                .index_select(0, tids_index_tensor)
+                        feat_last['is_clean'][attr] = feat['is_clean'][attr].index_select(0, tids_index_tensor)
+                        feat_last['class_masks'][attr] = feat['class_masks'][attr].index_select(0, tids_index_tensor)
+                        feat_last['tids'][attr] = feat['tids'][attr].index_select(0, tids_index_tensor)
+
+                    # Dumps the file.
+                    if batch_tid == 'all':
+                        torch.save(feat_last, base_path + '1-' + str(total_tuples) + '.feat')
+                    else:
+                        torch.save(feat_last, base_path + '1-' + str(total_tuples) + '_last' +
+                                   str(self.feature_args['tuples_to_read_list'][-1]) + '.feat')
 
     def run(self):
         with open(self.feature_args['dataset_dir'] + self.feature_args['dataset_name'] + '/' +
