@@ -282,21 +282,96 @@ if __name__ == "__main__":
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
         'incremental': False,
-        'infer_mode': 'all',
+        'infer_mode': 'dk',
+        'db_port': 5432
     }
 
     # Default parameters for Executor.
+    dataset_name = 'hospital'
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-        'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-        'dataset_name': 'hospital',
+        'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/dk',
+        'dataset_name': dataset_name,
         'entity_col': None,
         'numerical_attrs': None,
         'do_quantization': False,
-        'tuples_to_read_list': [250] * 4,
+        'tuples_to_read_list': [20] * 50
     }
 
     # Runs the default example.
+    executor = Executor(hc_args, feature_args)
+    executor.run()
+
+    ############################################################
+
+    hc_args['infer_mode'] = 'all'
+    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+
+    executor = Executor(hc_args, feature_args)
+    executor.run()
+
+    ############################################################
+
+    feature_args['dataset_name'] = 'hospital_shuffled'
+
+    hc_args['infer_mode'] = 'dk'
+    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+    feature_args['entity_col'] = '_tid_'
+
+    executor = Executor(hc_args, feature_args)
+    executor.run()
+
+    ############################################################
+
+    hc_args['infer_mode'] = 'all'
+    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+
+    executor = Executor(hc_args, feature_args)
+    executor.run()
+
+    ############################################################
+
+    feature_args['dataset_name'] = 'food5k'
+
+    hc_args['infer_mode'] = 'dk'
+    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+    feature_args['entity_col'] = None
+    feature_args['tuples_to_read_list'] = [50] * 100
+
+    executor = Executor(hc_args, feature_args)
+    executor.run()
+
+    ############################################################
+
+    hc_args['infer_mode'] = 'all'
+    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+
+    executor = Executor(hc_args, feature_args)
+    executor.run()
+
+    ############################################################
+
+    feature_args['dataset_name'] = 'food5k_shuffled'
+
+    hc_args['infer_mode'] = 'dk'
+    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+    feature_args['entity_col'] = '_tid_'
+
+    executor = Executor(hc_args, feature_args)
+    executor.run()
+
+    ############################################################
+
+    hc_args['infer_mode'] = 'all'
+    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+
     executor = Executor(hc_args, feature_args)
     executor.run()
