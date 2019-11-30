@@ -337,6 +337,11 @@ if __name__ == "__main__":
 
     feature_args['dataset_name'] = 'food5k'
 
+    hc_args['weak_label_thresh'] = 0.6
+    hc_args['max_domain'] = 10000
+    hc_args['cor_strength'] = 0.2
+    hc_args['nb_cor_strength'] = 0.3
+
     hc_args['infer_mode'] = 'dk'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
                                feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
