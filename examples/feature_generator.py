@@ -291,7 +291,7 @@ if __name__ == "__main__":
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-        'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/dk',
+        'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/dk/',
         'dataset_name': dataset_name,
         'entity_col': None,
         'numerical_attrs': None,
@@ -307,7 +307,7 @@ if __name__ == "__main__":
 
     hc_args['infer_mode'] = 'all'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
 
     executor = Executor(hc_args, feature_args)
     executor.run()
@@ -318,7 +318,7 @@ if __name__ == "__main__":
 
     hc_args['infer_mode'] = 'dk'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
     feature_args['entity_col'] = '_tid_'
 
     executor = Executor(hc_args, feature_args)
@@ -328,7 +328,7 @@ if __name__ == "__main__":
 
     hc_args['infer_mode'] = 'all'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
 
     executor = Executor(hc_args, feature_args)
     executor.run()
@@ -344,7 +344,7 @@ if __name__ == "__main__":
 
     hc_args['infer_mode'] = 'dk'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
     feature_args['entity_col'] = None
     feature_args['tuples_to_read_list'] = [50] * 100
 
@@ -355,7 +355,7 @@ if __name__ == "__main__":
 
     hc_args['infer_mode'] = 'all'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
 
     executor = Executor(hc_args, feature_args)
     executor.run()
@@ -366,7 +366,7 @@ if __name__ == "__main__":
 
     hc_args['infer_mode'] = 'dk'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
     feature_args['entity_col'] = '_tid_'
 
     executor = Executor(hc_args, feature_args)
@@ -376,7 +376,7 @@ if __name__ == "__main__":
 
     hc_args['infer_mode'] = 'all'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
 
     executor = Executor(hc_args, feature_args)
     executor.run()
