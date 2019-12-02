@@ -115,8 +115,9 @@ class Executor:
         errors_df = {}
         for detector in self.hc.detect_engine.detectors:
             errors[detector.name] = {}
-            errors_df[detector.name] = detector.detect_noisy_cells().reset_index()
+            errors_df[detector.name] = detector.detect_noisy_cells()
             if not errors_df[detector.name].empty:
+                errors_df[detector.name].reset_index()
                 errors_df[detector.name] = errors_df[detector.name].set_index(['_tid_', 'attribute'])
                 errors_df[detector.name].sort_index(inplace=True)
 
@@ -157,9 +158,11 @@ class Executor:
             tids_index_tensor = torch.LongTensor(tids_index)
             feat_last['tensors'][attr] = feat['tensors'][attr].index_select(0, tids_index_tensor)
             for detector_name in feat['errors'].keys():
-                feat_last['errors'][detector_name][attr] = feat['errors'][detector_name][attr].index_select(0, tids_index_tensor)
+                feat_last['errors'][detector_name][attr] = feat['errors'][detector_name][attr]\
+                    .index_select(0, tids_index_tensor)
             for label_type in feat['labels'].keys():
-                feat_last['labels'][label_type][attr] = feat['labels'][label_type][attr].index_select(0, tids_index_tensor)
+                feat_last['labels'][label_type][attr] = feat['labels'][label_type][attr]\
+                    .index_select(0, tids_index_tensor)
             feat_last['is_clean'][attr] = feat['is_clean'][attr].index_select(0, tids_index_tensor)
             feat_last['class_masks'][attr] = feat['class_masks'][attr].index_select(0, tids_index_tensor)
             feat_last['tids'][attr] = feat['tids'][attr].index_select(0, tids_index_tensor)
@@ -282,7 +285,7 @@ if __name__ == "__main__":
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
         'incremental': False,
-        'infer_mode': 'dk',
+        'infer_mode': 'all',
         'db_port': 5432
     }
 
@@ -291,12 +294,12 @@ if __name__ == "__main__":
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-        'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/dk/',
+        'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/',
         'dataset_name': dataset_name,
         'entity_col': None,
         'numerical_attrs': None,
         'do_quantization': False,
-        'tuples_to_read_list': [20] * 50
+        'tuples_to_read_list': [10] * 100
     }
 
     # Runs the default example.
@@ -305,30 +308,11 @@ if __name__ == "__main__":
 
     ############################################################
 
-    hc_args['infer_mode'] = 'all'
-    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
-
-    executor = Executor(hc_args, feature_args)
-    executor.run()
-
-    ############################################################
-
     feature_args['dataset_name'] = 'hospital_shuffled'
 
-    hc_args['infer_mode'] = 'dk'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
+                               feature_args['dataset_name'] + '/features/')
     feature_args['entity_col'] = '_tid_'
-
-    executor = Executor(hc_args, feature_args)
-    executor.run()
-
-    ############################################################
-
-    hc_args['infer_mode'] = 'all'
-    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
 
     executor = Executor(hc_args, feature_args)
     executor.run()
@@ -342,9 +326,8 @@ if __name__ == "__main__":
     hc_args['cor_strength'] = 0.2
     hc_args['nb_cor_strength'] = 0.3
 
-    hc_args['infer_mode'] = 'dk'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
+                               feature_args['dataset_name'] + '/features/')
     feature_args['entity_col'] = None
     feature_args['tuples_to_read_list'] = [50] * 100
 
@@ -353,30 +336,11 @@ if __name__ == "__main__":
 
     ############################################################
 
-    hc_args['infer_mode'] = 'all'
-    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
-
-    executor = Executor(hc_args, feature_args)
-    executor.run()
-
-    ############################################################
-
     feature_args['dataset_name'] = 'food5k_shuffled'
 
-    hc_args['infer_mode'] = 'dk'
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
+                               feature_args['dataset_name'] + '/features/')
     feature_args['entity_col'] = '_tid_'
-
-    executor = Executor(hc_args, feature_args)
-    executor.run()
-
-    ############################################################
-
-    hc_args['infer_mode'] = 'all'
-    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'] + '/')
 
     executor = Executor(hc_args, feature_args)
     executor.run()

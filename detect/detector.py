@@ -47,3 +47,12 @@ class Detector:
         error_df = pd.DataFrame(data=errors)
 
         return error_df
+
+    @staticmethod
+    def create_empty_errors_df():
+        empty_errors_df = pd.DataFrame(columns=['_tid_', 'attribute', '_cid_'])
+        empty_errors_df['_tid_'] = empty_errors_df['_tid_'].astype(int)
+        empty_errors_df['attribute'] = empty_errors_df['attribute'].astype(str)
+        empty_errors_df['_cid_'] = empty_errors_df['_cid_'].astype(int)
+
+        return empty_errors_df
