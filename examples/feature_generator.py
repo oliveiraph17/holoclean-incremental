@@ -339,7 +339,7 @@ if __name__ == "__main__":
     feature_args['dataset_name'] = 'food5k_shuffled'
 
     feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/' + hc_args['infer_mode'])
+                               feature_args['dataset_name'] + '/features/')
     feature_args['entity_col'] = '_tid_'
 
     executor = Executor(hc_args, feature_args)
