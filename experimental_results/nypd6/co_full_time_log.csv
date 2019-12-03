@@ -1,4 +1,0 @@
-iteration;batch;load_data;load_dcs;detect_errors;setup_domain;featurize_data;setup_model;fit_model;infer_repairs;get_inferred_values;generate_repaired_dataset;repaired_table_copy_time;save_stats_time
-1;1;5.222966000000001;0.005366000000000426;11.576847999999998;978.8026864528656;7819.920166;0.010624999998981366;1481.17497;174.03367400000025;0.4512379999996483;5.556743000001006;0;0.4127520000001823
-iteration;batch;load_data;load_dcs;detect_errors;setup_domain;featurize_data;setup_model;fit_model;infer_repairs;get_inferred_values;generate_repaired_dataset;repaired_table_copy_time;save_stats_time
-1;1;5.215233999999327;0.0050360000004729955;1590.9435176849365;10274.768823999999;0.031737999997858424;1412.0426499999994;390.70856899999853;1.7045370000014373;8.612907999995514;0;0.4427400000022317
