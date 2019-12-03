@@ -56,7 +56,7 @@ class DetectEngine:
 
     def store_detected_errors(self, errors_df):
         if errors_df.empty:
-            raise Exception("ERROR: Detected errors dataframe is empty.")
+            logging.info("Detected errors dataframe is empty.")
         self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
         self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])
         self.ds._active_attributes = sorted(errors_df['attribute'].unique())
