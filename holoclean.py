@@ -337,6 +337,13 @@ arguments = [
       'default': -1,
       'type': int,
       'help': 'Current skip-training starting batch in the experiments.'}),
+    (('-fe', '--feature-extraction'),
+     {'metavar': 'FEATURE_EXTRACTION',
+      'dest': 'feature_extraction',
+      'default': False,
+      'type': bool,
+      'help': 'Saves weak labels for all cells regardless of being clean or not now to decide later if they are clean '
+              'regarding the chosen error detector for training/inference.'}),
 ]
 
 # Flags for Holoclean mode

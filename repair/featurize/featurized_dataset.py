@@ -115,9 +115,14 @@ class FeaturizedDataset:
             cid = int(tuple[4])
             tid = int(tuple[5])
             init_idx = int(tuple[6])
-            if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
-                # Considers only not null and clean or fixed cells as weak labels.
-                labels[attr][count[attr]] = label
+            if self.env['feature_extraction']:
+                if label != NULL_REPR:
+                    # Considers only not null and clean or fixed cells as weak labels.
+                    labels[attr][count[attr]] = label
+            else:
+                if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
+                    # Considers only not null and clean or fixed cells as weak labels.
+                    labels[attr][count[attr]] = label
 
             # Sets is_clean according to the parameter infer_mode ('dk' or 'all').
             # All cells are initially set as not clean (torch.zeros).
