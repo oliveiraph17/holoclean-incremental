@@ -3,6 +3,7 @@ import ujson
 import importlib
 import os
 import torch
+import sys
 
 from dataset import AuxTables
 
@@ -12,6 +13,11 @@ class Executor:
         self.hc = None
         self.hc_args = hc_values
         self.feature_args = feature_values
+
+        self.hc_args['db_name'] = ('holo_'
+                                   + self.feature_args['dataset_name']
+                                   + '_'
+                                   + str(self.feature_args['db_suffix']))
 
         # Imports modules to dynamically instantiate HoloClean components (detectors and featurizers).
         self.modules = {
@@ -189,7 +195,8 @@ class Executor:
 
         # Dumps the tensors for every batch to a different file if 'current' batch is the last one regarding the full
         # dataset to save global features that correspond to the statistics for the whole dataset.
-        if len(batches_read) == len(self.feature_args['tuples_to_read_list']):
+        if len(batches_read) == (len(self.feature_args['tuples_already_featurized_list']) +
+                                 len(self.feature_args['tuples_to_read_list'])):
             base_path = self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '_global_'
 
             # Dumps again the files regarding the last batch but with different names.
@@ -240,11 +247,25 @@ class Executor:
                   self.feature_args['dataset_name'] + '.csv') as dataset_file:
 
             # Writes the header to a temporary file.
-            csv_fpath = '/tmp/current_dataset.csv'
+            csv_fpath = ('/tmp/current_dataset_'
+                         + self.feature_args['dataset_name']
+                         + '_'
+                         + str(self.feature_args['db_suffix'])
+                         + '.csv')
             with open(csv_fpath, 'w+') as tmp_file:
                 tmp_file.writelines([dataset_file.readline()])
 
             batches_read = []
+            for tuples_already_featurized in self.feature_args['tuples_already_featurized_list']:
+                batches_read.append(tuples_already_featurized)
+                # Appends to the temporary file the batches already featurized.
+                with open(csv_fpath, 'a+') as tmp_file:
+                    line_list = []
+                    for i in range(tuples_already_featurized):
+                        line = dataset_file.readline()
+                        line_list.append(line)
+                    tmp_file.writelines(line_list)
+
             for tuples_to_read in self.feature_args['tuples_to_read_list']:
                 batches_read.append(tuples_to_read)
                 # Appends to the temporary file the current batch to be loaded.
@@ -267,6 +288,22 @@ class Executor:
 
 
 if __name__ == "__main__":
+    # Command-line parameters:
+    #  0) Script name (by default)
+    #
+    #  1) db_port
+    #  2) dataset_name
+    #  3) entity_col
+    #  4) dataset_size
+    #  5) weak_label_thresh
+    #  6) cor_strength
+    #  7) nb_cor_strength
+    #
+    #  8) Number of batches for this dataset
+    #  9) Number of concurrent executions for this dataset
+    #
+    # 10) db_suffix
+
     # Default parameters for HoloClean.
     hc_args = {
         'detectors': [
@@ -276,71 +313,38 @@ if __name__ == "__main__":
         ],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
-        'weak_label_thresh': 0.99,
-        'max_domain': 10000,
-        'cor_strength': 0.6,
-        'nb_cor_strength': 0.8,
+        'weak_label_thresh': float(sys.argv[5]),
+        'cor_strength': float(sys.argv[6]),
+        'nb_cor_strength': float(sys.argv[7]),
         'threads': 1,
         'verbose': True,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
         'incremental': False,
         'infer_mode': 'all',
-        'db_port': 5432
+        'db_port': int(sys.argv[1])
     }
 
     # Default parameters for Executor.
-    dataset_name = 'hospital'
+    dataset_name = str(sys.argv[2])
+    entity_col = str(sys.argv[3]) if str(sys.argv[3]) == '_tid_' else None
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/',
         'dataset_name': dataset_name,
-        'entity_col': None,
+        'entity_col': entity_col,
         'numerical_attrs': None,
         'do_quantization': False,
-        'tuples_to_read_list': [10] * 100
+        'tuples_to_read_list': [int(int(sys.argv[4]) / int(sys.argv[8]))] * int(int(sys.argv[8]) / int(sys.argv[9])),
+        'tuples_already_featurized_list': [],
+        'db_suffix': int(sys.argv[10])
     }
 
+    for j in range(feature_args['db_suffix'] - 1):
+        for batch in feature_args['tuples_to_read_list']:
+            feature_args['tuples_already_featurized_list'].append(batch)
+
     # Runs the default example.
-    executor = Executor(hc_args, feature_args)
-    executor.run()
-
-    ############################################################
-
-    feature_args['dataset_name'] = 'hospital_shuffled'
-
-    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/')
-    feature_args['entity_col'] = '_tid_'
-
-    executor = Executor(hc_args, feature_args)
-    executor.run()
-
-    ############################################################
-
-    feature_args['dataset_name'] = 'food5k'
-
-    hc_args['weak_label_thresh'] = 0.6
-    hc_args['max_domain'] = 10000
-    hc_args['cor_strength'] = 0.2
-    hc_args['nb_cor_strength'] = 0.3
-
-    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/')
-    feature_args['entity_col'] = None
-    feature_args['tuples_to_read_list'] = [50] * 100
-
-    executor = Executor(hc_args, feature_args)
-    executor.run()
-
-    ############################################################
-
-    feature_args['dataset_name'] = 'food5k_shuffled'
-
-    feature_args['log_dir'] = (os.environ['HOLOCLEANHOME'] + '/experimental_results/' +
-                               feature_args['dataset_name'] + '/features/')
-    feature_args['entity_col'] = '_tid_'
-
     executor = Executor(hc_args, feature_args)
     executor.run()
