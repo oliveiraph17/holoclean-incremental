@@ -103,6 +103,8 @@ class Executor:
             for i in range(0, t.size(0)):
                 tid = int(t[i])
                 if (tid, attr) not in clean_df.index:
+                    # -2 means the ground truth is NULL (closed-world assumption) or it was not provided.
+                    ground_truth[attr][i] = -2
                     continue
                 g_truth = clean_df.loc[(tid, attr), '_value_']
                 domain = domain_df.loc[(tid, attr), 'domain']
@@ -286,6 +288,8 @@ if __name__ == "__main__":
         'estimator_type': 'NaiveBayes',
         'incremental': False,
         'infer_mode': 'all',
+        'global_features': False,
+        'feature_extraction': True,
     }
 
     # Default parameters for Executor.

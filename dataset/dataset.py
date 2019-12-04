@@ -446,7 +446,7 @@ class Dataset:
                                      self.quantized_data_previously_repaired.df]).reset_index(drop=True)
             else:
                 data_df = pd.concat([self.raw_data.df,
-                                     self.raw_data_previously_repaired.df]).reset_index(drop=True)
+                                     self.get_raw_data_previously_repaired()]).reset_index(drop=True)
         else:
             # We get the statistics from the incoming data.
             if self.do_quantization:
