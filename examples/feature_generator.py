@@ -85,6 +85,7 @@ class Executor:
         class_masks = self.hc.repair_engine.feat_dataset.var_class_mask
         tids = self.hc.repair_engine.feat_dataset.tids
         init_idxs = self.hc.repair_engine.feat_dataset.init_idxs
+        fixed = self.hc.repair_engine.feat_dataset.fixed
 
         # Gets the ground truth.
         self.hc.eval_engine.load_data(name=self.feature_args['dataset_name'] + '_clean',
@@ -125,7 +126,7 @@ class Executor:
             errors[detector.name] = {}
             errors_df[detector.name] = detector.detect_noisy_cells()
             if not errors_df[detector.name].empty:
-                errors_df[detector.name].reset_index()
+                errors_df[detector.name] = errors_df[detector.name].reset_index()
                 errors_df[detector.name] = errors_df[detector.name].set_index(['_tid_', 'attribute'])
                 errors_df[detector.name].sort_index(inplace=True)
 
@@ -150,7 +151,7 @@ class Executor:
         # Wraps tensors in a dictionary.
         feat = {'tensors': tensors, 'errors': errors,
                 'labels': {'weak': weak_labels, 'init': init_idxs, 'truth': ground_truth},
-                'is_clean': is_clean, 'class_masks': class_masks, 'tids': tids}
+                'is_clean': is_clean, 'class_masks': class_masks, 'tids': tids, 'fixed': fixed}
 
         # Gets the tensor entries from the 'current' batch.
         feat_last = {key: {} for key in feat.keys()}
@@ -174,6 +175,7 @@ class Executor:
             feat_last['is_clean'][attr] = feat['is_clean'][attr].index_select(0, tids_index_tensor)
             feat_last['class_masks'][attr] = feat['class_masks'][attr].index_select(0, tids_index_tensor)
             feat_last['tids'][attr] = feat['tids'][attr].index_select(0, tids_index_tensor)
+            feat_last['fixed'][attr] = feat['fixed'][attr].index_select(0, tids_index_tensor)
 
         # Dumps the files.
         torch.save(feat, base_path + '.feat')
@@ -236,6 +238,7 @@ class Executor:
                         feat_last['is_clean'][attr] = feat['is_clean'][attr].index_select(0, tids_index_tensor)
                         feat_last['class_masks'][attr] = feat['class_masks'][attr].index_select(0, tids_index_tensor)
                         feat_last['tids'][attr] = feat['tids'][attr].index_select(0, tids_index_tensor)
+                        feat_last['fixed'][attr] = feat['fixed'][attr].index_select(0, tids_index_tensor)
 
                     # Dumps the file.
                     if batch_tid == 'all':

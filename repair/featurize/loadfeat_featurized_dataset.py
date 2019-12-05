@@ -18,6 +18,8 @@ class LoadFeatFeaturizedDataset:
         # This list is only used for backward compatibility reasons.
         self.train_cid = []
 
+        self.infer_idx = {}
+
     def load_feat(self, batch_number, batch_size):
         current_batch_range = '1-' + str(batch_number * batch_size)
         path_prefix = self.base_path + current_batch_range
@@ -99,6 +101,9 @@ class LoadFeatFeaturizedDataset:
                     stitched_feat['tids'][attr] = torch.cat(
                         tuple([feat['tids'][attr] for feat in feat_list])
                     )
+                    stitched_feat['fixed'][attr] = torch.cat(
+                        tuple([feat['fixed'][attr] for feat in feat_list])
+                    )
 
                 self.feat = stitched_feat
                 self.feat_last = feat_list[len(feat_list) - 1]
@@ -119,7 +124,7 @@ class LoadFeatFeaturizedDataset:
                 self.classes[attr] = self.feat['tensors'][attr].size(1)
 
     # noinspection PyPep8Naming
-    def get_training_data(self, label_type='weak'):
+    def get_training_data(self, detectors, label_type='weak'):
         """
         get_training_data returns X_train, y_train, and mask_train
         where each row of each tensor is a variable/VID and
@@ -138,8 +143,33 @@ class LoadFeatFeaturizedDataset:
         mask_train = {}
 
         for attr in self.ds.get_active_attributes():
+            if detectors:
+                if label_type == 'truth':
+                    logging.info("No error detection should be provided for training when using 'truth' labels.")
+                dirty_cells = None
+                for detector in detectors:
+                    # Gets the number of times each cell was detected as potentially dirty.
+                    if dirty_cells is None:
+                        dirty_cells = (self.feat['errors'][detector][attr] == 1)
+                    else:
+                        dirty_cells = dirty_cells + (self.feat['errors'][detector][attr] == 1)
+
+                # Gets the indices for the cells that have non-null labels and are clean.
+                not_null_labels = (self.feat['labels'][label_type][attr] > -1)
+                if label_type == 'weak':
+                    # Discards the cells whose fixed cell status is NOT_SET (0) and keeps WEAK_LABEL or SINGLE_VALUE.
+                    weak_labelled_cells = (self.feat['fixed'][attr] > 0)
+                    # Removes from dirty cells those cells that were weak-labelled.
+                    dirty_cells = (dirty_cells > 0).long() - weak_labelled_cells.long()
+                train_idx = ((not_null_labels.long() - dirty_cells) > 0).nonzero()[:, 0]
+
+            else:
+                logging.info('No error detector was provided. Training using all cells as they are all assumed '
+                             'clean.')
+                # Gets the indices for all cells that have non-null labels.
+                train_idx = (self.feat['labels'][label_type][attr] > -1).nonzero()[:, 0]
+
             # Train using label_type
-            train_idx = (self.feat['labels'][label_type][attr] != -1).nonzero()[:, 0]
             Y_train[attr] = self.feat['labels'][label_type][attr].index_select(0, train_idx)
             X_train[attr] = self.feat['tensors'][attr].index_select(0, train_idx)
             mask_train[attr] = self.feat['class_masks'][attr].index_select(0, train_idx)
@@ -156,27 +186,137 @@ class LoadFeatFeaturizedDataset:
 
         feat = self.feat_skipping if skipping else self.feat_last
 
-        infer_idx = {}
         X_infer = {}
         mask_infer = {}
+        self.infer_idx = {}
+
         Y_ground_truth = {}
 
         for attr in self.ds.get_active_attributes():
             if self.env['infer_mode'] == 'dk':
                 assert detectors, "No error detector provided for infer_mode='dk'."
+                dirty_cells = None
                 for detector in detectors:
-                    # Generates a tensor per attribute with the number of error detections per cell.
-                    if attr not in infer_idx:
-                        infer_idx[attr] = (feat['errors'][detector][attr] == 1)
+                    # Gets the number of times each cell was detected as potentially dirty.
+                    if dirty_cells is None:
+                        dirty_cells = (feat['errors'][detector][attr] == 1)
                     else:
-                        infer_idx[attr] = infer_idx[attr].add(feat['errors'][detector][attr] == 1)
+                        dirty_cells = dirty_cells + (feat['errors'][detector][attr] == 1)
                 # Gets the positions which were spot as dirty by at least one error detector.
-                infer_idx[attr] = infer_idx[attr].nonzero()[:, 0]
+                self.infer_idx[attr] = dirty_cells.nonzero()[:, 0]
             else:
-                infer_idx[attr] = torch.arange(0, feat['tensors'][attr].size(0))
+                self.infer_idx[attr] = torch.arange(0, feat['tensors'][attr].size(0))
 
-            X_infer[attr] = feat['tensors'][attr].index_select(0, infer_idx[attr])
-            mask_infer[attr] = feat['class_masks'][attr].index_select(0, infer_idx[attr])
-            Y_ground_truth[attr] = feat['labels']['truth'][attr].index_select(0, infer_idx[attr])
+            X_infer[attr] = feat['tensors'][attr].index_select(0, self.infer_idx[attr])
+            mask_infer[attr] = feat['class_masks'][attr].index_select(0, self.infer_idx[attr])
+
+            Y_ground_truth[attr] = feat['labels']['truth'][attr].index_select(0, self.infer_idx[attr])
 
         return X_infer, mask_infer, Y_ground_truth
+
+    def get_evaluation_metrics(self, Y_pred, skipping=False):
+        feat = self.feat_skipping if skipping else self.feat_last
+
+        eval_metrics = {'total_errors': {}, 'potential_errors': {}, 'total_repairs': {}, 'correct_repairs': {},
+                        'detected_errors': {}, 'total_repairs_grdt_correct': {}, 'total_repairs_grdt_incorrect': {},
+                        'precision': {}, 'recall': {}, 'repairing_recall': {}, 'f1': {}, 'repairing_f1': {}, }
+
+        for attr in self.ds.get_active_attributes():
+            # Discards from the metrics cells whose ground-truth is null or it was not provided (closed-world).
+            provided_grdt_idx = (feat['labels']['truth'][attr] != -2).nonzero()[:, 0]
+
+            # Computes total errors: counts how many initial values differ from the ground-truth.
+            total_errors = torch.ne(feat['labels']['init'][attr].index_select(0, provided_grdt_idx),
+                                    feat['labels']['truth'][attr].index_select(0, provided_grdt_idx))
+            eval_metrics['total_errors'][attr] = sum(total_errors).item()
+
+            # Computes detected errors: counts how many cells were detected by at least one error detector.
+            eval_metrics['potential_errors'][attr] = self.infer_idx[attr].size(0)
+
+            # Gets the ids for the inferred cells that have ground-truth.
+            inf_grdt_idx = set(self.infer_idx[attr].tolist()).intersection(provided_grdt_idx.tolist())
+
+            # Computes detected errors after inference: counts how many dirty cells were repaired regardless of
+            # being correctly repaired or not.
+            eval_metrics['detected_errors'][attr] = len(
+                set(inf_grdt_idx).intersection((total_errors == 1).nonzero()[:, 0].tolist())
+            )
+
+            eval_metrics['total_repairs'][attr] = 0
+            eval_metrics['correct_repairs'][attr] = 0
+            eval_metrics['total_repairs_grdt_incorrect'][attr] = 0
+            eval_metrics['total_repairs_grdt_correct'][attr] = 0
+            eval_metrics['precision'][attr] = 0
+            eval_metrics['recall'][attr] = 0
+            eval_metrics['f1'][attr] = 0
+            eval_metrics['repairing_recall'][attr] = 0
+            eval_metrics['repairing_f1'][attr] = 0
+
+            if eval_metrics['potential_errors'][attr] > 0:
+                # Gets the index of the repair with the highest probability for each inferred cell.
+                inf_probs, inf_val_id = Y_pred[attr].max(1)
+
+                # We need distinct selectors for the inf_val_id and feat[init] tensors as the indices are different.
+                inf_grdt_idx = torch.LongTensor(sorted(inf_grdt_idx))
+                infer_grdt_idx = (self.infer_idx[attr] == inf_grdt_idx).nonzero()[:, 0]
+
+                # Computes total repairs: counts how many inferred values are different from the corresponding initial
+                # ones.
+                repaired_cells = torch.ne(inf_val_id.index_select(0, infer_grdt_idx),
+                                          feat['labels']['init'][attr].index_select(0, inf_grdt_idx).squeeze())
+                eval_metrics['total_repairs'][attr] = sum(repaired_cells).item()
+
+                if eval_metrics['total_repairs'][attr] > 0:
+                    # Gets the indices for the repaired cells that have ground-truth.
+                    repaired_cells_idx = repaired_cells.nonzero()[:, 0]
+                    rep_grdt_idx = inf_grdt_idx.index_select(0, repaired_cells_idx)
+
+                    # Computes correct repairs: counts how many dirty cells were correctly repaired
+                    # (i.e., init value != inferred value and inferred value == ground-truth).
+                    eval_metrics['correct_repairs'][attr] = sum(
+                        torch.eq(inf_val_id.index_select(0, repaired_cells_idx),
+                                 feat['labels']['truth'][attr].index_select(0, rep_grdt_idx).squeeze())
+                    ).item()
+
+                    # Computes repairs on incorrect cells: counts how many repairs were made in dirty cells regardless
+                    # of being correct repairs or not (i.e., init value != inferred value and
+                    # init_value != ground-truth).
+                    eval_metrics['total_repairs_grdt_incorrect'][attr] = sum(
+                        torch.ne(feat['labels']['init'][attr].index_select(0, rep_grdt_idx),
+                                 feat['labels']['truth'][attr].index_select(0, rep_grdt_idx))
+                    ).item()
+
+                    # Computes repairs on correct cells: counts how many repairs (actually messes) were made in clean
+                    # cells (i.e., init value != inferred value and init_value == ground-truth).
+                    eval_metrics['total_repairs_grdt_correct'][attr] = sum(
+                        torch.eq(feat['labels']['init'][attr].index_select(0, rep_grdt_idx),
+                                 feat['labels']['truth'][attr].index_select(0, rep_grdt_idx))
+                    ).item()
+
+                    if (eval_metrics['total_repairs_grdt_correct'][attr] +
+                            eval_metrics['total_repairs_grdt_incorrect'][attr]) > 0:
+                        eval_metrics['precision'][attr] = (eval_metrics['correct_repairs'][attr] /
+                                                           (eval_metrics['total_repairs_grdt_correct'][attr] +
+                                                            eval_metrics['total_repairs_grdt_incorrect'][attr]))
+
+                    if eval_metrics['total_errors'][attr] > 0:
+                        eval_metrics['recall'][attr] = (eval_metrics['correct_repairs'][attr] /
+                                                        eval_metrics['total_errors'][attr])
+
+                    if (eval_metrics['precision'][attr] + eval_metrics['recall'][attr]) > 0:
+                        eval_metrics['f1'][attr] = ((2 * eval_metrics['precision'][attr] *
+                                                     eval_metrics['recall'][attr]) /
+                                                    (eval_metrics['precision'][attr] +
+                                                     eval_metrics['recall'][attr]))
+
+                    if eval_metrics['detected_errors'][attr] > 0:
+                        eval_metrics['repairing_recall'][attr] = (eval_metrics['correct_repairs'][attr] /
+                                                                  eval_metrics['detected_errors'][attr])
+
+                    if (eval_metrics['precision'][attr] + eval_metrics['repairing_recall'][attr]) > 0:
+                        eval_metrics['repairing_f1'][attr] = ((2 * eval_metrics['precision'][attr] *
+                                                     eval_metrics['repairing_recall'][attr]) /
+                                                    (eval_metrics['precision'][attr] +
+                                                     eval_metrics['repairing_recall'][attr]))
+
+        return eval_metrics

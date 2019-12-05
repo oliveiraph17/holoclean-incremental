@@ -65,7 +65,8 @@ class Executor:
         tic = time.clock()
         total_training_cells = 0
         X_train, Y_train, mask_train, train_cid = \
-            self.hc.repair_engine.feat_dataset.get_training_data(self.feature_args['labels'])
+            self.hc.repair_engine.feat_dataset.get_training_data(self.feature_args['detectors'],
+                                                                 self.feature_args['labels'])
         for attr in self.hc.ds.get_active_attributes():
             logging.info('Training model for %s with %d training examples (cells)', attr, X_train[attr].size(0))
             tic_attr = time.clock()
@@ -93,16 +94,58 @@ class Executor:
             self.feature_args['detectors'],
             skipping)
         Y_pred = {}
+
+        tic_attr = time.clock()
         for attr in self.hc.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
-            tic_attr = time.clock()
             Y_pred[attr] = self.hc.repair_engine.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
-            logging.debug('Done. Elapsed time: %.2f', time.clock() - tic_attr)
 
             grdt = Y_truth[attr].numpy().flatten()
             Y_assign = Y_pred[attr].data.numpy().argmax(axis=1)
             accuracy = 100. * np.mean(Y_assign == grdt)
-            logging.debug("%s, acc = %.2f%%", attr, accuracy)
+            logging.debug("Previous model accuracy: %.2f.", accuracy)
+
+        logging.debug('Done. Elapsed time: %.2f', time.clock() - tic_attr)
+
+        return Y_pred
+
+    def evaluate(self, Y_pred, skipping=False):
+        eval_metrics = self.hc.repair_engine.feat_dataset.get_evaluation_metrics(Y_pred, skipping)
+
+        global_metrics = {name: [] for name in eval_metrics.keys()}
+        for attr in self.hc.ds.get_active_attributes():
+            for name, value in eval_metrics.items():
+                logging.debug('[' + attr + '] ' + name + ' = %2f', value[attr])
+                global_metrics[name].append(value[attr])
+
+        sum_metrics = ['total_errors', 'potential_errors', 'total_repairs', 'correct_repairs', 'detected_errors',
+                       'total_repairs_grdt_correct', 'total_repairs_grdt_incorrect']
+
+        agg_metrics = {}
+        for name in sum_metrics:
+            agg_metrics[name] = sum(global_metrics[name])
+
+        if (agg_metrics['total_repairs_grdt_correct'] + agg_metrics['total_repairs_grdt_incorrect']) > 0:
+            agg_metrics['precision'] = (agg_metrics['correct_repairs'] /
+                                        (agg_metrics['total_repairs_grdt_correct'] +
+                                         agg_metrics['total_repairs_grdt_incorrect']))
+
+        if agg_metrics['total_errors'] > 0:
+            agg_metrics['recall'] = (agg_metrics['correct_repairs'] / agg_metrics['total_errors'])
+
+        if (agg_metrics['precision'] + agg_metrics['recall']) > 0:
+            agg_metrics['f1'] = ((2 * agg_metrics['precision'] * agg_metrics['recall']) /
+                                 (agg_metrics['precision'] + agg_metrics['recall']))
+
+        if agg_metrics['detected_errors'] > 0:
+            agg_metrics['repairing_recall'] = (agg_metrics['correct_repairs'] / agg_metrics['detected_errors'])
+
+        if (agg_metrics['precision'] + agg_metrics['repairing_recall']) > 0:
+            agg_metrics['repairing_f1'] = ((2 * agg_metrics['precision'] * agg_metrics['repairing_recall']) /
+                                           (agg_metrics['precision'] + agg_metrics['repairing_recall']))
+
+        for name, agg_value in agg_metrics.items():
+            logging.debug('[Aggregated] ' + name + ' = %2f', agg_value)
 
     def run(self):
         total_tuples = 0
@@ -114,12 +157,14 @@ class Executor:
 
             self.setup_hc_repair_engine(batch_number, batch_size)
             self.train()
-            self.infer()
+            Y_pred = self.infer()
+            self.evaluate(Y_pred)
 
             number_of_skipping_batches = number_of_batches - batch_number
             for i in range(number_of_skipping_batches):
                 self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
-                self.infer(skipping=True)
+                Y_pred = self.infer(skipping=True)
+                self.evaluate(Y_pred, skipping=True)
 
             batch_number += 1
 
@@ -127,7 +172,7 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        'epochs': 20,
+        'epochs': 5,
         'threads': 1,
         'verbose': True,
         'print_fw': False,
@@ -138,19 +183,20 @@ if __name__ == "__main__":
     }
 
     # Default parameters for Executor.
+    dataset_name = 'hospital'
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-        'feat_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-        'dataset_name': 'hospital',
+        'feat_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/',
+        'dataset_name': dataset_name,
         'entity_col': None,
         'numerical_attrs': None,
         'tuples_to_read_list': [250] * 4,
         'active_attributes': ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
                               'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
                               'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg'],
-        'labels': 'init',  # one of 'weak', 'init' or 'truth'
-        'detectors': ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector']
+        'labels': 'weak',  # one of 'weak', 'init' or 'truth'
+        'detectors': ['ErrorLoaderDetector']  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector']
     }
 
     # Runs the default example.
