@@ -92,6 +92,7 @@ class FeaturizedDataset:
         count = {}
         self.tids = {}
         self.init_idxs = {}
+        self.fixed = {}
         for attr in self.ds.get_active_attributes():
             count[attr] = 0
             num_instances = self.tensor[attr].size(0)
@@ -99,6 +100,7 @@ class FeaturizedDataset:
             is_clean[attr] = torch.zeros(num_instances, 1).type(torch.LongTensor)
             self.tids[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
             self.init_idxs[attr] = -1 * torch.ones(num_instances, 1).type(torch.LongTensor)
+            self.fixed[attr] = torch.zeros(num_instances, 1).type(torch.LongTensor)
 
         tids_from_previous_batches = None
         if not self.ds.is_first_batch():
@@ -119,6 +121,7 @@ class FeaturizedDataset:
                 if label != NULL_REPR:
                     # Considers only not null and clean or fixed cells as weak labels.
                     labels[attr][count[attr]] = label
+                self.fixed[attr][count[attr]] = fixed
             else:
                 if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
                     # Considers only not null and clean or fixed cells as weak labels.
