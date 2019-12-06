@@ -72,6 +72,13 @@ datasets = [
      0.99, 10000, 0.6, 0.8,
      'dk', False, False),
 
+    # Example setup for model monitoring.
+    # ('hospital', None, None, False,
+    #  None,
+    #  [250] * 4, True, 1000, 0.1, 'NaiveBayes',
+    #  0.99, 10000, 0.6, 0.8,
+    #  'dk', False, True),
+
     ('food5k_shuffled', '_tid_', None, False,
      None,
      [1000] * 5, False, None, None, 'NaiveBayes',

@@ -15,11 +15,30 @@ class Executor:
         self.hc_args = hc_values
         self.feature_args = feature_values
 
+        self.quality_log_fpath = ''
+        if self.hc_args['log_repairing_quality']:
+            self.quality_log_fpath += (self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' +
+                                       self.feature_args['approach'] + '_quality_log.csv')
+
+        self.time_log_fpath = ''
+        if self.hc_args['log_execution_times']:
+            self.time_log_fpath += (self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' +
+                                    self.feature_args['approach'] + '_time_log.csv')
+
+        self.weight_log_fpath = ''
+        if self.hc_args['log_feature_weights']:
+            self.weight_log_fpath += (self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' +
+                                      self.feature_args['approach'] + '_weight_log.csv')
+
+
     def setup_hc_repair_engine(self, batch_number, batch_size):
         # Sets up a HoloClean session.
         self.hc = holoclean.HoloClean(
             **self.hc_args
         ).session
+
+        # Sets up loggers for the experiments.
+        self.hc.setup_experiment_loggers(self.quality_log_fpath, self.time_log_fpath, self.weight_log_fpath)
 
         # Sets the needed properties for Dataset.
         # Loads a sample from the raw CSV file to do the basic settings.
@@ -109,7 +128,7 @@ class Executor:
 
         return Y_pred
 
-    def evaluate(self, Y_pred, skipping=False):
+    def evaluate(self, Y_pred, train_batch_number, skipping_batch_number, skipping=False):
         eval_metrics = self.hc.repair_engine.feat_dataset.get_evaluation_metrics(Y_pred, skipping)
 
         global_metrics = {name: [] for name in eval_metrics.keys()}
@@ -121,7 +140,7 @@ class Executor:
         sum_metrics = ['total_errors', 'potential_errors', 'total_repairs', 'correct_repairs', 'detected_errors',
                        'total_repairs_grdt_correct', 'total_repairs_grdt_incorrect']
 
-        agg_metrics = {}
+        agg_metrics = {name: 0 for name in eval_metrics.keys()}
         for name in sum_metrics:
             agg_metrics[name] = sum(global_metrics[name])
 
@@ -147,6 +166,30 @@ class Executor:
         for name, agg_value in agg_metrics.items():
             logging.debug('[Aggregated] ' + name + ' = %2f', agg_value)
 
+        agg_values = [self.hc.env['infer_mode']]  # infer_mode
+        agg_values.append('global' if self.hc.env['global_features'] else 'incremental')  # features
+        agg_values.append('True')  # train_using_all_batches
+        agg_values.append(str(train_batch_number + 1))  # skip_training_starting_batch
+        agg_values.append(str(skipping_batch_number))  # batch
+        agg_values.append(str(agg_metrics['potential_errors']))  # dk_cells
+        agg_values.append('0')  # training_cells
+        agg_values.append(str(agg_metrics['precision']))
+        agg_values.append(str(agg_metrics['recall']))
+        agg_values.append(str(agg_metrics['repairing_recall']))
+        agg_values.append(str(agg_metrics['f1']))
+        agg_values.append(str(agg_metrics['repairing_f1']))
+        agg_values.append(str(agg_metrics['detected_errors']))
+        agg_values.append(str(agg_metrics['total_errors']))
+        agg_values.append(str(agg_metrics['correct_repairs']))
+        agg_values.append(str(agg_metrics['total_repairs']))
+        agg_values.append(str(agg_metrics['total_repairs_grdt_correct'] + agg_metrics['total_repairs_grdt_incorrect']))
+        agg_values.append(str(agg_metrics['total_repairs_grdt_correct']))
+        agg_values.append(str(agg_metrics['total_repairs_grdt_incorrect']))
+        agg_values.append('0')  # 'rmse'
+
+        self.hc.experiment_quality_logger.info(';'.join(agg_values))
+
+
     def run(self):
         total_tuples = 0
         batch_number = 1
@@ -158,13 +201,13 @@ class Executor:
             self.setup_hc_repair_engine(batch_number, batch_size)
             self.train()
             Y_pred = self.infer()
-            self.evaluate(Y_pred)
+            self.evaluate(Y_pred, batch_number, batch_number)
 
             number_of_skipping_batches = number_of_batches - batch_number
             for i in range(number_of_skipping_batches):
                 self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
                 Y_pred = self.infer(skipping=True)
-                self.evaluate(Y_pred, skipping=True)
+                self.evaluate(Y_pred, batch_number, batch_number + i + 1, skipping=True)
 
             batch_number += 1
 
@@ -172,14 +215,17 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        'epochs': 5,
+        'epochs': 20,
         'threads': 1,
         'verbose': True,
         'print_fw': False,
         'timeout': 3 * 60000,
         'incremental': False,
         'infer_mode': 'dk',
-        'global_features': False
+        'global_features': False,
+        'log_repairing_quality': True,
+        'log_execution_times': False,
+        'log_feature_weights': False,
     }
 
     # Default parameters for Executor.
@@ -188,9 +234,11 @@ if __name__ == "__main__":
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'feat_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/',
+        'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
         'dataset_name': dataset_name,
         'entity_col': None,
         'numerical_attrs': None,
+        'approach': 'monitoring',
         'tuples_to_read_list': [250] * 4,
         'active_attributes': ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
                               'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
