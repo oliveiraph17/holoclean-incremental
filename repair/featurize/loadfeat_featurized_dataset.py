@@ -160,8 +160,8 @@ class LoadFeatFeaturizedDataset:
                     # Discards the cells whose fixed cell status is NOT_SET (0) and keeps WEAK_LABEL or SINGLE_VALUE.
                     weak_labelled_cells = (self.feat['fixed'][attr] > 0)
                     # Removes from dirty cells those cells that were weak-labelled.
-                    dirty_cells = (dirty_cells > 0).long() - weak_labelled_cells.long()
-                train_idx = ((not_null_labels.long() - dirty_cells) > 0).nonzero()[:, 0]
+                    dirty_cells = (dirty_cells > 0) - weak_labelled_cells
+                train_idx = ((not_null_labels.long() - (dirty_cells > 0).long()) > 0).nonzero()[:, 0]
 
             else:
                 logging.info('No error detector was provided. Training using all cells as they are all assumed '
@@ -222,101 +222,108 @@ class LoadFeatFeaturizedDataset:
                         'precision': {}, 'recall': {}, 'repairing_recall': {}, 'f1': {}, 'repairing_f1': {}, }
 
         for attr in self.ds.get_active_attributes():
+            for name in eval_metrics.keys():
+                eval_metrics[name][attr] = 0
+
+            # Computes detected errors: counts how many cells were detected by at least one error detector.
+            eval_metrics['potential_errors'][attr] = self.infer_idx[attr].size(0)
+
             # Discards from the metrics cells whose ground-truth is null or it was not provided (closed-world).
             provided_grdt_idx = (feat['labels']['truth'][attr] != -2).nonzero()[:, 0]
+
+            if provided_grdt_idx.nelement() == 0:
+                continue
 
             # Computes total errors: counts how many initial values differ from the ground-truth.
             total_errors = torch.ne(feat['labels']['init'][attr].index_select(0, provided_grdt_idx),
                                     feat['labels']['truth'][attr].index_select(0, provided_grdt_idx))
             eval_metrics['total_errors'][attr] = sum(total_errors).item()
 
-            # Computes detected errors: counts how many cells were detected by at least one error detector.
-            eval_metrics['potential_errors'][attr] = self.infer_idx[attr].size(0)
-
-            # Gets the ids for the inferred cells that have ground-truth.
-            inf_grdt_idx = set(self.infer_idx[attr].tolist()).intersection(provided_grdt_idx.tolist())
+            if eval_metrics['potential_errors'][attr] == 0:
+                continue
 
             # Computes detected errors after inference: counts how many dirty cells were repaired regardless of
             # being correctly repaired or not.
             eval_metrics['detected_errors'][attr] = len(
-                set(inf_grdt_idx).intersection((total_errors == 1).nonzero()[:, 0].tolist())
+                set(self.infer_idx[attr].tolist()).intersection((total_errors == 1).nonzero()[:, 0].tolist())
             )
 
-            eval_metrics['total_repairs'][attr] = 0
-            eval_metrics['correct_repairs'][attr] = 0
-            eval_metrics['total_repairs_grdt_incorrect'][attr] = 0
-            eval_metrics['total_repairs_grdt_correct'][attr] = 0
-            eval_metrics['precision'][attr] = 0
-            eval_metrics['recall'][attr] = 0
-            eval_metrics['f1'][attr] = 0
-            eval_metrics['repairing_recall'][attr] = 0
-            eval_metrics['repairing_f1'][attr] = 0
+            # Gets the index of the repair with the highest probability for each inferred cell.
+            inf_probs, inf_val_id = Y_pred[attr].max(1)
 
-            if eval_metrics['potential_errors'][attr] > 0:
-                # Gets the index of the repair with the highest probability for each inferred cell.
-                inf_probs, inf_val_id = Y_pred[attr].max(1)
+            # Gets the ids for the inferred cells that have ground-truth.
+            valid_inf_idx = set(self.infer_idx[attr].tolist()).intersection(provided_grdt_idx.tolist())
+            inf_grdt_idx = torch.LongTensor(sorted(valid_inf_idx))
 
-                # We need distinct selectors for the inf_val_id and feat[init] tensors as the indices are different.
-                inf_grdt_idx = torch.LongTensor(sorted(inf_grdt_idx))
-                infer_grdt_idx = (self.infer_idx[attr] == inf_grdt_idx).nonzero()[:, 0]
+            # Gets a distinct selector for the inf_val_id as its tensors indices are different from feat[label].
+            valid_infer_idx = []
+            for i in range(self.infer_idx[attr].size(0)):
+                if self.infer_idx[attr][i] in inf_grdt_idx:
+                    valid_infer_idx.append(i)
+            infer_grdt_idx = torch.LongTensor(valid_infer_idx)
 
-                # Computes total repairs: counts how many inferred values are different from the corresponding initial
-                # ones.
-                repaired_cells = torch.ne(inf_val_id.index_select(0, infer_grdt_idx),
-                                          feat['labels']['init'][attr].index_select(0, inf_grdt_idx).squeeze())
-                eval_metrics['total_repairs'][attr] = sum(repaired_cells).item()
+            if inf_grdt_idx.nelement() == 0 or infer_grdt_idx.nelement() == 0:
+                continue
 
-                if eval_metrics['total_repairs'][attr] > 0:
-                    # Gets the indices for the repaired cells that have ground-truth.
-                    repaired_cells_idx = repaired_cells.nonzero()[:, 0]
-                    rep_grdt_idx = inf_grdt_idx.index_select(0, repaired_cells_idx)
+            # Computes total repairs: counts how many inferred values are different from the corresponding initial
+            # ones.
+            repaired_cells = torch.ne(inf_val_id.index_select(0, infer_grdt_idx),
+                                      feat['labels']['init'][attr].index_select(0, inf_grdt_idx).squeeze())
+            eval_metrics['total_repairs'][attr] = sum(repaired_cells).item()
 
-                    # Computes correct repairs: counts how many dirty cells were correctly repaired
-                    # (i.e., init value != inferred value and inferred value == ground-truth).
-                    eval_metrics['correct_repairs'][attr] = sum(
-                        torch.eq(inf_val_id.index_select(0, repaired_cells_idx),
-                                 feat['labels']['truth'][attr].index_select(0, rep_grdt_idx).squeeze())
-                    ).item()
+            if eval_metrics['total_repairs'][attr] == 0:
+                continue
 
-                    # Computes repairs on incorrect cells: counts how many repairs were made in dirty cells regardless
-                    # of being correct repairs or not (i.e., init value != inferred value and
-                    # init_value != ground-truth).
-                    eval_metrics['total_repairs_grdt_incorrect'][attr] = sum(
-                        torch.ne(feat['labels']['init'][attr].index_select(0, rep_grdt_idx),
-                                 feat['labels']['truth'][attr].index_select(0, rep_grdt_idx))
-                    ).item()
+            # Gets the indices for the repaired cells that have ground-truth.
+            repaired_cells_idx = repaired_cells.nonzero()[:, 0]
+            rep_grdt_idx = inf_grdt_idx.index_select(0, repaired_cells_idx)
 
-                    # Computes repairs on correct cells: counts how many repairs (actually messes) were made in clean
-                    # cells (i.e., init value != inferred value and init_value == ground-truth).
-                    eval_metrics['total_repairs_grdt_correct'][attr] = sum(
-                        torch.eq(feat['labels']['init'][attr].index_select(0, rep_grdt_idx),
-                                 feat['labels']['truth'][attr].index_select(0, rep_grdt_idx))
-                    ).item()
+            # Computes correct repairs: counts how many dirty cells were correctly repaired
+            # (i.e., init value != inferred value and inferred value == ground-truth).
+            eval_metrics['correct_repairs'][attr] = sum(
+                torch.eq(inf_val_id.index_select(0, repaired_cells_idx),
+                         feat['labels']['truth'][attr].index_select(0, rep_grdt_idx).squeeze())
+            ).item()
 
-                    if (eval_metrics['total_repairs_grdt_correct'][attr] +
-                            eval_metrics['total_repairs_grdt_incorrect'][attr]) > 0:
-                        eval_metrics['precision'][attr] = (eval_metrics['correct_repairs'][attr] /
-                                                           (eval_metrics['total_repairs_grdt_correct'][attr] +
-                                                            eval_metrics['total_repairs_grdt_incorrect'][attr]))
+            # Computes repairs on incorrect cells: counts how many repairs were made in dirty cells regardless
+            # of being correct repairs or not (i.e., init value != inferred value and
+            # init_value != ground-truth).
+            eval_metrics['total_repairs_grdt_incorrect'][attr] = sum(
+                torch.ne(feat['labels']['init'][attr].index_select(0, rep_grdt_idx),
+                         feat['labels']['truth'][attr].index_select(0, rep_grdt_idx))
+            ).item()
 
-                    if eval_metrics['total_errors'][attr] > 0:
-                        eval_metrics['recall'][attr] = (eval_metrics['correct_repairs'][attr] /
-                                                        eval_metrics['total_errors'][attr])
+            # Computes repairs on correct cells: counts how many repairs (actually messes) were made in clean
+            # cells (i.e., init value != inferred value and init_value == ground-truth).
+            eval_metrics['total_repairs_grdt_correct'][attr] = sum(
+                torch.eq(feat['labels']['init'][attr].index_select(0, rep_grdt_idx),
+                         feat['labels']['truth'][attr].index_select(0, rep_grdt_idx))
+            ).item()
 
-                    if (eval_metrics['precision'][attr] + eval_metrics['recall'][attr]) > 0:
-                        eval_metrics['f1'][attr] = ((2 * eval_metrics['precision'][attr] *
-                                                     eval_metrics['recall'][attr]) /
-                                                    (eval_metrics['precision'][attr] +
-                                                     eval_metrics['recall'][attr]))
+            if (eval_metrics['total_repairs_grdt_correct'][attr] +
+                    eval_metrics['total_repairs_grdt_incorrect'][attr]) > 0:
+                eval_metrics['precision'][attr] = (eval_metrics['correct_repairs'][attr] /
+                                                   (eval_metrics['total_repairs_grdt_correct'][attr] +
+                                                    eval_metrics['total_repairs_grdt_incorrect'][attr]))
 
-                    if eval_metrics['detected_errors'][attr] > 0:
-                        eval_metrics['repairing_recall'][attr] = (eval_metrics['correct_repairs'][attr] /
-                                                                  eval_metrics['detected_errors'][attr])
+            if eval_metrics['total_errors'][attr] > 0:
+                eval_metrics['recall'][attr] = (eval_metrics['correct_repairs'][attr] /
+                                                eval_metrics['total_errors'][attr])
 
-                    if (eval_metrics['precision'][attr] + eval_metrics['repairing_recall'][attr]) > 0:
-                        eval_metrics['repairing_f1'][attr] = ((2 * eval_metrics['precision'][attr] *
-                                                     eval_metrics['repairing_recall'][attr]) /
-                                                    (eval_metrics['precision'][attr] +
-                                                     eval_metrics['repairing_recall'][attr]))
+            if (eval_metrics['precision'][attr] + eval_metrics['recall'][attr]) > 0:
+                eval_metrics['f1'][attr] = ((2 * eval_metrics['precision'][attr] *
+                                             eval_metrics['recall'][attr]) /
+                                            (eval_metrics['precision'][attr] +
+                                             eval_metrics['recall'][attr]))
+
+            if eval_metrics['detected_errors'][attr] > 0:
+                eval_metrics['repairing_recall'][attr] = (eval_metrics['correct_repairs'][attr] /
+                                                          eval_metrics['detected_errors'][attr])
+
+            if (eval_metrics['precision'][attr] + eval_metrics['repairing_recall'][attr]) > 0:
+                eval_metrics['repairing_f1'][attr] = ((2 * eval_metrics['precision'][attr] *
+                                             eval_metrics['repairing_recall'][attr]) /
+                                            (eval_metrics['precision'][attr] +
+                                             eval_metrics['repairing_recall'][attr]))
 
         return eval_metrics

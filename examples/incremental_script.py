@@ -94,18 +94,6 @@ datasets = [
      0.99, 10000, 0.6, 0.8,
      'all', False, False),
 
-    ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])],
-     None, True, 1000, 0.20, 'NaiveBayes',
-     0.99, 10000, 0.6, 0.8,
-     'dk', False, False),
-
-    ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])],
-     None, True, 1000, 0.20, 'NaiveBayes',
-     0.99, 10000, 0.6, 0.8,
-     'all', False, False),
-
     # ('food5k', None, ['latitude', 'longitude'], True,
     #  [(100, ['latitude', 'longitude'])],
     #  None, True, 5000, 0.01, 'NaiveBayes',
