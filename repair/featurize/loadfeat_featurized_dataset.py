@@ -29,7 +29,7 @@ class LoadFeatFeaturizedDataset:
         logging.info('Loading features from: %s', path)
         self.feat = torch.load(path)
 
-        # Loads tensors of the last batch encompassed by the newly-loaded tensors.
+        # Loads tensors of the last batch within the newly-loaded tensors.
         path = path_prefix + '_last' + str(batch_size) + '.feat'
         logging.info('Loading features from: %s', path)
         self.feat_last = torch.load(path)

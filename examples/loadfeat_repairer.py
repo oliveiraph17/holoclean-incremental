@@ -9,6 +9,7 @@ import logging
 from repair.featurize.loadfeat_featurized_dataset import LoadFeatFeaturizedDataset
 
 
+# noinspection PyPep8Naming,PyListCreation
 class Executor:
     def __init__(self, hc_values, feature_values):
         self.hc = None
@@ -29,7 +30,6 @@ class Executor:
         if self.hc_args['log_feature_weights']:
             self.weight_log_fpath += (self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' +
                                       self.feature_args['approach'] + '_weight_log.csv')
-
 
     def setup_hc_repair_engine(self, batch_number, batch_size):
         # Sets up a HoloClean session.
@@ -188,7 +188,6 @@ class Executor:
         agg_values.append('0')  # 'rmse'
 
         self.hc.experiment_quality_logger.info(';'.join(agg_values))
-
 
     def run(self):
         total_tuples = 0

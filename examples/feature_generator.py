@@ -87,7 +87,7 @@ class Executor:
         init_idxs = self.hc.repair_engine.feat_dataset.init_idxs
         fixed = self.hc.repair_engine.feat_dataset.fixed
 
-        # Gets the ground truth.
+        # Gets the ground-truth.
         self.hc.eval_engine.load_data(name=self.feature_args['dataset_name'] + '_clean',
                                       fpath=(self.feature_args['dataset_dir'] +
                                              self.feature_args['dataset_name'] + '/' +
@@ -299,13 +299,13 @@ if __name__ == "__main__":
     #  1) db_port
     #  2) dataset_name
     #  3) entity_col
-    #  4) dataset_size
+    #  4) batch_size
     #  5) weak_label_thresh
     #  6) cor_strength
     #  7) nb_cor_strength
     #
-    #  8) Number of batches for this dataset
-    #  9) Number of concurrent executions for this dataset
+    #  8) Initial batch
+    #  9) Final batch
     #
     # 10) db_suffix
 
@@ -342,14 +342,10 @@ if __name__ == "__main__":
         'entity_col': entity_col,
         'numerical_attrs': None,
         'do_quantization': False,
-        'tuples_to_read_list': [int(int(sys.argv[4]) / int(sys.argv[8]))] * int(int(sys.argv[8]) / int(sys.argv[9])),
-        'tuples_already_featurized_list': [],
+        'tuples_to_read_list': [int(sys.argv[4])] * (int(sys.argv[9]) - int(sys.argv[8]) + 1),
+        'tuples_already_featurized_list': [int(sys.argv[4])] * (int(sys.argv[8]) - 1),
         'db_suffix': int(sys.argv[10])
     }
-
-    for j in range(feature_args['db_suffix'] - 1):
-        for batch in feature_args['tuples_to_read_list']:
-            feature_args['tuples_already_featurized_list'].append(batch)
 
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
