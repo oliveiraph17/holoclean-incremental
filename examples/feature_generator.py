@@ -199,8 +199,7 @@ class Executor:
 
         # Dumps the tensors for every batch to a different file if 'current' batch is the last one regarding the full
         # dataset to save global features that correspond to the statistics for the whole dataset.
-        if len(batches_read) == (len(self.feature_args['tuples_already_featurized_list']) +
-                                 len(self.feature_args['tuples_to_read_list'])):
+        if self.feature_args['generate_global_features']:
             base_path = self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '_global_'
 
             # Dumps again the files regarding the last batch but with different names.
@@ -308,6 +307,7 @@ if __name__ == "__main__":
     #  9) Final batch
     #
     # 10) db_suffix
+    # 11) generate_global_features (0 or 1)
 
     # Default parameters for HoloClean.
     hc_args = {
@@ -344,7 +344,8 @@ if __name__ == "__main__":
         'do_quantization': False,
         'tuples_to_read_list': [int(sys.argv[4])] * (int(sys.argv[9]) - int(sys.argv[8]) + 1),
         'tuples_already_featurized_list': [int(sys.argv[4])] * (int(sys.argv[8]) - 1),
-        'db_suffix': int(sys.argv[10])
+        'db_suffix': int(sys.argv[10]),
+        'generate_global_features': bool(int(sys.argv[11]))
     }
 
     # Runs the default example.
