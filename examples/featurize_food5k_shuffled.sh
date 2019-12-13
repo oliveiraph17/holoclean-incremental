@@ -4,30 +4,23 @@
 source ../set_env.sh
 
 script="feature_generator.py"
-if [ $# -eq 1 ] ; then
-  script="$1"
-fi
+# if [ $# -eq 1 ] ; then
+#   script="$1"
+# fi
 
-db_port=5432
+db_port=$3
 dataset_name="food5k_shuffled"
 entity_col="_tid_"
 dataset_size=5000
 weak_label_thresh=0.6
 cor_strength=0.2
 nb_cor_strength=0.3
-number_of_batches=100
-number_of_executions=4
+init_batch=$1
+final_batch=$2
+db_suffix=$init_batch
+global=0
 
-db_suffix=1
-python $script $db_port $dataset_name $entity_col $dataset_size $weak_label_thresh $cor_strength $nb_cor_strength $number_of_batches $number_of_executions $db_suffix 2> output_"$dataset_name"_"$db_suffix".log &
-
-db_suffix=2
-python $script $db_port $dataset_name $entity_col $dataset_size $weak_label_thresh $cor_strength $nb_cor_strength $number_of_batches $number_of_executions $db_suffix 2> output_"$dataset_name"_"$db_suffix".log &
-
-db_suffix=3
-python $script $db_port $dataset_name $entity_col $dataset_size $weak_label_thresh $cor_strength $nb_cor_strength $number_of_batches $number_of_executions $db_suffix 2> output_"$dataset_name"_"$db_suffix".log &
-
-db_suffix=4
-python $script $db_port $dataset_name $entity_col $dataset_size $weak_label_thresh $cor_strength $nb_cor_strength $number_of_batches $number_of_executions $db_suffix 2> output_"$dataset_name"_"$db_suffix".log &
+createdb -p $db_port -U holocleanuser -O holocleanuser -w -e holo_"$dataset_name"_"$db_suffix"
+python $script $db_port $dataset_name $entity_col $batch_size $weak_label_thresh $cor_strength $nb_cor_strength $init_batch $final_batch $db_suffix $global 2> output_"$dataset_name"_"$db_suffix".log &
 
 wait

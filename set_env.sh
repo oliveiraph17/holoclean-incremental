@@ -5,4 +5,5 @@ echo "Holoclean home directory: $HOLOCLEANHOME"
 export PYTHONPATH="$PYTHONPATH:$HOLOCLEANHOME"
 export PATH="$PATH:$HOLOCLEANHOME"
 echo $PATH
+export PGPASSWORD="abcd1234"
 echo "Environment variables set!"
