@@ -160,7 +160,7 @@ class LoadFeatFeaturizedDataset:
                     # Discards the cells whose fixed cell status is NOT_SET (0) and keeps WEAK_LABEL or SINGLE_VALUE.
                     weak_labelled_cells = (self.feat['fixed'][attr] > 0)
                     # Removes from dirty cells those cells that were weak-labelled.
-                    dirty_cells = (dirty_cells > 0) - weak_labelled_cells
+                    dirty_cells = (dirty_cells > 0).long() - weak_labelled_cells.long()
                 train_idx = ((not_null_labels.long() - (dirty_cells > 0).long()) > 0).nonzero()[:, 0]
 
             else:
@@ -217,16 +217,20 @@ class LoadFeatFeaturizedDataset:
     def get_evaluation_metrics(self, Y_pred, skipping=False):
         feat = self.feat_skipping if skipping else self.feat_last
 
-        eval_metrics = {'total_errors': {}, 'potential_errors': {}, 'total_repairs': {}, 'correct_repairs': {},
-                        'detected_errors': {}, 'total_repairs_grdt_correct': {}, 'total_repairs_grdt_incorrect': {},
-                        'precision': {}, 'recall': {}, 'repairing_recall': {}, 'f1': {}, 'repairing_f1': {}, }
+        eval_metrics = {'dk_cells': {}, 'training_cells': {}, 'precision': {}, 'recall': {}, 'repairing_recall': {},
+                        'f1': {}, 'repairing_f1': {}, 'detected_errors': {}, 'total_errors': {}, 'correct_repairs': {},
+                        'total_repairs': {}, 'total_repairs_grdt': {}, 'total_repairs_grdt_correct': {},
+                        'total_repairs_grdt_incorrect': {}, 'rmse': {}}
+
+        incorrect_repairs = {}
 
         for attr in self.ds.get_active_attributes():
+            # TODO: set correctly the rmse.
             for name in eval_metrics.keys():
                 eval_metrics[name][attr] = 0
 
             # Computes detected errors: counts how many cells were detected by at least one error detector.
-            eval_metrics['potential_errors'][attr] = self.infer_idx[attr].size(0)
+            eval_metrics['dk_cells'][attr] = self.infer_idx[attr].size(0)
 
             # Discards from the metrics cells whose ground-truth is null or it was not provided (closed-world).
             provided_grdt_idx = (feat['labels']['truth'][attr] != -2).nonzero()[:, 0]
@@ -239,7 +243,7 @@ class LoadFeatFeaturizedDataset:
                                     feat['labels']['truth'][attr].index_select(0, provided_grdt_idx))
             eval_metrics['total_errors'][attr] = sum(total_errors).item()
 
-            if eval_metrics['potential_errors'][attr] == 0:
+            if eval_metrics['dk_cells'][attr] == 0:
                 continue
 
             # Computes detected errors after inference: counts how many dirty cells were repaired regardless of
@@ -285,6 +289,25 @@ class LoadFeatFeaturizedDataset:
                          feat['labels']['truth'][attr].index_select(0, rep_grdt_idx).squeeze())
             ).item()
 
+            # Logs the incorrect repairs (i.e., init value != inferred value and inferred value != ground-truth).
+            incorrect_tensor = torch.ne(inf_val_id.index_select(0, repaired_cells_idx),
+                                         feat['labels']['truth'][attr].index_select(0, rep_grdt_idx).squeeze())
+            incorrect_tensor_idx = incorrect_tensor.nonzero()[:, 0]
+            if incorrect_tensor_idx.nelement() > 0:
+                incorrect_feat_ix = rep_grdt_idx.index_select(0, incorrect_tensor_idx)
+                incorrect_inf_ix = repaired_cells_idx.index_select(0, incorrect_tensor_idx)
+                tt = feat['tids'][attr].index_select(0, incorrect_feat_ix).squeeze().tolist()
+                pp = inf_val_id.index_select(0, incorrect_inf_ix).squeeze().tolist()
+                th = feat['labels']['truth'][attr].index_select(0, incorrect_feat_ix).squeeze().tolist()
+                pps = Y_pred[attr].index_select(0, incorrect_inf_ix).tolist()
+                if incorrect_tensor_idx.nelement() > 1:
+                    incorrect_repairs[attr] = list(zip(tt, pp, th, pps))
+                else:
+                    # Forces the tuple not to be converted into a number of list elements but be appended as a tuple.
+                    fake_list = []
+                    fake_list.append((tt, pp, th, pps))
+                    incorrect_repairs[attr] = fake_list
+
             # Computes repairs on incorrect cells: counts how many repairs were made in dirty cells regardless
             # of being correct repairs or not (i.e., init value != inferred value and
             # init_value != ground-truth).
@@ -300,8 +323,10 @@ class LoadFeatFeaturizedDataset:
                          feat['labels']['truth'][attr].index_select(0, rep_grdt_idx))
             ).item()
 
-            if (eval_metrics['total_repairs_grdt_correct'][attr] +
-                    eval_metrics['total_repairs_grdt_incorrect'][attr]) > 0:
+            eval_metrics['total_repairs_grdt'][attr] = eval_metrics['total_repairs_grdt_correct'][attr] +\
+                                                       eval_metrics['total_repairs_grdt_incorrect'][attr]
+
+            if (eval_metrics['total_repairs_grdt'][attr]) > 0:
                 eval_metrics['precision'][attr] = (eval_metrics['correct_repairs'][attr] /
                                                    (eval_metrics['total_repairs_grdt_correct'][attr] +
                                                     eval_metrics['total_repairs_grdt_incorrect'][attr]))
@@ -326,4 +351,4 @@ class LoadFeatFeaturizedDataset:
                                             (eval_metrics['precision'][attr] +
                                              eval_metrics['repairing_recall'][attr]))
 
-        return eval_metrics
+        return eval_metrics, incorrect_repairs
