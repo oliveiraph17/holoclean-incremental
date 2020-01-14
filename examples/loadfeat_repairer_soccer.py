@@ -286,7 +286,6 @@ if __name__ == "__main__":
     else:
         entity_col = '_tid_'
     dataset_name = sys.argv[1]
-
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
@@ -296,9 +295,9 @@ if __name__ == "__main__":
         'entity_col': entity_col,
         'numerical_attrs': None,
         'approach': 'monitoring',
-        'tuples_to_read_list': [324] * 100,
-        'active_attributes': ['ADDR_PCT_CD', 'BORO_NM', 'CRM_ATPT_CPTD_CD', 'JURISDICTION_CODE', 'JURIS_DESC', 'KY_CD',
-                              'LAW_CAT_CD', 'LOC_OF_OCCUR_DESC', 'OFNS_DESC,PATROL_BORO', 'PD_CD', 'PD_DESC', 'PREM_TYP_DESC'],
+        'tuples_to_read_list': [2000] * 100,
+        'active_attributes': ['name', 'surname', 'birthyear', 'birthplace', 'position', 'team',
+                              'city', 'stadium', 'season', 'manager'],
         'labels': 'weak',  # one of 'weak', 'init' or 'truth'
         'detectors': ['ErrorLoaderDetector']  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector']
     }
