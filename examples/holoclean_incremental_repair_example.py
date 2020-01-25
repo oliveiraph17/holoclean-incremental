@@ -37,6 +37,8 @@ class Executor:
         }
 
         for current_iteration in self.inc_args['iterations']:
+            self.hc_args['is_first_batch'] = True
+
             with open(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                       self.inc_args['dataset_name'] + '.csv') as dataset_file:
                 self.hc_args['current_iteration'] = current_iteration

@@ -66,11 +66,11 @@ def build_model_monitoring_input(total_tuples, percentage):
 
 
 datasets = [
-    ('hospital', None, None, False,
-     None,
-     [10] * 100, False, 1000, 0.01, 'NaiveBayes',
-     0.99, 10000, 0.6, 0.8,
-     'dk', False, None),
+    # ('hospital', None, None, False,
+    #  None,
+    #  [10] * 100, False, 1000, 0.01, 'NaiveBayes',
+    #  0.99, 10000, 0.6, 0.8,
+    #  'dk', False, None),
 
     ('hospital', None, None, False,
      None,
