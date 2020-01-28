@@ -704,7 +704,11 @@ class Dataset:
                     is_previous = self.raw_data_previously_repaired.df.loc[
                                       self.raw_data_previously_repaired.df['_tid_'] == tid].size > 0
                 else:
-                    is_previous = self.previous_dirty_rows_df.loc[self.previous_dirty_rows_df['_tid_'] == tid].size > 0
+                    if self.previous_dirty_rows_df.empty:
+                        is_previous = False
+                    else:
+                        is_previous = self.previous_dirty_rows_df\
+                                          .loc[self.previous_dirty_rows_df['_tid_'] == tid].size > 0
                 if is_previous:
                     updated_previous_values[tid] = []
 
@@ -750,8 +754,11 @@ class Dataset:
                     repaired_incoming_rows_df = repaired_df[
                         ~repaired_df['_tid_'].isin(self.raw_data_previously_repaired.df['_tid_'])]
                 else:
-                    repaired_incoming_rows_df = repaired_df[~repaired_df['_tid_'].isin(
-                        self.previous_dirty_rows_df['_tid_'])]
+                    if self.previous_dirty_rows_df.empty:
+                        repaired_incoming_rows_df = repaired_df
+                    else:
+                        repaired_incoming_rows_df = repaired_df[~repaired_df['_tid_'].isin(
+                            self.previous_dirty_rows_df['_tid_'])]
             else:
                 if self.env['train_using_all_batches']:
                     # Picks only tuples from the current batch (i.e., not (~) isin previous).

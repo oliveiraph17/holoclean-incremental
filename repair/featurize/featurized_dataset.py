@@ -107,7 +107,9 @@ class FeaturizedDataset:
             if self.env['train_using_all_batches']:
                 tids_from_previous_batches = self.ds.get_raw_data_previously_repaired()['_tid_'].tolist()
             elif self.env['repair_previous_errors']:
-                tids_from_previous_batches = self.ds.get_previous_dirty_rows()['_tid_'].tolist()
+                previous_dirty_rows_df = self.ds.get_previous_dirty_rows()
+                if not previous_dirty_rows_df.empty:
+                    tids_from_previous_batches = previous_dirty_rows_df['_tid_'].tolist()
 
         for tuple in tqdm(res):
             attr = tuple[0]
