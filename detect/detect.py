@@ -67,6 +67,10 @@ class DetectEngine:
                                                            AuxTables.dk_cells.name)
 
         results = self.ds.engine.execute_query(query)
-        df = pd.DataFrame(results, columns=results[0].keys())
+
+        if results:
+            df = pd.DataFrame(results, columns=results[0].keys())
+        else:
+            df = pd.DataFrame(results, columns=self.ds.raw_data.get_attributes())
 
         self.ds.set_previous_dirty_rows(df)
