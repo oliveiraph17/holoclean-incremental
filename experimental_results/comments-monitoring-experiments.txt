@@ -1,0 +1,225 @@
+-----------------------
+PRECISION X RECALL X F1
+-----------------------
+
+--------
+HOSPITAL
+--------
+
+- Estabilization batch (dk, incremental)
+All attributes: 6 (nice convergence, achieving 0.85+ F1 from this batch onwards, which shows the dataset order favors the model)
+1 HospitalName, City, PhoneNumber, Sample (zero precision forever)
+2 ProviderNumber, HospitalType
+3 CountyName, EmergencyService (with zero precision before 3)
+4 ZipCode
+5 State (huge oscilation before it)
+6 HospitalOwner (nice convergence), Stateavg (nice convergence)
+9 Condition (4 reaches 100%, then it gets worse for 5 and 6, then gets 100% in 7 and then worses again in 8, and finally 100% by 9)
+12 MeasureCode (improves up to 6, keeps stable in 7 and 8, then worses from 9 to 11, and stabilizes in 12)
+13 Address1, MeasureName
+20 Score (it achieves top quality in batch 7, but then oscilates and stabilizes at a lower quality in 20)
+
+- Estabilization batch (all, incremental)
+It seems to be all identical to dk (I checked for all attributes, Condition, and MeasureCode, and for them it was exactly the same behavior)
+
+- Estabilization batch (dk, global)
+All attributes: 7 (more visible improvements up to 5, then minor in 7; convergence similar to incremental in general but with slightly higher F1)
+2 Condition
+3 HospitalOwner
+3 MeasureCode (with almost 100% of F1), Address1
+32 Score (peak performance in 8 and then minor variations)
+
+- Estabilization batch (all, global)
+All attributes: 3
+For the other verified attributes, the behavior was the same as dk
+
+HOSPITAL_SHUFFLED
+- Estabilization batch (dk, incremental)
+All attributes: 3 (very well-behaved curves, but the recall steadily increasing from 0.2 to 0.8 until the last batch, which shows the power of global features)
+
+- Estabilization batch (dk, global)
+All attributes: 3 (very well-behaved curves, but achieving 0.9+ F1 from batch 6 onwards -- being trained up to 3)
+
+------
+FOOD5K
+------
+
+- Estabilization batch (dk, incremental)
+All attributes: 5 (nice convergence; F1 almost constant even though the features are incremental)
+1 inspectiontype, zip (very bad quality; it drops quicly to a little more than 0.2)
+2 address
+3 city (reaches 100% F1 as opposed to city with global features!)
+6 facilitytype (very stable; curiously, it reaches the best performance in batch 1)
+inspectiondate, license, results, risk, inpectiontype, state ==> zero precision
+
+- Estabilization batch (dk, global)
+All attributes: 4 (nice convergence; F1 almost constant, so global features don't affect that much this dataset)
+The same behavior of incremental for the attributes
+city ==> improves up to 9 (100% F1), then deteriorates the recall (and so F1) and stabilizes this way
+
+- Estabilization batch (all, incremental)
+All attributes: 9 (very nice convergence, with recall and precision curves crossing)
+all and dk performed very close in this dataset
+
+- Estabilization batch (all, global)
+All attributes: 9 (very nice convergence, similar to dk --with recall and precision curves crossing-- but even more constant F1)
+
+---------------
+FOOK5K_SHUFFLED
+---------------
+
+- for all/incremental/all_attributes, the precision starts worse than the non-shuffled version, but it stabilizes by batch 12 to a similar same precision
+- for dk/incremental/all_attributes, it stabilizes in the first batch!
+- for all/global/all_attributes, it stabilizes in batch 7 (very stable)
+- for dk/global/all_attributes, it also stabilizes in the first batch!
+
+-----
+NYPD6
+-----
+
+- dk/incremental/all_attributes: stabilizes in batch 2, with >81 F1; the incremental features show their impact for this dataset with a steadily increase in precision and recall
+- dk/global/all_attributes: stabilizes in batch 2, with ~80.27 F1
+- all/incremental/all_attributes: stabilizes in batch 2, with >65 F1
+- all/global/all_attributes: stabilizes in batch 6, but with very little difference after batch 2, with >65 F1 (very stable)
+
+- dk/incremental:
+ADDR_PCT_CD (low quality ~16%)
+1 BORO_NM, CRM_ATPT_CPTD_CD, KY_CD (stabilizes in batch 1 with almost >97% F1, with increasing F1 with incremental features)
+2 JURIS_DESC, JURISDICTION_CODE (stabilizes in batch 2 with almost >97% F1), PD_DESC (>90% F1)
+3 LOC_OF_OCCUR_DESC (with >78% F1), PD_CD (with >90% F1), PREM_TYP_DESC (with ~46% F1, very slightly difference from batch 2)
+5 LAW_CAT_CD (achieves best performance in batch 1, then drops a little bit in 3-4 and recovers in 5 ==> this doesn't happen for global features)
+OFNS_DESC, PATROL_BORO (error: index out of range)
+global features, in general, didn't show much improvement
+
+
+------
+SOCCER
+------
+
+errors:
+surname=18635
+season=4817
+city=6888
+position=956
+
+-----------------
+soccer/all/global
+- attributes:
+	- surname:
+	stabilizes at 1% (prec=0.4 f1=0.56)
+	presents oscilations with minor drops in precision that is recovered later	- season:
+	all results are almost identical to 1% (prec=0.36 and f1=0.47)
+	peak of precision (0.4) at 11%, raising up F1 to 0.51)
+	- city:
+	two peaks at 5% and 8%, with prec=0.62, recall=0.44 and f1=0.53, but then it keeps varying significantly with most cases prec=0.57, recall=0.38 and f1=0.45 (I analyzed up to 60% because the log is still incomplete)
+	- position:
+	awful performance
+	stabilizes at 2% (prec=0.1, recall=0.46, f1=0.18)
+	experiences a drop at 6% (prec=0.7, recall=0.46, f1=0.12) that is restored in the next batch
+
+----------------------	
+soccer/all/incremental
+- attributes:
+	- surname:
+	stabilizes at 1% and keeps always the same performance (prec=0.8, recall=0.4, f1=0.54)
+	- season:
+	peak performance at 1% (prec=0.54, recall=0.86, f1=0.67)
+	it drops considerable in 2% to prec=0.46, recall=0.73, f1=0.57 and keeps this way; drops again in 7% (f1=0.54) and even more in 27% (f1=0.52); then it keeps switching between these two last values up to 60%
+	- city:
+	two peaks at 5% and 8%, with prec=0.68, recall=0.46 and f1=0.55, but then it keeps varying significantly with most cases prec=0.61, recall=0.4 and f1=0.48 (I analyzed up to 60% because the log is still incomplete)
+	incremental was slightly better for city than global
+	- position:
+	awful performance (even worse than global)
+	stabilizes at 2% (prec=0.08, recall=0.46, f1=0.14)
+	small peak at 8% and other percentages (prec=0.095, recall=0.47, f1=0.16), but ends up with a slight drop
+
+---------------------	
+soccer/dk/incremental
+- attributes:
+	- surname:
+	stabilizes at 1% and keeps always the same performance (prec=0.97, recall=0.4, f1=0.57)
+	- season:
+	peak performance at 1% (prec and recall were not shown maybe due to an error, but f1 keeps from 0.885 to 0.85)
+	it drops considerable in 2% from 0.85 to 0.73 and keeps practically unchanged until 100%
+	- city:
+	peak at 2% with prec=0.87, recall=0.46 and f1=0.6, but then it keeps varying significantly with most cases prec=0.85, recall=0.4 and f1=0.55
+	- position:
+	good performance for dk
+	stabilizes at 1% (prec=1, recall=0.46, f1=0.63)
+	small peak in recall at 13% (prec=1, recall=0.47, f1=0.64)
+
+
+
+----------------------
+* RELATIVE DIRTINESS *
+----------------------
+
+------------------------
+hospital/all/incremental
+- finishes with 0.51 relative dirtiness
+- varies between ~0.49 and ~0.77
+- reaches peak only after 81%)
+==> the order favor HoloClean's model!
+
+---------------------------------
+hospital_shuffled/all/incremental
+- finishes with 0.63 relative dirtiness
+- varies between ~0.63 and ~1.06
+- reaches peak only after 55%)
+
+--------------------------------
+hospital_shuffled/dk/incremental
+- finishes with 0.21
+- peak in 12%
+- almost a zipfian curve (huge decrease in the beginning)
+
+----------------------
+food5k/all/incremental
+- finishes with 0.6 relative dirtiness
+- varies between ~0.59 and ~0.7
+
+-------------------------------
+food5k_shuffled/all/incremental
+- finishes with 0.57 relative dirtiness
+- varies between ~0.55 and ~0.6
+
+------------------------------
+food5k_shuffled/dk/incremental
+- finishes with 0.5
+- peak in 12% (0.492), then worsen and recover by 52% to ~0.5
+- almost a log curve (huge increase in the beginning), but decreasing after 20%
+
+---------------------
+nypd6/all/incremental
+- finishes with 0.71 relative dirtiness
+- varies increasing steadly from ~0.63  to 0.71 over batches
+- estabilizes around 0.71 of finish by 16%
+- reaches peak in 4% with 0.704
+
+--------------------
+nypd6/dk/incremental
+- finishes with 0.173
+- peak in 3%
+- almost a zipfian curve (huge decrease in the beginning)
+
+---------------------
+soccer/dk/incremental
+- relative dirtiness finishes with 0.545
+- peak in 1% (0.517)
+- "V"-shaped curve with minimum point at 14%
+
+----------------
+soccer/dk/global
+- finishes with 0.56
+- peaks in 39% and 45% (0.55)
+- "V"-shaped curve with minimum point at 14%, varying from 0.495 and 0.548
+
+----------------------
+soccer/all/incremental
+- the relative dirtiness drops from 2 to 1.2 (almost a zipfian curve) ==> worse than not cleaning!
+- peak in 1% (1.18)
+
+-----------------
+soccer/all/global
+- the relative dirtiness grows from 1.1 to 1.2 (almost a sinoidal mixed with a soft log curve) ==> worse than not cleaning!
+- peak in 11% (1.15)
