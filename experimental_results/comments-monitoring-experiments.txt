@@ -44,6 +44,14 @@ All attributes: 3 (very well-behaved curves, but achieving 0.9+ F1 from batch 6 
 FOOD5K
 ------
 
+Errors:
+address 	20
+city 	18
+dbaname 	1
+facilitytype 	250
+zip 	4
+
+
 - Estabilization batch (dk, incremental)
 All attributes: 5 (nice convergence; F1 almost constant even though the features are incremental)
 1 inspectiontype, zip (very bad quality; it drops quicly to a little more than 0.2)
@@ -77,6 +85,21 @@ FOOK5K_SHUFFLED
 NYPD6
 -----
 
+- Errors:
+ADDR_PCT_CD 	6479
+BORO_NM 	6479
+CRM_ATPT_CPTD_CD 	6479
+JURISDICTION_CODE 	6479
+JURIS_DESC 	6479
+KY_CD 	6479
+LAW_CAT_CD 	6479
+LOC_OF_OCCUR_DESC 	6479
+OFNS_DESC 	6479
+PATROL_BORO 	6479
+PD_CD 	6479
+PD_DESC 	6479
+PREM_TYP_DESC 	6479
+
 - dk/incremental/all_attributes: stabilizes in batch 2, with >81 F1; the incremental features show their impact for this dataset with a steadily increase in precision and recall
 - dk/global/all_attributes: stabilizes in batch 2, with ~80.27 F1
 - all/incremental/all_attributes: stabilizes in batch 2, with >65 F1
@@ -96,7 +119,7 @@ global features, in general, didn't show much improvement
 SOCCER
 ------
 
-errors:
+- Errors:
 surname=18635
 season=4817
 city=6888
