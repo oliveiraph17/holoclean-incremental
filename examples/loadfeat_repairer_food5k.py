@@ -243,23 +243,24 @@ class Executor:
             self.hc.experiment_quality_logger.info(';'.join(str(value) for value in log_entry))
 
     def run(self):
-        total_tuples = 0
         batch_number = 1
         number_of_batches = len(self.feature_args['tuples_to_read_list'])
 
         for batch_size in self.feature_args['tuples_to_read_list']:
-            total_tuples += batch_size
+            if batch_number > self.feature_args['last_batch']:
+                break
 
-            self.setup_hc_repair_engine(batch_number, batch_size)
-            self.train()
-            Y_pred = self.infer()
-            self.evaluate(Y_pred, batch_number, batch_number)
+            if batch_number >= self.feature_args['first_batch']:
+                self.setup_hc_repair_engine(batch_number, batch_size)
+                self.train()
+                Y_pred = self.infer()
+                self.evaluate(Y_pred, batch_number, batch_number)
 
-            number_of_skipping_batches = number_of_batches - batch_number
-            for i in range(number_of_skipping_batches):
-                self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
-                Y_pred = self.infer(skipping=True)
-                self.evaluate(Y_pred, batch_number, batch_number + i + 1, skipping=True)
+                number_of_skipping_batches = number_of_batches - batch_number
+                for i in range(number_of_skipping_batches):
+                    self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
+                    Y_pred = self.infer(skipping=True)
+                    self.evaluate(Y_pred, batch_number, batch_number + i + 1, skipping=True)
 
             batch_number += 1
 
@@ -299,7 +300,9 @@ if __name__ == "__main__":
         'active_attributes': ['inspectionid', 'dbaname', 'akaname', 'license', 'facilitytype', 'risk',
                               'address', 'city', 'state', 'zip', 'inspectiondate', 'inspectiontype', 'results'],
         'labels': 'weak',  # one of 'weak', 'init' or 'truth'
-        'detectors': ['ErrorLoaderDetector']  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector']
+        'detectors': ['ErrorLoaderDetector'],  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector']
+        'first_batch': int(sys.argv[5]),
+        'last_batch': int(sys.argv[6]),
     }
 
     # Runs the default example.
