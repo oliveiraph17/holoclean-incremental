@@ -1127,15 +1127,15 @@ class Dataset:
 
         return self.raw_data_previously_repaired.df
 
-    def load_stats(self):
+    def load_stats(self, base_path='/tmp/', batch_id=''):
         try:
-            with open('/tmp/' + self.raw_data.name + '_single_attr_stats.ujson',
+            with open(base_path + self.raw_data.name + batch_id + '_single_attr_stats.ujson',
                       encoding='utf-8') as f:
                 single_attr_stats = ujson.load(f)
-            with open('/tmp/' + self.raw_data.name + '_pair_attr_stats.ujson',
+            with open(base_path + self.raw_data.name + batch_id + '_pair_attr_stats.ujson',
                       encoding='utf-8') as f:
                 pair_attr_stats = ujson.load(f)
-            with open('/tmp/' + self.raw_data.name + '_num_tuples.txt',
+            with open(base_path + self.raw_data.name + batch_id + '_num_tuples.txt',
                       encoding='utf-8') as f:
                 num_tuples = int(f.readline())
 
@@ -1148,14 +1148,14 @@ class Dataset:
         except ValueError:
             raise Exception('ERROR while trying to load statistics.')
 
-    def save_stats(self):
-        with open('/tmp/' + self.raw_data.name + '_single_attr_stats.ujson', 'w',
+    def save_stats(self, base_path='/tmp/'):
+        with open(base_path + self.raw_data.name + '_single_attr_stats.ujson', 'w',
                   encoding='utf-8') as f:
             ujson.dump(self.single_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/' + self.raw_data.name + '_pair_attr_stats.ujson', 'w',
+        with open(base_path + self.raw_data.name + '_pair_attr_stats.ujson', 'w',
                   encoding='utf-8') as f:
             ujson.dump(self.pair_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/' + self.raw_data.name + '_num_tuples.txt', 'w',
+        with open(base_path + self.raw_data.name + '_num_tuples.txt', 'w',
                   encoding='utf-8') as f:
             f.write(str(self.total_tuples) + '\n')
 
