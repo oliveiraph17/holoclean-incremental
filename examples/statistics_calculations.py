@@ -162,7 +162,6 @@ if __name__ == "__main__":
     }
 
     # Default parameters for Executor.
-    # Default parameters for Executor.
     if sys.argv[4] == '_':
         entity_col = None
     else:
