@@ -162,12 +162,36 @@ if __name__ == "__main__":
     }
 
     # Default parameters for Executor.
-    # Default parameters for Executor.
     if sys.argv[4] == '_':
         entity_col = None
     else:
         entity_col = '_tid_'
     dataset_name = sys.argv[1]
+
+    if dataset_name == 'hospital' or dataset_name == 'hospital_shuffled':
+        active_attributes = ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
+                              'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
+                              'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg']
+        tuples_to_read = [10] * 100
+
+    elif dataset_name == 'food5k' or dataset_name == 'food5k_shuffled':
+        active_attributes = ['inspectionid', 'dbaname', 'akaname', 'license', 'facilitytype', 'risk',
+                              'address', 'city', 'state', 'zip', 'inspectiondate', 'inspectiontype', 'results']
+        tuples_to_read = [50] * 100
+
+    elif dataset_name == 'nypd6':
+        active_attributes = ['ADDR_PCT_CD', 'BORO_NM', 'CRM_ATPT_CPTD_CD', 'JURISDICTION_CODE', 'JURIS_DESC', 'KY_CD',
+                             'LAW_CAT_CD', 'LOC_OF_OCCUR_DESC', 'OFNS_DESC', 'PATROL_BORO', 'PD_CD', 'PD_DESC',
+                             'PREM_TYP_DESC']
+        tuples_to_read = [324] * 100
+
+    elif dataset_name == 'soccer':
+        active_attributes = ['name', 'surname', 'birthyear', 'birthplace', 'position', 'team',
+                              'city', 'stadium', 'season', 'manager'],
+        tuples_to_read = [2000] * 100
+    else:
+        raise ValueError('Unknown settings for dataset %s' % dataset_name)
+
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
@@ -177,10 +201,8 @@ if __name__ == "__main__":
         'entity_col': entity_col,
         'numerical_attrs': None,
         'approach': 'monitoring',
-        'tuples_to_read_list': [10] * 100,
-        'active_attributes': ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
-                              'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
-                              'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg'],
+        'tuples_to_read_list': tuples_to_read,
+        'active_attributes': active_attributes,
         'first_batch': int(sys.argv[5]),
         'last_batch': int(sys.argv[6]),
     }

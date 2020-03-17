@@ -5,6 +5,7 @@ import numpy as np
 import holoclean
 import os
 import logging
+import sys
 
 from repair.featurize.loadfeat_featurized_dataset import LoadFeatFeaturizedDataset
 
@@ -75,14 +76,15 @@ class Executor:
         if self.hc_args['global_features']:
             base_path += 'global_'
 
+        # Initializes the featurized dataset.
         self.hc.repair_engine.feat_dataset = LoadFeatFeaturizedDataset(self.hc.ds, self.hc.env, base_path)
         self.hc.repair_engine.feat_dataset.load_feat(batch_number, batch_size)
 
-    # noinspection PyPep8Naming
-    def train(self):
         # Sets up the models.
         self.hc.repair_engine.setup_repair_model()
 
+    # noinspection PyPep8Naming
+    def train(self):
         # Trains.
         tic = time.clock()
         total_training_cells = 0
@@ -263,6 +265,22 @@ class Executor:
 
             batch_number += 1
 
+    def run_infer_all(self):
+        batch_size = self.feature_args['tuples_to_read_list'][0]
+        self.hc_args['save_load_checkpoint'] = True
+
+        # We use batch 2 because the model is not loaded from disk for the first batch.
+        self.setup_hc_repair_engine(2, batch_size)
+
+        # We do not train because we use save_load_checkpoint.
+        for attr in self.hc.ds.get_active_attributes():
+            self.training_cells[attr] = 0
+
+        for i in range(self.feature_args['first_batch'], self.feature_args['last_batch'] + 1):
+            self.hc.repair_engine.feat_dataset.load_feat_skipping(0, batch_size, i)
+            Y_pred = self.infer(skipping=True)
+            self.evaluate(Y_pred, 100, i, skipping=True)
+
 
 if __name__ == "__main__":
     # Default parameters for HoloClean.
@@ -273,34 +291,69 @@ if __name__ == "__main__":
         'print_fw': True,
         'timeout': 3 * 60000,
         'incremental': False,
-        'infer_mode': 'dk',
-        'global_features': False,
+        'infer_mode': sys.argv[2],
+        'global_features': bool(int(sys.argv[3])),
         'log_repairing_quality': True,
         'log_execution_times': False,
         'log_feature_weights': True,
     }
 
     # Default parameters for Executor.
-    dataset_name = 'hospital'
+    if sys.argv[4] == '_':
+        entity_col = None
+    else:
+        entity_col = '_tid_'
+    dataset_name = sys.argv[1]
+
+    if dataset_name == 'hospital' or dataset_name == 'hospital_shuffled':
+        active_attributes = ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
+                              'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
+                              'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg']
+        tuples_to_read = [10] * 100
+
+    elif dataset_name == 'food5k' or dataset_name == 'food5k_shuffled':
+        active_attributes = ['inspectionid', 'dbaname', 'akaname', 'license', 'facilitytype', 'risk',
+                              'address', 'city', 'state', 'zip', 'inspectiondate', 'inspectiontype', 'results']
+        tuples_to_read = [50] * 100
+
+    elif dataset_name == 'nypd6':
+        active_attributes = ['ADDR_PCT_CD', 'BORO_NM', 'CRM_ATPT_CPTD_CD', 'JURISDICTION_CODE', 'JURIS_DESC', 'KY_CD',
+                             'LAW_CAT_CD', 'LOC_OF_OCCUR_DESC', 'OFNS_DESC', 'PATROL_BORO', 'PD_CD', 'PD_DESC',
+                             'PREM_TYP_DESC']
+        tuples_to_read = [324] * 100
+
+    elif dataset_name == 'soccer':
+        active_attributes = ['name', 'surname', 'birthyear', 'birthplace', 'position', 'team',
+                              'city', 'stadium', 'season', 'manager'],
+        tuples_to_read = [2000] * 100
+    else:
+        raise ValueError('Unknown settings for dataset %s' % dataset_name)
+
     feature_args = {
         'project_root': os.environ['HOLOCLEANHOME'],
         'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
         'feat_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/' + dataset_name + '/features/',
         'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
         'dataset_name': dataset_name,
-        'entity_col': None,
+        'entity_col': entity_col,
         'numerical_attrs': None,
         'approach': 'monitoring',
-        'tuples_to_read_list': [250] * 4,
-        'active_attributes': ['ProviderNumber', 'HospitalName', 'Address1', 'City', 'State', 'ZipCode', 'CountyName',
-                              'PhoneNumber', 'HospitalType', 'HospitalOwner', 'EmergencyService', 'Condition',
-                              'MeasureCode', 'MeasureName', 'Score', 'Sample', 'Stateavg'],
+        'tuples_to_read_list': tuples_to_read,
+        'active_attributes': active_attributes,
         'labels': 'weak',  # one of 'weak', 'init' or 'truth'
         'detectors': ['ErrorLoaderDetector'],  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector'],
-        'first_batch': 4,
-        'last_batch': 4,
+        'first_batch': int(sys.argv[5]),
+        'last_batch': int(sys.argv[6]),
     }
 
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
     executor.run()
+
+    # Runs the run_infer_all
+    # 1) Set save_load_checkpoint=True
+    # 2) Run for first_batch=1 and last_batch=1 to quickly generate checkpoints
+    # 3) Run for first_batch=100 and last_batch=100 to generate the checkpoint referring to the full dataset
+    # 4) Back up the checkpoint to avoid being overwritten
+    # 5) Run first_batch=1 and last_batch=100 after commenting executor.run() above and uncommenting the function below
+    # executor.run_infer_all()
