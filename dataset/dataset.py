@@ -111,6 +111,9 @@ class Dataset:
         # Boolean flag for loading statistics pre-computed using the whole dataset to generate global features.
         self.global_features = env['global_features']
 
+        # @warning: Changes for testing stats on clean cells.
+        self.data_df2 = None
+
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
                   exclude_attr_cols=None, numerical_attrs=None, store_to_db=True):
@@ -531,7 +534,18 @@ class Dataset:
         """
         # need to decode values into unicode strings since we do lookups via
         # unicode strings from Postgres
-        return data_df[[attr]].groupby([attr]).size().to_dict()
+
+        # @warning: Changes for testing stats on clean cells.
+        if self.data_df2 is None:
+            self.data_df2 = data_df
+            dk_cells_df = self.aux_table[AuxTables.dk_cells].df
+            attrs = dk_cells_df['attribute'].unique()
+            for at in attrs:
+                error_tids = dk_cells_df[dk_cells_df['attribute'] == at]['_tid_']
+                self.data_df2.loc[self.data_df2['_tid_'].isin(error_tids), [at]] = NULL_REPR
+
+        return self.data_df2[[attr]].groupby([attr]).size().to_dict()
+        # return data_df[[attr]].groupby([attr]).size().to_dict()
 
     def get_stats_pair(self, first_attr, second_attr, data_df):
         """
@@ -540,7 +554,9 @@ class Dataset:
             <second_val>: all values for second_attr that appear at least once with <first_val>
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
         """
-        tmp_df = data_df[[first_attr, second_attr]]\
+        # @warning: Changes for testing stats on clean cells.
+        tmp_df = self.data_df2[[first_attr, second_attr]]\
+        # tmp_df = data_df[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
             .size()\
             .reset_index(name="count")

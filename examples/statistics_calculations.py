@@ -5,7 +5,9 @@ import holoclean
 import os
 import sys
 import logging
+import copy
 
+from scipy.stats import entropy
 
 # noinspection PyPep8Naming,PyListCreation
 class Executor:
@@ -76,11 +78,14 @@ class Executor:
         if self.hc_args['global_features']:
             base_path += 'global_'
 
-    def compute_attribute_similarity(self, batch_number, batch_size):
+    def load_stats(self, batch_number, batch_size):
         base_path = self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/features/'
         current_batch_range = '_1-' + str(batch_number * batch_size)
-        self.hc.ds.total_tuples, self.hc.ds.single_attr_stats, self.hc.ds.pair_attr_stats = \
-            self.hc.ds.load_stats(base_path, current_batch_range)
+        return self.hc.ds.load_stats(base_path, current_batch_range)
+
+    def compute_attribute_similarity(self, batch_number, batch_size):
+        self.hc.ds.total_tuples, self.hc.ds.single_attr_stats, self.hc.ds.pair_attr_stats = self.load_stats(
+            batch_number, batch_size)
         correlations = self.hc.ds.compute_norm_cond_entropy_corr()
         return correlations
 
@@ -117,35 +122,174 @@ class Executor:
         return distances
 
 
-    def run(self):
-        batch_number = 1
-        number_of_batches = len(self.feature_args['tuples_to_read_list'])
+    def generate_attr_corr_and_weight_dist(self):
+        batch_number = self.feature_args['first_batch']
 
         for batch_size in self.feature_args['tuples_to_read_list']:
             if batch_number > self.feature_args['last_batch']:
                 break
 
-            if batch_number >= self.feature_args['first_batch']:
-                self.setup_hc_repair_engine(batch_number, batch_size)
+            self.setup_hc_repair_engine(batch_number, batch_size)
 
-                corr = self.compute_attribute_similarity(batch_number, batch_size)
-                corr_list = []
-                for attr in self.hc.ds.get_active_attributes():
-                    # Store the correlations in the order of active attributes to match the weights.
-                    corr_list.append([corr[attr][attr2] for attr2 in self.hc.ds.get_active_attributes()])
-                corr_array = np.array(corr_list)
+            corr = self.compute_attribute_similarity(batch_number, batch_size)
+            corr_list = []
+            for attr in self.hc.ds.get_active_attributes():
+                # Store the correlations in the order of active attributes to match the weights.
+                corr_list.append([corr[attr][attr2] for attr2 in self.hc.ds.get_active_attributes()])
+            corr_array = np.array(corr_list)
 
-                dist_array = self.get_weight_distance(batch_number)
-                dist_array = 1 - (dist_array / (np.max(dist_array) + np.spacing(0)))
+            dist_array = self.get_weight_distance(batch_number)
+            dist_array = 1 - (dist_array / (np.max(dist_array) + np.spacing(0)))
 
-                attr_ids = [[id] for id in np.arange(dist_array.shape[0])]
-                dist_array = np.append(attr_ids, dist_array, axis=1)
-                corr_array = np.append(attr_ids, corr_array, axis=1)
+            attr_ids = [[id] for id in np.arange(dist_array.shape[0])]
+            dist_array = np.append(attr_ids, dist_array, axis=1)
+            corr_array = np.append(attr_ids, corr_array, axis=1)
 
-                np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + \
-                           '_corr.csv', corr_array, delimiter=';')
-                np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + \
-                           '_dist.csv', dist_array, delimiter=';')
+            np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + \
+                       '_batch' + str(batch_number) + '_corr.csv', corr_array, delimiter=';')
+            np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + \
+                       '_batch' + str(batch_number) + '_dist.csv', dist_array, delimiter=';')
+
+            batch_number += 1
+
+    def compute_KL(self):
+        # This function compares current batch with the last training batch to try to skip training.
+
+        batch_number = self.feature_args['first_batch']
+        batch_size = self.feature_args['tuples_to_read_list'][batch_number - 1]
+        self.setup_hc_repair_engine(batch_number, batch_size)
+
+        smoothing_value = 0.0001
+        smoothing_count = 0
+        thresh = 0.015
+
+        stats1 = None
+        sum_freq1 = {}
+        kl = {}
+
+        for batch_size in self.feature_args['tuples_to_read_list'][self.feature_args['first_batch'] - 1:self.feature_args['last_batch']]:
+            stats2_full = {}
+            stats2_full['total_tuples'], stats2_full['single_attr_stats'], stats2_full['pair_attr_stats'] = self.load_stats(
+                batch_number, batch_size)
+
+            print('Batch: ' + str(batch_number))
+            count_retrain = 0
+
+            for attr1 in self.hc.ds.get_active_attributes():
+                retrain = False
+                kl[attr1] = {}
+                # Computes the total frequency for attr1 in stats2 to normalize the frequencies.
+                sum_freq2 = sum(stats2_full['single_attr_stats'][attr1].values())
+                stats2 = stats2_full['pair_attr_stats']
+                for attr2 in stats2[attr1].keys():
+                    # Normalizes the frequencies in stats2 to get a valid data distribution.
+                    for val1 in stats2[attr1][attr2].keys():
+                        for val2 in stats2[attr1][attr2][val1].keys():
+                            stats2[attr1][attr2][val1][val2] /= sum_freq2
+
+                    if batch_number > self.feature_args['first_batch']:
+                        # Smoothing of stats1. We assume that new values can appear (i.e., in stats2 but not in stats1)
+                        # but no one is removed from the distribution (i.e., in stats1 but not in stats2).
+                        stats1_attr1 = copy.deepcopy(stats1[attr1])
+                        smoothing_count = 0
+                        for val1 in stats2[attr1][attr2].keys():
+                            # Adds to stats1 new values for attr1 in stats2 as well as all its co-occurring values.
+                            if val1 not in stats1_attr1[attr2]:
+                                stats1_attr1[attr2][val1] = {}
+                                for val2 in stats2[attr1][attr2][val1].keys():
+                                    stats1_attr1[attr2][val1][val2] = smoothing_value
+                                    smoothing_count += 1
+                            else:
+                                # Adds to stats1 only new co-occurring values in stats2.
+                                for val2 in stats2[attr1][attr2][val1].keys():
+                                    if val2 not in stats1_attr1[attr2][val1]:
+                                        stats1_attr1[attr2][val1][val2] = smoothing_value
+                                        smoothing_count += 1
+
+                        # Smoothing stats2. This is needed for stats on clean cells as cells can be spotted as errors
+                        # in subsequent batches, so values in the distribution can disappear.
+                        stats2_attr1 = copy.deepcopy(stats2[attr1])
+                        smoothing_count2 = 0
+                        for val1 in stats1_attr1[attr2].keys():
+                            # Adds to stats2 removed values for attr1 in stats1 as well as all its co-occurring values.
+                            if val1 not in stats2_attr1[attr2]:
+                                stats2_attr1[attr2][val1] = {}
+                                for val2 in stats1_attr1[attr2][val1].keys():
+                                    stats2_attr1[attr2][val1][val2] = smoothing_value
+                                    smoothing_count2 += 1
+                            else:
+                                # Adds to stats1 only new co-occurring values in stats2.
+                                for val2 in stats1_attr1[attr2][val1].keys():
+                                    if val2 not in stats2_attr1[attr2][val1]:
+                                        stats2_attr1[attr2][val1][val2] = smoothing_value
+                                        smoothing_count2 += 1
+
+                        if smoothing_count > 0:
+                            smoothing_correction = smoothing_value * (smoothing_count / sum_freq1[attr1])
+                            for val1 in stats1_attr1[attr2].keys():
+                                for val2 in stats1_attr1[attr2][val1].keys():
+                                    # Smooths probabilities that do not correspond to new values.
+                                    # We consider that no actual probability is equal to the smoothing value.
+                                    if stats1_attr1[attr2][val1][val2] != smoothing_value:
+                                        stats1_attr1[attr2][val1][val2] -= smoothing_correction
+
+                        if smoothing_count2 > 0:
+                            smoothing_correction2 = smoothing_value * (smoothing_count2 / sum_freq2)
+                            for val1 in stats2_attr1[attr2].keys():
+                                for val2 in stats2_attr1[attr2][val1].keys():
+                                    # Smooths probabilities that do not correspond to new values.
+                                    # We consider that no actual probability is equal to the smoothing value.
+                                    if stats2_attr1[attr2][val1][val2] != smoothing_value:
+                                        stats2_attr1[attr2][val1][val2] -= smoothing_correction2
+
+                        # Generates the pdfs for (attr1, attr2) sorted by (val1, val2).
+                        probs_attr1_stats1_list = []
+                        probs_attr1_stats2_list = []
+                        for val1 in sorted(stats1_attr1[attr2].keys()):
+                            for val2 in sorted(stats1_attr1[attr2][val1].keys()):
+                                if val1 != '_nan_' and val2 != '_nan_':
+                                    probs_attr1_stats1_list.append(stats1_attr1[attr2][val1][val2])
+                                    probs_attr1_stats2_list.append(stats2_attr1[attr2][val1][val2])
+
+                        probs_attr1_stats1 = np.array(probs_attr1_stats1_list)
+                        probs_attr1_stats2 = np.array(probs_attr1_stats2_list)
+
+                        # Computes the K-L divergence.
+                        kl[attr1][attr2] = entropy(probs_attr1_stats1, probs_attr1_stats2)
+
+                        # Option 1) We retrain if at least one of the pairwise distributions regarding attr1 differs
+                        # more than the threshold.
+                        # if kl[attr1][attr2] > thresh:
+                        #     retrain = True
+                        #     print(str(batch_number) + ',' + attr1 + ',' + attr2 + ',' + str(kl[attr1][attr2]))
+
+                    else:
+                        # Saves the initial stats.
+                        stats1 = stats2
+                        sum_freq1[attr1] = sum_freq2
+                        #     print(str(batch_number) + ',' + attr1 + ',' + attr2 + ',' + str(kl[attr1][attr2]))
+
+                if batch_number > self.feature_args['first_batch']:
+                    # Option 2) We retrain if the "aggregated" KL weighted by the attribute correlations is larger than
+                    # the threshold multiplied by the number of attributes (to keep the threshold value proportional to
+                    # each single attribute).
+                    self.hc.ds.total_tuples, self.hc.ds.single_attr_stats, self.hc.ds.pair_attr_stats = \
+                        stats2_full['total_tuples'], stats2_full['single_attr_stats'], stats2_full['pair_attr_stats']
+                    correlations = self.hc.ds.compute_norm_cond_entropy_corr()
+
+                    weighted_kl = [kl[attr1][attr2] * correlations[attr1][attr2] for attr2 in kl[attr1].keys()]
+                    if sum(weighted_kl) / len(kl[attr1].values()) > thresh * len(kl[attr1].values()):
+                        retrain = True
+                        for attr2 in kl[attr1].keys():
+                            print(str(batch_number) + ',' + attr1 + ',' + attr2 + ',' + str(kl[attr1][attr2]))
+
+                if retrain:
+                    count_retrain += 1
+                    # Sets stats1 for attr1 to be the stats of the dataset used for retraining.
+                    stats1[attr1] = stats2[attr1]
+                    # Saves the new frequency of attr1.
+                    sum_freq1[attr1] = sum_freq2
+                    print('Updated stats1 for ' + attr1)
 
             batch_number += 1
 
@@ -209,4 +353,5 @@ if __name__ == "__main__":
 
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
-    executor.run()
+    # executor.generate_attr_corr_and_weight_dist()
+    executor.compute_KL()
