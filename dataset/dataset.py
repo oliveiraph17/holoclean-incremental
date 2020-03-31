@@ -555,8 +555,8 @@ class Dataset:
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
         """
         # @warning: Changes for testing stats on clean cells.
-        tmp_df = self.data_df2[[first_attr, second_attr]]\
         # tmp_df = data_df[[first_attr, second_attr]]\
+        tmp_df = self.data_df2[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
             .size()\
             .reset_index(name="count")
