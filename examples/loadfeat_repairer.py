@@ -84,7 +84,7 @@ class Executor:
         self.hc.repair_engine.setup_repair_model()
 
     # noinspection PyPep8Naming
-    def train(self):
+    def train(self, batch_number=None):
         # Trains.
         tic = time.clock()
         total_training_cells = 0
@@ -92,21 +92,22 @@ class Executor:
             self.hc.repair_engine.feat_dataset.get_training_data(self.feature_args['detectors'],
                                                                  self.feature_args['labels'])
         for attr in self.hc.ds.get_active_attributes():
-            self.training_cells[attr] = X_train[attr].size(0)
-            logging.info('Training model for %s with %d training examples (cells)', attr, self.training_cells[attr])
-            tic_attr = time.clock()
+            if batch_number is None or batch_number in self.feature_args['train_batches'][attr]:
+                self.training_cells[attr] = X_train[attr].size(0)
+                logging.info('Training model for %s with %d training examples (cells)', attr, self.training_cells[attr])
+                tic_attr = time.clock()
 
-            self.hc.repair_engine.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr],
-                                                               self.hc.env['epochs'])
+                self.hc.repair_engine.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr],
+                                                                   self.hc.env['epochs'])
 
-            if self.hc.env['save_load_checkpoint']:
-                tic_checkpoint = time.clock()
-                self.hc.repair_engine.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.hc.ds.raw_data.name
-                                                                         + '-' + attr)
-                logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
+                if self.hc.env['save_load_checkpoint']:
+                    tic_checkpoint = time.clock()
+                    self.hc.repair_engine.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.hc.ds.raw_data.name
+                                                                             + '-' + attr)
+                    logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
 
-            logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
-            total_training_cells += self.training_cells[attr]
+                logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
+                total_training_cells += self.training_cells[attr]
         toc = time.clock()
 
         logging.info('DONE training repair model')
@@ -247,6 +248,8 @@ class Executor:
         batch_number = 1
         number_of_batches = len(self.feature_args['tuples_to_read_list'])
 
+        tic = time.time()
+
         for batch_size in self.feature_args['tuples_to_read_list']:
             if batch_number > self.feature_args['last_batch']:
                 break
@@ -265,6 +268,9 @@ class Executor:
 
             batch_number += 1
 
+        toc = time.time()
+        print('Elapsed time: ', toc - tic)
+
     def run_infer_all(self):
         batch_size = self.feature_args['tuples_to_read_list'][0]
         self.hc_args['save_load_checkpoint'] = True
@@ -281,6 +287,34 @@ class Executor:
             Y_pred = self.infer(skipping=True)
             self.evaluate(Y_pred, 100, i, skipping=True)
 
+    def run_skipping(self):
+        batch_number = 1
+        number_of_batches = len(self.feature_args['tuples_to_read_list'])
+        self.hc_args['save_load_checkpoint'] = True
+
+        tic = time.time()
+
+        for batch_size in self.feature_args['tuples_to_read_list']:
+            if batch_number > self.feature_args['last_batch']:
+                break
+
+            if batch_number >= self.feature_args['first_batch']:
+                self.setup_hc_repair_engine(batch_number, batch_size)
+
+                # # Skip in predefined batches.
+                # if batch_number in self.feature_args['train_batches']:
+                #     self.train()
+
+                # Skip training based on train_batches.
+                self.train(batch_number)
+
+                Y_pred = self.infer()
+                self.evaluate(Y_pred, batch_number, batch_number)
+
+            batch_number += 1
+
+        toc = time.time()
+        print('Elapsed time: ', toc - tic)
 
 if __name__ == "__main__":
     # Default parameters for HoloClean.
@@ -341,14 +375,35 @@ if __name__ == "__main__":
         'tuples_to_read_list': tuples_to_read,
         'active_attributes': active_attributes,
         'labels': 'weak',  # one of 'weak', 'init' or 'truth'
-        'detectors': ['ErrorLoaderDetector'],  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector'],
+        'detectors': ['NullDetector', 'ViolationDetector'],  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector'],
         'first_batch': int(sys.argv[5]),
         'last_batch': int(sys.argv[6]),
+        # 'train_batches': [1, 2, 4, 8, 16, 32, 64],
+        'train_batches': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        'train_batches': {  # KL thresh = 0.015
+            'Address1': [1, 2, 4, 6, 9, 16, 31, 76],
+            'City': [1, 2, 4, 6, 10, 18, 37],
+            'Condition': [1, 2, 7, 12, 25],
+            'CountyName': [1, 2, 4, 6, 9, 17, 36],
+            'EmergencyService': [1, 2, 5, 10, 87],
+            'HospitalName': [1, 2, 4, 6, 9, 16, 31, 75],
+            'HospitalOwner': [1, 2, 4, 6, 11, 30],
+            'HospitalType': [1, 2, 5, 11],
+            'MeasureCode': [1, 2, 3, 5, 7, 10, 15, 24, 40, 71],
+            'MeasureName': [1, 2, 3, 5, 7, 11, 17, 27, 45, 82],
+            'PhoneNumber': [1, 2, 4, 6, 9, 16, 31, 74],
+            'ProviderNumber': [1, 2, 4, 6, 9, 16, 31, 74],
+            'Sample': [1, 2, 3, 4, 6, 9, 13, 18, 25, 35, 51, 80],
+            'Score': [1, 2, 3, 5, 8, 11, 16, 25, 85],
+            'State': [1, 2, 5, 11, 44],
+            'Stateavg': [1, 2, 3, 5, 7, 11, 17, 27, 79],
+            'ZipCode': [1, 2, 3, 5, 8, 13, 24, 54]
+        }
     }
 
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
-    executor.run()
+    # executor.run()
 
     # Runs the run_infer_all
     # 1) Set save_load_checkpoint=True
@@ -357,3 +412,6 @@ if __name__ == "__main__":
     # 4) Back up the checkpoint to avoid being overwritten
     # 5) Run first_batch=1 and last_batch=100 after commenting executor.run() above and uncommenting the function below
     # executor.run_infer_all()
+
+    # Runs the run_skipping
+    executor.run_skipping()

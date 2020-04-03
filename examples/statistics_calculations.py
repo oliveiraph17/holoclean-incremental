@@ -145,10 +145,12 @@ class Executor:
             dist_array = np.append(attr_ids, dist_array, axis=1)
             corr_array = np.append(attr_ids, corr_array, axis=1)
 
-            np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + \
-                       '_batch' + str(batch_number) + '_corr.csv', corr_array, delimiter=';')
-            np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + \
-                       '_batch' + str(batch_number) + '_dist.csv', dist_array, delimiter=';')
+            np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' + \
+                       self.feature_args['dataset_name'] + '_batch' + str(batch_number) + '_corr.csv',
+                       corr_array, delimiter=';')
+            np.savetxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' + \
+                       self.feature_args['dataset_name'] + '_batch' + str(batch_number) + '_dist.csv',
+                       dist_array, delimiter=';')
 
             batch_number += 1
 
