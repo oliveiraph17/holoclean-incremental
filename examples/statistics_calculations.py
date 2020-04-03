@@ -89,8 +89,36 @@ class Executor:
         correlations = self.hc.ds.compute_norm_cond_entropy_corr()
         return correlations
 
+    def correct_weight_file(self, attribute):
+        weight_log_path = self.weight_log_fpath + '_' + attribute + '_weight_log'
+        quality_log_path = self.weight_log_fpath + '_' + attribute + '_quality_log'
+
+        weight_df = pd.read_csv(weight_log_path + '.csv', sep=';')
+        quality_df = pd.read_csv(quality_log_path + '.csv', sep=';')
+
+        # Clear extra headers from the middle of the file.
+        weight_df = weight_df.loc[weight_df['w0'] != 'w0']
+        # Clear log lines not associated to training (but inferring).
+        quality_df = quality_df.loc[quality_df['train_batch'] == quality_df['infer_batch']]
+
+        # Align the indexes because when trying to assign a column of one DataFrame to another,
+        # pandas will try to align the indexes, and failing to do so, insert NaNs.
+        weight_df.index = quality_df.index
+
+        # Assign the columns. It works because the original row orders from the files correspond.
+        weight_df['infer_mode'] = quality_df['infer_mode']
+        weight_df['features'] = quality_df['features']
+
+        weight_df = weight_df.astype({'batch_number': 'int32'})
+        weight_df = weight_df.sort_values(by=['batch_number'])
+
+        weight_df.to_csv(weight_log_path + '_corrected.csv', index=False, sep=';')
+
     def get_weight_file(self, attr, batch_number):
         weight_log_path = self.weight_log_fpath + '_' + attr + '_weight_log_corrected.csv'
+        if not os.path.isfile(weight_log_path):
+            self.correct_weight_file(attr)
+
         weight_df = pd.read_csv(weight_log_path, sep=';')
         weight_df.drop_duplicates(keep='last', inplace=True)
         weight_df = weight_df.loc[(weight_df['infer_mode'] == self.infer_mode) & \
