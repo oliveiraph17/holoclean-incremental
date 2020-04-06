@@ -182,6 +182,85 @@ class Executor:
 
             batch_number += 1
 
+    def get_attribute_groups(self):
+        batch_number = self.feature_args['first_batch']
+
+        for batch_size in self.feature_args['tuples_to_read_list']:
+            if batch_number > self.feature_args['last_batch']:
+                break
+
+            data_corr = np.loadtxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' + \
+                       self.feature_args['dataset_name'] + '_batch' + str(batch_number) + '_corr.csv', delimiter=';')
+            data_dist = np.loadtxt(self.feature_args['log_dir'] + self.feature_args['dataset_name'] + '/' + \
+                       self.feature_args['dataset_name'] + '_batch' + str(batch_number) + '_dist.csv', delimiter=';')
+
+            # Computes distances between correlation vectors.
+            sim_corr_list = []
+            for corr_vec in data_corr[:, 1:]:
+                dist_corr_vec = np.linalg.norm(corr_vec - data_corr[:, 1:], ord=2, axis=1)
+                sim_corr_list.append(dist_corr_vec)
+
+            # Scales the distances to interval [0, 1].
+            sim_corr = np.array(sim_corr_list)
+            sim_corr = sim_corr / sim_corr.max()
+
+            # Grouping based on weights' distances. Remember to also change the comparison operator below.
+            # Weights' distance.
+            # thresh = 0.6
+            # groups_ds = data_dist[:, 1:]
+
+            # Grouping based on correlation.
+            thresh = 0.10
+            groups_ds = sim_corr
+
+            # Build the groups based on the threshold.
+            groups = [set([i]) for i in range(groups_ds.shape[0])]
+            for i in range(groups_ds.shape[0] - 1):
+                for j in range(i + 1, groups_ds.shape[1]):
+
+                    # Groups based on correlations.
+                    # Compares both i,j and j,i because conditional entropy is not symmetric.
+                    if groups_ds[i, j] <= thresh and groups_ds[j, i] <= thresh:
+
+                        #         # Groups based on distance between learned weights.
+                        #         if groups_ds[i, j] >= thresh:
+
+                        for idx, g in enumerate(groups):
+                            if i in g:
+                                group_i = idx
+                            if j in g:
+                                group_j = idx
+                        if group_i != group_j:
+                            groups[group_i].update(groups[group_j])
+                            del groups[group_j]
+            print('Batch ' + str(batch_number))
+            print(groups)
+            # Eliminate duplicated groups.
+            groups = list(set(frozenset(item) for item in groups))
+
+            ds_attrs = {}
+            ds_attrs['hospital_shuffled'] = ['Address1', 'City', 'Condition', 'CountyName', 'EmergencyService',
+                                             'HospitalName', 'HospitalOwner', 'HospitalType', 'MeasureCode',
+                                             'MeasureName', 'PhoneNumber', 'ProviderNumber', 'Sample', 'Score',
+                                             'State', 'Stateavg', 'ZipCode']
+
+            ds_attrs['food5k_shuffled'] = ['address', 'akaname', 'city', 'dbaname', 'facilitytype', 'inspectiondate',
+                                           'inspectionid', 'inspectiontype', 'license', 'results', 'risk', 'state',
+                                           'zip']
+
+            ds_attrs['nypd6'] = ['ADDR_PCT_CD', 'BORO_NM', 'CRM_ATPT_CPTD_CD', 'JURISDICTION_CODE', 'JURIS_DESC',
+                                 'KY_CD', 'LAW_CAT_CD', 'LOC_OF_OCCUR_DESC', 'OFNS_DESC', 'PATROL_BORO', 'PD_CD',
+                                 'PD_DESC', 'PREM_TYP_DESC']
+
+            ds_attrs['soccer'] = ['name', 'surname', 'birthyear', 'birthplace', 'position', 'team', 'city', 'stadium',
+                                  'season', 'manager']
+
+            print(groups)
+            for group in groups:
+                print([ds_attrs[self.feature_args['dataset_name']][i] for i in group])
+
+            batch_number += 1
+
     def compute_KL(self):
         # This function compares current batch with the last training batch to try to skip training.
 
@@ -384,4 +463,5 @@ if __name__ == "__main__":
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
     # executor.generate_attr_corr_and_weight_dist()
-    executor.compute_KL()
+    executor.get_attribute_groups()
+    # executor.compute_KL()
