@@ -58,7 +58,8 @@ hc_args = {
 inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
+    'log_dir': '/home/pholiveira/experimental_results/',
+    # 'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/'
     'dataset_name': None,
     'entity_col': None,
     'numerical_attrs': None,
@@ -67,15 +68,13 @@ inc_args = {
     'iterations': [0],
 }
 
-# datasets = [('Full', 'hospital_shuffled', '_tid_', [1000], 0.99, 0.6, 0.8),
-#             ('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 0.6, 0.8),
-#             ('Full', 'food5k_shuffled', '_tid_', [5000], 0.6, 0.2, 0.3),
-#             ('A', 'food5k_shuffled', '_tid_', [50] * 100, 0.6, 0.2, 0.3),
-#             ('Full', 'nypd6', None, [32399], 0.9, 0.05, 0.3),
-#             ('A', 'nypd6', None, [324] * 100, 0.9, 0.05, 0.3),
-#             ('A', 'soccer', None, [2000] * 100, 0.9, 0.05, 0.3)]
-
-datasets = [('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 0.6, 0.8)]
+datasets = [('Full', 'hospital_shuffled', '_tid_', [1000], 0.99, 0.6, 0.8),
+            ('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 0.6, 0.8),
+            ('Full', 'food5k_shuffled', '_tid_', [5000], 0.6, 0.2, 0.3),
+            ('A', 'food5k_shuffled', '_tid_', [50] * 100, 0.6, 0.2, 0.3),
+            ('Full', 'nypd6', None, [32399], 0.9, 0.05, 0.3),
+            ('A', 'nypd6', None, [324] * 100, 0.9, 0.05, 0.3),
+            ('A', 'soccer', None, [2000] * 100, 0.9, 0.05, 0.3)]
 
 avg_time_iterations = None
 
