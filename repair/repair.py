@@ -117,12 +117,18 @@ class RepairEngine:
         X_pred, mask_pred, infer_idx = self.feat_dataset.get_infer_data()
         Y_pred = self.repair_model.infer_values(X_pred, mask_pred)
         distr_df, infer_val_df = self.get_infer_dataframes(infer_idx, Y_pred)
-        self.ds.generate_aux_table(AuxTables.cell_distr, distr_df, store=True, index_attrs=['_vid_'])
-        self.ds.generate_aux_table(AuxTables.inf_values_idx, infer_val_df, store=True, index_attrs=['_vid_'])
-        toc = time.clock()
-        status = "DONE inferring repairs."
-        infer_time = toc - tic
-        return status, infer_time
+        if not distr_df.empty:
+            self.ds.generate_aux_table(AuxTables.cell_distr, distr_df, store=True, index_attrs=['_vid_'])
+            self.ds.generate_aux_table(AuxTables.inf_values_idx, infer_val_df, store=True, index_attrs=['_vid_'])
+            status = "DONE inferring repairs."
+            toc = time.clock()
+            infer_time = toc - tic
+            inference_occurred = True
+        else:
+            status = "DONE no cells to infer."
+            infer_time = 0.0
+            inference_occurred = False
+        return status, infer_time, inference_occurred
 
     def get_infer_dataframes(self, infer_idx, Y_pred):
         distr = []

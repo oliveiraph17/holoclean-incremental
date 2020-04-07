@@ -508,7 +508,7 @@ class Session:
         return self.dc_parser.get_dcs()
 
     def detect_errors(self, detect_list):
-        status, detect_time, dk_cells_count = self.detect_engine.detect_errors(detect_list)
+        status, detect_time, dk_cells_count, found_errors = self.detect_engine.detect_errors(detect_list)
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
         if self.env['log_repairing_quality']:
@@ -516,6 +516,7 @@ class Session:
             self.repairing_quality_metrics.append(str(dk_cells_count))
         if self.env['log_execution_times']:
             self.execution_times.append(str(detect_time))
+        return found_errors
 
     def disable_quantize(self):
         self.do_quantization = False
@@ -562,8 +563,8 @@ class Session:
 
 
 
-    def generate_domain(self):
-        status, domain_time = self.domain_engine.setup()
+    def generate_domain(self, found_errors=True):
+        status, domain_time = self.domain_engine.setup(found_errors)
         logging.info(status)
         logging.debug('Time to generate the domain: %.2f secs', domain_time)
         if self.env['log_execution_times']:
@@ -575,15 +576,15 @@ class Session:
         """
         self.domain_engine.run_estimator()
 
-    def repair_errors(self, featurizers):
-        return self._repair_errors(featurizers)
+    def repair_errors(self, featurizers, found_errors=True):
+        return self._repair_errors(featurizers, found_errors=found_errors)
 
     def repair_validate_errors(self, featurizers, fpath, tid_col, attr_col,
             val_col, validate_period, na_values=None):
         return self._repair_errors(featurizers, fpath, tid_col, attr_col,
                 val_col, na_values, validate_period)
 
-    def _repair_errors(self, featurizers, fpath=None,
+    def _repair_errors(self, featurizers, found_errors=True, fpath=None,
             tid_col=None, attr_col=None, val_col=None, na_values=None,
             validate_period=None):
         """
@@ -599,13 +600,21 @@ class Session:
         :param na_values: (Any) how na_values are represented in the data.
         :param validate_period: (int) perform validation every nth epoch.
         """
-        status, feat_time = self.repair_engine.setup_featurized_ds(featurizers)
+        if found_errors:
+            status, feat_time = self.repair_engine.setup_featurized_ds(featurizers)
+        else:
+            status = "DONE featurizers were not set up."
+            feat_time = 0.0
         logging.info(status)
         logging.debug('Time to featurize data: %.2f secs', feat_time)
         if self.env['log_execution_times']:
             self.execution_times.append(str(feat_time))
 
-        status, setup_time = self.repair_engine.setup_repair_model()
+        if found_errors:
+            status, setup_time = self.repair_engine.setup_repair_model()
+        else:
+            status = "DONE repair model was not set up."
+            setup_time = 0.0
         logging.info(status)
         logging.debug('Time to setup repair model: %.2f secs', feat_time)
         if self.env['log_execution_times']:
@@ -620,7 +629,12 @@ class Session:
         else:
             # If validation fpath provided, fit and validate
             if fpath is None:
-                status, fit_time, training_cells_count = self.repair_engine.fit_repair_model()
+                if found_errors:
+                    status, fit_time, training_cells_count = self.repair_engine.fit_repair_model()
+                else:
+                    status = "DONE repair model was not fit."
+                    fit_time = 0.0
+                    training_cells_count = 0
             else:
                 # Set up validation set
                 name = self.ds.raw_data.name + '_clean'
@@ -629,8 +643,15 @@ class Session:
                 logging.info(status)
                 logging.debug('Time to evaluate repairs: %.2f secs', load_time)
 
-                status, fit_time, training_cells_count = self.repair_engine.fit_validate_repair_model(self.eval_engine,
-                        validate_period)
+                if found_errors:
+                    status, fit_time, training_cells_count = self.repair_engine.fit_validate_repair_model(
+                        self.eval_engine,
+                        validate_period
+                    )
+                else:
+                    status = "DONE repair model with validation was not fit."
+                    fit_time = 0.0
+                    training_cells_count = 0
 
             logging.info(status)
             logging.debug('Time to fit repair model: %.2f secs', fit_time)
@@ -639,24 +660,37 @@ class Session:
             if self.env['log_execution_times']:
                 self.execution_times.append(str(fit_time))
 
-        status, infer_time = self.repair_engine.infer_repairs()
+        if found_errors:
+            status, infer_time, inference_occurred = self.repair_engine.infer_repairs()
+        else:
+            status = "DONE no errors found, thus no cells to infer."
+            infer_time = 0.0
+            inference_occurred = False
         logging.info(status)
         logging.debug('Time to infer correct cell values: %.2f secs', infer_time)
         if self.env['log_execution_times']:
             self.execution_times.append(str(infer_time))
 
-        status, get_inferred_values_time = self.ds.get_inferred_values()
+        if inference_occurred:
+            status, get_inferred_values_time = self.ds.get_inferred_values()
+        else:
+            status = "DONE no inferred values to get."
+            get_inferred_values_time = 0.0
         logging.info(status)
         logging.debug('Time to collect inferred values: %.2f secs', get_inferred_values_time)
         if self.env['log_execution_times']:
             self.execution_times.append(str(get_inferred_values_time))
 
-        repaired_table_copy_time = 0
-        save_stats_time = 0
-        if self.env['incremental']:
-            status, time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
+        repaired_table_copy_time = 0.0
+        save_stats_time = 0.0
+        if inference_occurred:
+            if self.env['incremental']:
+                status, time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
+            else:
+                status, time = self.ds.get_repaired_dataset()
         else:
-            status, time = self.ds.get_repaired_dataset()
+            status = "DONE no repaired dataset to generate."
+            time = 0.0
         logging.info(status)
         logging.debug('Time to store repaired dataset: %.2f secs', time)
         if self.env['log_execution_times']:
@@ -671,9 +705,11 @@ class Session:
             status, time = self.repair_engine.get_featurizer_weights()
             logging.info(status)
             logging.debug('Time to store featurizer weights: %.2f secs', time)
-            return status
+            return status, inference_occurred
 
-    def evaluate(self, fpath, tid_col, attr_col, val_col, na_values=None):
+        return inference_occurred
+
+    def evaluate(self, fpath, tid_col, attr_col, val_col, na_values=None, inference_occurred=True):
         """
         evaluate generates an evaluation report with metrics (e.g. precision,
         recall) given a test set.
@@ -695,19 +731,23 @@ class Session:
         logging.info(status)
         logging.debug('Time to generate report: %.2f secs', report_time)
         if self.env['log_repairing_quality']:
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'precision')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'recall')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'repair_recall')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'f1')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'repair_f1')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'detected_errors')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_errors')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'correct_repairs')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_correct')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_incorrect')))
-            self.repairing_quality_metrics.append(str(getattr(eval_report, 'rmse')))
+            if inference_occurred:
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'precision')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'recall')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'repair_recall')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'f1')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'repair_f1')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'detected_errors')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_errors')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'correct_repairs')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_correct')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'total_repairs_grdt_incorrect')))
+                self.repairing_quality_metrics.append(str(getattr(eval_report, 'rmse')))
+            else:
+                for i in range(13):
+                    self.repairing_quality_metrics.append(str(0.0))
 
             self.experiment_quality_logger.info(';'.join(self.repairing_quality_metrics))
 

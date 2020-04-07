@@ -1,15 +1,38 @@
 from examples.holoclean_incremental_repair_example import Executor
 
 import os
+import resource
+
+from time import sleep
+from concurrent.futures import ThreadPoolExecutor
+
+
+class MemoryMonitor:
+    def __init__(self):
+        self.keep_measuring = True
+
+    def measure_usage(self):
+        max_usage = 0
+        while self.keep_measuring:
+            # Keeps track of the maximum resident set size (in KB since Linux 2.6.26).
+            max_usage = max(
+                max_usage,
+                resource.getrusage(resource.RUSAGE_SELF).ru_maxrss +
+                resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+            )
+            sleep(0.01)
+
+        return max_usage
+
 
 hc_args = {
-    # 'detectors': [('nulldetector', 'NullDetector', False),
-    #               ('violationdetector', 'ViolationDetector', False)],
-    'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+    'detectors': [('nulldetector', 'NullDetector', False),
+                  ('violationdetector', 'ViolationDetector', False)],
+    # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
     'weak_label_thresh': 0.99,
-    'max_domain': 50,
+    'max_domain': 1000000,
     'cor_strength': 0.6,
     'nb_cor_strength': 0.8,
     'epochs': 20,
@@ -17,8 +40,6 @@ hc_args = {
     'verbose': False,
     'timeout': 3*60000,
     'estimator_type': 'NaiveBayes',
-    'epochs_convergence': 3,
-    'convergence_thresh': 0.01,
     'current_iteration': None,
     'current_batch_number': None,
     'log_repairing_quality': True,
@@ -46,25 +67,51 @@ inc_args = {
     'iterations': [0],
 }
 
-datasets = [('hospital', None, [20] * 2, 0.99, 10000, 0.6, 0.8),
-            ('food5k_shuffled', '_tid_', [1000] * 5, 0.6, 1000, 0.2, 0.3)]
+# datasets = [('Full', 'hospital_shuffled', '_tid_', [1000], 0.99, 0.6, 0.8),
+#             ('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 0.6, 0.8),
+#             ('Full', 'food5k_shuffled', '_tid_', [5000], 0.6, 0.2, 0.3),
+#             ('A', 'food5k_shuffled', '_tid_', [50] * 100, 0.6, 0.2, 0.3),
+#             ('Full', 'nypd6', None, [32399], 0.9, 0.05, 0.3),
+#             ('A', 'nypd6', None, [324] * 100, 0.9, 0.05, 0.3),
+#             ('A', 'soccer', None, [2000] * 100, 0.9, 0.05, 0.3)]
 
-approaches = ['A', 'B', 'C', 'C+', 'B+', 'Full']
-avg_time_iterations = [1, 2]  # or None
+datasets = [('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 0.6, 0.8)]
 
-for (dataset_name, entity_col, tuples_to_read_list,
-     weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
+avg_time_iterations = None
+
+
+def run_executor():
+    with ThreadPoolExecutor() as thread_pool_executor:
+        memory_monitor = MemoryMonitor()
+        memory_monitor_thread = thread_pool_executor.submit(memory_monitor.measure_usage)
+        try:
+            executor = Executor(hc_args, inc_args)
+
+            executor_thread = thread_pool_executor.submit(executor.run)
+            executor_thread.result()
+        finally:
+            memory_monitor.keep_measuring = False
+
+            max_usage_kb = memory_monitor_thread.result()
+            # Writes to file the maximum resident set size in GB.
+            max_usage_gb = (max_usage_kb / 1024) / 1024
+            with open(inc_args['log_dir'] + inc_args['dataset_name'] + '/' +
+                      inc_args['approach'] + '_memory_log.csv', 'a') as f:
+                f.writelines([str(max_usage_gb) + ' GB\n'])
+
+
+for (approach, dataset_name, entity_col, tuples_to_read_list,
+     weak_label_thresh, cor_strength, nb_cor_strength) in datasets:
     inc_args['dataset_name'] = dataset_name
     inc_args['entity_col'] = entity_col
     inc_args['tuples_to_read_list'] = tuples_to_read_list
     hc_args['weak_label_thresh'] = weak_label_thresh
-    hc_args['max_domain'] = max_domain
     hc_args['cor_strength'] = cor_strength
     hc_args['nb_cor_strength'] = nb_cor_strength
 
     ######################################################################
 
-    if 'A' in approaches:
+    if approach == 'A':
         hc_args['incremental'] = False
         hc_args['repair_previous_errors'] = False
         hc_args['recompute_from_scratch'] = False
@@ -74,20 +121,18 @@ for (dataset_name, entity_col, tuples_to_read_list,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['iterations'] = [0]
-        executor = Executor(hc_args, inc_args)
-        executor.run()
+        run_executor()
 
         if avg_time_iterations:
             # A - Time
             hc_args['log_repairing_quality'] = False
             hc_args['log_execution_times'] = True
             inc_args['iterations'] = avg_time_iterations
-            executor = Executor(hc_args, inc_args)
-            executor.run()
+            run_executor()
 
     ######################################################################
 
-    if 'B' in approaches:
+    if approach == 'B':
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = True
         hc_args['recompute_from_scratch'] = True
@@ -97,20 +142,18 @@ for (dataset_name, entity_col, tuples_to_read_list,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['iterations'] = [0]
-        executor = Executor(hc_args, inc_args)
-        executor.run()
+        run_executor()
 
         if avg_time_iterations:
             # B - Time
             hc_args['log_repairing_quality'] = False
             hc_args['log_execution_times'] = True
             inc_args['iterations'] = avg_time_iterations
-            executor = Executor(hc_args, inc_args)
-            executor.run()
+            run_executor()
 
     ######################################################################
 
-    if 'C' in approaches:
+    if approach == 'C':
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = False
         hc_args['recompute_from_scratch'] = False
@@ -120,20 +163,18 @@ for (dataset_name, entity_col, tuples_to_read_list,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['iterations'] = [0]
-        executor = Executor(hc_args, inc_args)
-        executor.run()
+        run_executor()
 
         if avg_time_iterations:
             # C - Time
             hc_args['log_repairing_quality'] = False
             hc_args['log_execution_times'] = True
             inc_args['iterations'] = avg_time_iterations
-            executor = Executor(hc_args, inc_args)
-            executor.run()
+            run_executor()
 
     ######################################################################
 
-    if 'B+' in approaches:
+    if approach == 'B+':
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = True
         hc_args['recompute_from_scratch'] = True
@@ -144,20 +185,18 @@ for (dataset_name, entity_col, tuples_to_read_list,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['iterations'] = [0]
-        executor = Executor(hc_args, inc_args)
-        executor.run()
+        run_executor()
 
         if avg_time_iterations:
             # B+ - Time
             hc_args['log_repairing_quality'] = False
             hc_args['log_execution_times'] = True
             inc_args['iterations'] = avg_time_iterations
-            executor = Executor(hc_args, inc_args)
-            executor.run()
+            run_executor()
 
     ######################################################################
 
-    if 'C+' in approaches:
+    if approach == 'C+':
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = False
         hc_args['recompute_from_scratch'] = False
@@ -168,20 +207,18 @@ for (dataset_name, entity_col, tuples_to_read_list,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['iterations'] = [0]
-        executor = Executor(hc_args, inc_args)
-        executor.run()
+        run_executor()
 
         if avg_time_iterations:
             # C+ - Time
             hc_args['log_repairing_quality'] = False
             hc_args['log_execution_times'] = True
             inc_args['iterations'] = avg_time_iterations
-            executor = Executor(hc_args, inc_args)
-            executor.run()
+            run_executor()
 
     ######################################################################
 
-    if 'Full' in approaches:
+    if approach == 'Full':
         hc_args['incremental'] = False
         hc_args['repair_previous_errors'] = False
         hc_args['recompute_from_scratch'] = False
@@ -192,13 +229,11 @@ for (dataset_name, entity_col, tuples_to_read_list,
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
         inc_args['iterations'] = [0]
-        executor = Executor(hc_args, inc_args)
-        executor.run()
+        run_executor()
 
         if avg_time_iterations:
             # Full - Time
             hc_args['log_repairing_quality'] = False
             hc_args['log_execution_times'] = True
             inc_args['iterations'] = avg_time_iterations
-            executor = Executor(hc_args, inc_args)
-            executor.run()
+            run_executor()

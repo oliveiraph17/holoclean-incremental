@@ -29,6 +29,8 @@ class DomainEngine:
         self.max_domain = env["max_domain"]
         self.cor_strength = env["cor_strength"]
         self.estimator_type = env["estimator_type"]
+        self.incremental = env["incremental"]
+        self.recompute_from_scratch = env["recompute_from_scratch"]
 
         self.setup_complete = False
         self.domain = None
@@ -40,18 +42,26 @@ class DomainEngine:
         self.single_stats = {}
         self.pair_stats = {}
 
-    def setup(self):
+    def setup(self, found_errors=True):
         """
         setup initializes the in-memory and Postgres auxiliary tables (e.g.
         'cell_domain', 'pos_values').
         """
         tic = time.time()
-        self.setup_attributes()
-        self.domain_df = self.generate_domain()
-        self.store_domains(self.domain_df)
-        status = "DONE with domain preparation."
-        toc = time.time()
-        return status, toc - tic
+        if found_errors:
+            self.setup_attributes()
+            self.domain_df = self.generate_domain()
+            self.store_domains(self.domain_df)
+            status = "DONE with domain preparation."
+            domain_time = time.time() - tic
+        else:
+            if self.incremental and not self.recompute_from_scratch:
+                self.ds.save_stats()
+                status = "DONE no domain to generate, just saved stats."
+            else:
+                status = "DONE no domain to generate."
+            domain_time = time.time() - tic
+        return status, domain_time
 
     def store_domains(self, domain):
         """

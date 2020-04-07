@@ -82,24 +82,26 @@ class Executor:
                             detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
                         else:
                             detectors.append(getattr(modules['detect'][detector_file], detector_class)())
-                    hc.detect_errors(detectors)
+                    found_errors = hc.detect_errors(detectors)
 
                     # Repairs errors based on the defined features.
-                    hc.generate_domain()
-                    hc.run_estimator()
+                    hc.generate_domain(found_errors)
+                    if found_errors:
+                        hc.run_estimator()
 
                     featurizers = [
                         getattr(modules['featurize'][featurizer_file], featurizer_class)()
                         for featurizer_file, featurizer_class in self.hc_args['featurizers'].items()
                     ]
-                    hc.repair_errors(featurizers)
+                    inference_occurred = hc.repair_errors(featurizers, found_errors=found_errors)
 
                     # Evaluates the correctness of the results.
                     hc.evaluate(fpath=(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                        self.inc_args['dataset_name'] + '_clean.csv'),
                                 tid_col='tid',
                                 attr_col='attribute',
-                                val_col='correct_val')
+                                val_col='correct_val',
+                                inference_occurred=inference_occurred)
 
                     logging.info('Batch %s finished.', self.hc_args['current_batch_number'] + 1)
                     self.hc_args['current_batch_number'] += 1

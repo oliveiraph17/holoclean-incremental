@@ -38,23 +38,30 @@ class DetectEngine:
         # Get unique errors only that might have been detected from multiple detectors.
         self.errors_df = pd.concat(errors, ignore_index=True).drop_duplicates().reset_index(drop=True)
         if self.errors_df.shape[0]:
-            self.errors_df['_cid_'] = self.errors_df.apply(lambda x: self.ds.get_cell_id(x['_tid_'], x['attribute']), axis=1)
+            found_errors = True
+            self.errors_df['_cid_'] = self.errors_df.apply(lambda x: self.ds.get_cell_id(x['_tid_'], x['attribute']),
+                                                           axis=1)
+        else:
+            found_errors = False
         logging.info("detected %d potentially erroneous cells", self.errors_df.shape[0])
 
-        # Store errors to db.
-        self.store_detected_errors(self.errors_df)
+        if found_errors:
+            # Store errors to db.
+            self.store_detected_errors(self.errors_df)
 
-        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
-            self.set_previous_dirty_rows()
+            if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
+                self.set_previous_dirty_rows()
 
-        status = "DONE with error detection."
-        toc_total = time.clock()
-        detect_time = toc_total - tic_total
-        return status, detect_time, self.errors_df.shape[0]
+            status = "DONE with error detection."
+            toc_total = time.clock()
+            detect_time = toc_total - tic_total
+        else:
+            status = "DONE no errors detected."
+            detect_time = 0.0
+
+        return status, detect_time, self.errors_df.shape[0], found_errors
 
     def store_detected_errors(self, errors_df):
-        if errors_df.empty:
-            raise Exception("ERROR: Detected errors dataframe is empty.")
         self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
         self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])
         self.ds._active_attributes = sorted(errors_df['attribute'].unique())
