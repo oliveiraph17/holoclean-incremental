@@ -145,7 +145,7 @@ class LoadFeatFeaturizedDataset:
 
         return X_infer, mask_infer, Y_ground_truth
 
-    def get_evaluation_metrics(self, Y_pred, skipping=False):
+    def get_evaluation_metrics(self, Y_pred, skipping=False, grouping=False):
         feat = self.feat_skipping if skipping else self.feat_last
 
         eval_metrics = {'dk_cells': {}, 'training_cells': {}, 'precision': {}, 'recall': {}, 'repairing_recall': {},

@@ -17,6 +17,7 @@ class Executor:
         self.hc_args = hc_values
         self.feature_args = feature_values
         self.training_cells = {}
+        self.groups = None
 
         self.quality_log_fpath = ''
         if self.hc_args['log_repairing_quality']:
@@ -80,6 +81,10 @@ class Executor:
         self.hc.repair_engine.feat_dataset = LoadFeatFeaturizedDataset(self.hc.ds, self.hc.env, base_path)
         self.hc.repair_engine.feat_dataset.load_feat(batch_number, batch_size)
 
+        # Sets attribute groups, if any.
+        if self.groups is not None:
+            self.hc.repair_engine.groups = self.groups
+
         # Sets up the models.
         self.hc.repair_engine.setup_repair_model()
 
@@ -115,7 +120,40 @@ class Executor:
         logging.debug('Number of training elements: %d', total_training_cells)
 
     # noinspection PyPep8Naming
-    def infer(self, skipping=False):
+    def train_grouped(self, batch_number=None):
+        # Trains.
+        tic = time.clock()
+        total_training_cells = 0
+        X_train, Y_train, mask_train, train_cid = \
+            self.hc.repair_engine.feat_dataset.get_training_data(self.feature_args['detectors'],
+                                                                 self.feature_args['labels'])
+
+        for attr, attrs_in_group in self.groups.items():
+            if batch_number is None or batch_number in self.feature_args['train_batches'][attr]:
+                self.training_cells[attr] = sum([X_train[att].size(0) for att in attrs_in_group])
+                logging.info('Training model for %s with %d training examples (cells)', attr, self.training_cells[attr])
+                tic_attr = time.clock()
+
+                self.hc.repair_engine.repair_model[attr].fit_model(X_train, Y_train, mask_train,
+                                                                   self.hc.env['epochs'], attrs_in_group)
+
+                if self.hc.env['save_load_checkpoint']:
+                    tic_checkpoint = time.clock()
+                    self.hc.repair_engine.repair_model[attr].save_checkpoint('/tmp/checkpoint-'
+                                                                             + self.hc.ds.raw_data.name
+                                                                             + '-' + attr)
+                    logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
+
+                logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
+                total_training_cells += self.training_cells[attr]
+        toc = time.clock()
+
+        logging.info('DONE training repair model')
+        logging.debug('Time to fit repair model: %.2f secs', toc - tic)
+        logging.debug('Number of training elements: %d', total_training_cells)
+
+    # noinspection PyPep8Naming
+    def infer(self, skipping=False, grouping=False):
         X_pred, mask_pred, Y_truth = self.hc.repair_engine.feat_dataset.get_infer_data(
             self.feature_args['detectors'],
             skipping)
@@ -124,8 +162,11 @@ class Executor:
         tic_attr = time.clock()
         for attr in self.hc.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
-            Y_pred[attr] = self.hc.repair_engine.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
-
+            if not grouping:
+                Y_pred[attr] = self.hc.repair_engine.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
+            else:
+                Y_pred[attr] = self.hc.repair_engine.repair_model[
+                    self.hc.repair_engine.get_attr_group(attr)].infer_values(X_pred[attr], mask_pred[attr])
             grdt = Y_truth[attr].numpy().flatten()
             Y_assign = Y_pred[attr].data.numpy().argmax(axis=1)
             accuracy = 100. * np.mean(Y_assign == grdt)
@@ -135,7 +176,7 @@ class Executor:
 
         return Y_pred
 
-    def evaluate(self, Y_pred, train_batch_number, skipping_batch_number, skipping=False):
+    def evaluate(self, Y_pred, train_batch_number, skipping_batch_number, skipping=False, grouping=False):
         eval_metrics, incorrect_repairs = self.hc.repair_engine.feat_dataset.get_evaluation_metrics(Y_pred, skipping)
 
         metrics_header = ['infer_mode', 'features', 'train_using_all_batches', 'train_batch',
@@ -152,7 +193,11 @@ class Executor:
 
         agg_metrics = {name: 0 for name in eval_metrics.keys()}
         for attr in self.hc.ds.get_active_attributes():
-            eval_metrics['training_cells'][attr] = self.training_cells[attr]
+            if not grouping:
+                eval_metrics['training_cells'][attr] = self.training_cells[attr]
+            else:
+                eval_metrics['training_cells'][self.hc.repair_engine.get_attr_group(attr)] = self.training_cells[
+                    self.hc.repair_engine.get_attr_group(attr)]
 
             # Outputs the attribute's metrics and adds them to the aggregated metrics.
             for metric, value in eval_metrics.items():
@@ -206,7 +251,11 @@ class Executor:
 
                         f.write('batch_number;' + ';'.join('w' + str(i) for i in range(num_weights)) + '\n')
 
-                    weights = self.hc.repair_engine.repair_model[attr].model.first_layer_weights[0].squeeze().tolist()
+                    if not grouping:
+                        weights = self.hc.repair_engine.repair_model[attr].model.first_layer_weights[0].squeeze().tolist()
+                    else:
+                        weights = self.hc.repair_engine.repair_model[
+                            self.hc.repair_engine.get_attr_group(attr)].model.first_layer_weights[0].squeeze().tolist()
                     f.write(str(train_batch_number) + ';' + ';'.join(str(w) for w in weights) + '\n')
 
         # Overwrites the aggregated metrics than are not only sums.
@@ -244,27 +293,93 @@ class Executor:
 
             self.hc.experiment_quality_logger.info(';'.join(str(value) for value in log_entry))
 
-    def run(self):
+    def run(self, grouping=False):
         batch_number = 1
         number_of_batches = len(self.feature_args['tuples_to_read_list'])
 
         tic = time.time()
 
         for batch_size in self.feature_args['tuples_to_read_list']:
+            # No grouping.
+            self.groups = {
+                'Address1': ['Address1'],
+                'City': ['City'],
+                'CountyName': ['CountyName'],
+                'HospitalName': ['HospitalName'],
+                'MeasureCode': ['MeasureCode'],
+                'MeasureName': ['MeasureName'],
+                'PhoneNumber': ['PhoneNumber'],
+                'ProviderNumber': ['ProviderNumber'],
+                'Sample': ['Sample'],
+                'Stateavg': ['Stateavg'],
+                'ZipCode': ['ZipCode'],
+                'Condition': ['Condition'],
+                'State': ['State'],
+                'HospitalType': ['HospitalType'],
+                'HospitalOwner': ['HospitalOwner'],
+                'Score': ['Score'],
+                'EmergencyService': ['EmergencyService'],
+            }
+
+            # # Automatic grouping via correlations (thresh=0.1)
+            # if batch_number == 1:
+            #     self.groups = {
+            #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'MeasureCode', 'MeasureName',
+            #                      'PhoneNumber', 'ProviderNumber', 'Sample', 'Stateavg', 'ZipCode'],
+            #         'Condition': ['Condition'],
+            #         'State': ['State'],
+            #         'HospitalType': ['HospitalType'],
+            #         'HospitalOwner': ['HospitalOwner'],
+            #         'Score': ['Score'],
+            #         'EmergencyService': ['EmergencyService'],
+            #     }
+            # else:
+            #     self.groups = {
+            #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'PhoneNumber', 'ProviderNumber',
+            #                      'Sample', 'ZipCode'],
+            #         'Condition': ['Condition'],
+            #         'State': ['State'],
+            #         'MeasureCode': ['MeasureCode', 'MeasureName', 'Stateavg'],
+            #         'HospitalType': ['HospitalType'],
+            #         'HospitalOwner': ['HospitalOwner'],
+            #         'Score': ['Score'],
+            #         'EmergencyService': ['EmergencyService'],
+            #     }
+
+            # # Single model for all the attributes
+            # self.groups = {
+            #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'MeasureCode', 'MeasureName',
+            #                      'PhoneNumber', 'ProviderNumber', 'Sample', 'Stateavg', 'ZipCode', 'Condition',
+            #                      'State', 'HospitalType', 'HospitalOwner', 'Score', 'EmergencyService'],
+            # }
+
+            # # Automatic grouping via correlations (thresh=0.05)
+            ['city']
+            ['state']
+            ['results']
+            ['address', 'akaname', 'dbaname', 'inspectiondate', 'inspectionid', 'license']
+            ['inspectiontype']
+            ['risk']
+            ['zip']
+            ['facilitytype']
+
             if batch_number > self.feature_args['last_batch']:
                 break
 
             if batch_number >= self.feature_args['first_batch']:
                 self.setup_hc_repair_engine(batch_number, batch_size)
-                self.train()
-                Y_pred = self.infer()
-                self.evaluate(Y_pred, batch_number, batch_number)
+                if not grouping:
+                    self.train()
+                else:
+                    self.train_grouped()
+                Y_pred = self.infer(grouping=grouping)
+                self.evaluate(Y_pred, batch_number, batch_number, grouping=grouping)
 
-                number_of_skipping_batches = number_of_batches - batch_number
-                for i in range(number_of_skipping_batches):
-                    self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
-                    Y_pred = self.infer(skipping=True)
-                    self.evaluate(Y_pred, batch_number, batch_number + i + 1, skipping=True)
+                # number_of_skipping_batches = number_of_batches - batch_number
+                # for i in range(number_of_skipping_batches):
+                #     self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
+                #     Y_pred = self.infer(skipping=True, grouping=grouping)
+                #     self.evaluate(Y_pred, batch_number, batch_number + i + 1, skipping=True, grouping=grouping)
 
             batch_number += 1
 
@@ -403,7 +518,7 @@ if __name__ == "__main__":
 
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
-    # executor.run()
+    executor.run(grouping=True)
 
     # Runs the run_infer_all
     # 1) Set save_load_checkpoint=True
@@ -414,4 +529,4 @@ if __name__ == "__main__":
     # executor.run_infer_all()
 
     # Runs the run_skipping
-    executor.run_skipping()
+    # executor.run_skipping()

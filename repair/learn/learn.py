@@ -140,7 +140,7 @@ class RepairModel:
                                    lr=self.env['learning_rate'],
                                    weight_decay=self.env['weight_decay'])
 
-    def fit_model(self, X_train, Y_train, mask_train, epochs):
+    def fit_model(self, X_train, Y_train, mask_train, epochs, attrs_in_group):
         """
         X_train: (batch, # of classes (domain size), total # of features)
         Y_train: (batch, 1)
@@ -153,31 +153,36 @@ class RepairModel:
         last_accuracy = 0
         for epoch_idx in tqdm(range(1, epochs + 1)):
             cost = 0.
-            num_batches = (X_train.shape[0] + batch_size - 1) // batch_size
-            for k in range(num_batches):
-                start, end = k * batch_size, (k + 1) * batch_size
-                cost += self.__train__(X_train[start:end],
-                                       Y_train[start:end],
-                                       mask_train[start:end])
+            num_batches = {}
+            cost = {}
+            for attr in attrs_in_group:
+                num_batches[attr] = (X_train[attr].shape[0] + batch_size - 1) // batch_size
+                cost[attr] = 0.
+                for k in range(num_batches[attr]):
+                    start, end = k * batch_size, (k + 1) * batch_size
+                    cost[attr] += self.__train__(X_train[attr][start:end],
+                                           Y_train[attr][start:end],
+                                           mask_train[attr][start:end])
 
             if self.env['verbose'] or self.env['epochs_convergence'] > 0:
                 # Compute and print accuracy at the end of epoch
-                grdt = Y_train.numpy().flatten()
-                Y_pred = self.__predict__(X_train, mask_train)
-                Y_assign = Y_pred.data.numpy().argmax(axis=1)
-                accuracy = 100. * np.mean(Y_assign == grdt)
-                if self.env['verbose']:
-                    logging.debug("Epoch %d, cost = %f, acc = %.2f%%",
-                                  epoch_idx, cost / max(num_batches, 1),
-                                  accuracy)
-                if self.env['epochs_convergence'] > 0:
-                    if accuracy <= last_accuracy + self.env['convergence_thresh']:
-                        accuracy_count += 1
-                        if accuracy_count > self.env['epochs_convergence']:
-                            break
-                    else:
-                        accuracy_count = 0
-                        last_accuracy = accuracy
+                for attr in attrs_in_group:
+                    grdt = Y_train[attr].numpy().flatten()
+                    Y_pred = self.__predict__(X_train[attr], mask_train[attr])
+                    Y_assign = Y_pred.data.numpy().argmax(axis=1)
+                    accuracy = 100. * np.mean(Y_assign == grdt)
+                    if self.env['verbose']:
+                        logging.debug("Epoch %d, attr=%s, cost = %f, acc = %.2f%%",
+                                      epoch_idx, attr, cost[attr] / max(num_batches[attr], 1),
+                                      accuracy)
+                    # if self.env['epochs_convergence'] > 0:
+                    #     if accuracy <= last_accuracy + self.env['convergence_thresh']:
+                    #         accuracy_count += 1
+                    #         if accuracy_count > self.env['epochs_convergence']:
+                    #             break
+                    #     else:
+                    #         accuracy_count = 0
+                    #         last_accuracy = accuracy
 
     def infer_values(self, X_pred, mask_pred):
         logging.info('inferring on %d examples (cells)', X_pred.shape[0])
