@@ -88,6 +88,8 @@ class Executor:
         # Sets up the models.
         self.hc.repair_engine.setup_repair_model()
 
+        self.training_cells = {attr: 0 for attr in self.hc.ds.get_active_attributes()}
+
     # noinspection PyPep8Naming
     def train(self, batch_number=None):
         # Trains.
@@ -97,22 +99,21 @@ class Executor:
             self.hc.repair_engine.feat_dataset.get_training_data(self.feature_args['detectors'],
                                                                  self.feature_args['labels'])
         for attr in self.hc.ds.get_active_attributes():
-            if batch_number is None or batch_number in self.feature_args['train_batches'][attr]:
-                self.training_cells[attr] = X_train[attr].size(0)
-                logging.info('Training model for %s with %d training examples (cells)', attr, self.training_cells[attr])
-                tic_attr = time.clock()
+            self.training_cells[attr] = X_train[attr].size(0)
+            logging.info('Training model for %s with %d training examples (cells)', attr, self.training_cells[attr])
+            tic_attr = time.clock()
 
-                self.hc.repair_engine.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr],
-                                                                   self.hc.env['epochs'])
+            self.hc.repair_engine.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr],
+                                                               self.hc.env['epochs'])
 
-                if self.hc.env['save_load_checkpoint']:
-                    tic_checkpoint = time.clock()
-                    self.hc.repair_engine.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.hc.ds.raw_data.name
-                                                                             + '-' + attr)
-                    logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
+            if self.hc.env['save_load_checkpoint']:
+                tic_checkpoint = time.clock()
+                self.hc.repair_engine.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.hc.ds.raw_data.name
+                                                                         + '-' + attr)
+                logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
 
-                logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
-                total_training_cells += self.training_cells[attr]
+            logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
+            total_training_cells += self.training_cells[attr]
         toc = time.clock()
 
         logging.info('DONE training repair model')
@@ -120,7 +121,7 @@ class Executor:
         logging.debug('Number of training elements: %d', total_training_cells)
 
     # noinspection PyPep8Naming
-    def train_grouped(self, batch_number=None):
+    def train_grouped(self, retrain=None):
         # Trains.
         tic = time.clock()
         total_training_cells = 0
@@ -128,13 +129,17 @@ class Executor:
             self.hc.repair_engine.feat_dataset.get_training_data(self.feature_args['detectors'],
                                                                  self.feature_args['labels'])
 
+        if retrain is None:
+            # If no skipping list is provided, it retrains for all the groups.
+            retrain = self.groups.keys()
+
         for attr, attrs_in_group in self.groups.items():
-            if batch_number is None or batch_number in self.feature_args['train_batches'][attr]:
+            if attr in retrain:
                 self.training_cells[attr] = sum([X_train[att].size(0) for att in attrs_in_group])
                 logging.info('Training model for %s with %d training examples (cells)', attr, self.training_cells[attr])
                 tic_attr = time.clock()
 
-                self.hc.repair_engine.repair_model[attr].fit_model(X_train, Y_train, mask_train,
+                self.hc.repair_engine.repair_model[attr].fit_model_grouped(X_train, Y_train, mask_train,
                                                                    self.hc.env['epochs'], attrs_in_group)
 
                 if self.hc.env['save_load_checkpoint']:
@@ -153,7 +158,7 @@ class Executor:
         logging.debug('Number of training elements: %d', total_training_cells)
 
     # noinspection PyPep8Naming
-    def infer(self, skipping=False, grouping=False):
+    def infer(self, skipping=False):
         X_pred, mask_pred, Y_truth = self.hc.repair_engine.feat_dataset.get_infer_data(
             self.feature_args['detectors'],
             skipping)
@@ -162,7 +167,7 @@ class Executor:
         tic_attr = time.clock()
         for attr in self.hc.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
-            if not grouping:
+            if self.groups is None:
                 Y_pred[attr] = self.hc.repair_engine.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
             else:
                 Y_pred[attr] = self.hc.repair_engine.repair_model[
@@ -176,7 +181,7 @@ class Executor:
 
         return Y_pred
 
-    def evaluate(self, Y_pred, train_batch_number, skipping_batch_number, skipping=False, grouping=False):
+    def evaluate(self, Y_pred, train_batch_number, skipping_batch_number, skipping=False):
         eval_metrics, incorrect_repairs = self.hc.repair_engine.feat_dataset.get_evaluation_metrics(Y_pred, skipping)
 
         metrics_header = ['infer_mode', 'features', 'train_using_all_batches', 'train_batch',
@@ -193,7 +198,7 @@ class Executor:
 
         agg_metrics = {name: 0 for name in eval_metrics.keys()}
         for attr in self.hc.ds.get_active_attributes():
-            if not grouping:
+            if self.groups is None:
                 eval_metrics['training_cells'][attr] = self.training_cells[attr]
             else:
                 eval_metrics['training_cells'][self.hc.repair_engine.get_attr_group(attr)] = self.training_cells[
@@ -201,7 +206,7 @@ class Executor:
 
             # Outputs the attribute's metrics and adds them to the aggregated metrics.
             for metric, value in eval_metrics.items():
-                logging.debug('[' + attr + '] ' + metric + ' = %2f', value[attr])
+                # logging.debug('[' + attr + '] ' + metric + ' = %2f', value[attr])
 
                 # Sums for all aggregated metrics even though this is meaningless for some metrics because it is faster
                 # than testing if they should be summed up or not.
@@ -251,7 +256,7 @@ class Executor:
 
                         f.write('batch_number;' + ';'.join('w' + str(i) for i in range(num_weights)) + '\n')
 
-                    if not grouping:
+                    if self.groups is None:
                         weights = self.hc.repair_engine.repair_model[attr].model.first_layer_weights[0].squeeze().tolist()
                     else:
                         weights = self.hc.repair_engine.repair_model[
@@ -279,8 +284,8 @@ class Executor:
                                            (agg_metrics['precision'] + agg_metrics['repairing_recall']))
 
         # Outputs the aggregated metrics.
-        for metric, agg_value in agg_metrics.items():
-            logging.debug('[Aggregated] ' + metric + ' = %2f', agg_value)
+        # for metric, agg_value in agg_metrics.items():
+        #     logging.debug('[Aggregated] ' + metric + ' = %2f', agg_value)
 
         # Saves the aggregated metrics.
         if self.hc_args['log_repairing_quality']:
@@ -293,119 +298,109 @@ class Executor:
 
             self.hc.experiment_quality_logger.info(';'.join(str(value) for value in log_entry))
 
-    def run(self, grouping=False):
+    def run(self):
+        # This function trains for each batch and infers from the batch onwards using the same set of trained models.
         batch_number = 1
         number_of_batches = len(self.feature_args['tuples_to_read_list'])
 
         tic = time.time()
 
         for batch_size in self.feature_args['tuples_to_read_list']:
-            # No grouping.
-            self.groups = {
-                'Address1': ['Address1'],
-                'City': ['City'],
-                'CountyName': ['CountyName'],
-                'HospitalName': ['HospitalName'],
-                'MeasureCode': ['MeasureCode'],
-                'MeasureName': ['MeasureName'],
-                'PhoneNumber': ['PhoneNumber'],
-                'ProviderNumber': ['ProviderNumber'],
-                'Sample': ['Sample'],
-                'Stateavg': ['Stateavg'],
-                'ZipCode': ['ZipCode'],
-                'Condition': ['Condition'],
-                'State': ['State'],
-                'HospitalType': ['HospitalType'],
-                'HospitalOwner': ['HospitalOwner'],
-                'Score': ['Score'],
-                'EmergencyService': ['EmergencyService'],
-            }
-
-            # # Automatic grouping via correlations (thresh=0.1)
-            # if batch_number == 1:
-            #     self.groups = {
-            #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'MeasureCode', 'MeasureName',
-            #                      'PhoneNumber', 'ProviderNumber', 'Sample', 'Stateavg', 'ZipCode'],
-            #         'Condition': ['Condition'],
-            #         'State': ['State'],
-            #         'HospitalType': ['HospitalType'],
-            #         'HospitalOwner': ['HospitalOwner'],
-            #         'Score': ['Score'],
-            #         'EmergencyService': ['EmergencyService'],
-            #     }
-            # else:
-            #     self.groups = {
-            #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'PhoneNumber', 'ProviderNumber',
-            #                      'Sample', 'ZipCode'],
-            #         'Condition': ['Condition'],
-            #         'State': ['State'],
-            #         'MeasureCode': ['MeasureCode', 'MeasureName', 'Stateavg'],
-            #         'HospitalType': ['HospitalType'],
-            #         'HospitalOwner': ['HospitalOwner'],
-            #         'Score': ['Score'],
-            #         'EmergencyService': ['EmergencyService'],
-            #     }
-
-            # # Single model for all the attributes
-            # self.groups = {
-            #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'MeasureCode', 'MeasureName',
-            #                      'PhoneNumber', 'ProviderNumber', 'Sample', 'Stateavg', 'ZipCode', 'Condition',
-            #                      'State', 'HospitalType', 'HospitalOwner', 'Score', 'EmergencyService'],
-            # }
-
-            # # Automatic grouping via correlations (thresh=0.05)
-            ['city']
-            ['state']
-            ['results']
-            ['address', 'akaname', 'dbaname', 'inspectiondate', 'inspectionid', 'license']
-            ['inspectiontype']
-            ['risk']
-            ['zip']
-            ['facilitytype']
-
             if batch_number > self.feature_args['last_batch']:
                 break
 
             if batch_number >= self.feature_args['first_batch']:
                 self.setup_hc_repair_engine(batch_number, batch_size)
-                if not grouping:
+                if self.groups is None:
                     self.train()
                 else:
                     self.train_grouped()
-                Y_pred = self.infer(grouping=grouping)
-                self.evaluate(Y_pred, batch_number, batch_number, grouping=grouping)
+                Y_pred = self.infer()
+                self.evaluate(Y_pred, batch_number, batch_number)
 
-                # number_of_skipping_batches = number_of_batches - batch_number
-                # for i in range(number_of_skipping_batches):
-                #     self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
-                #     Y_pred = self.infer(skipping=True, grouping=grouping)
-                #     self.evaluate(Y_pred, batch_number, batch_number + i + 1, skipping=True, grouping=grouping)
+                number_of_skipping_batches = number_of_batches - batch_number
+                for i in range(number_of_skipping_batches):
+                    self.hc.repair_engine.feat_dataset.load_feat_skipping(batch_number, batch_size, i + 1)
+                    Y_pred = self.infer(skipping=True)
+                    self.evaluate(Y_pred, batch_number, batch_number + i + 1, skipping=True)
 
             batch_number += 1
 
         toc = time.time()
         print('Elapsed time: ', toc - tic)
 
-    def run_infer_all(self):
+    def run_infer_all(self, train_batch):
+        # This function loads a given trained set of models (in /tmp folder) and infers all the batches using them.
         batch_size = self.feature_args['tuples_to_read_list'][0]
         self.hc_args['save_load_checkpoint'] = True
 
-        # We use batch 2 because the model is not loaded from disk for the first batch.
+        # We set up using batch 2 because it consumes the least memory possible being the first loaded from disk (the
+        # first batch is not loaded from /tmp by default). Actually, it loads the "given" trained model from /tmp.
+        # That is, the batch number here is meaningless for training issues.
         self.setup_hc_repair_engine(2, batch_size)
 
-        # We do not train because we use save_load_checkpoint.
+        # We do not train because we use save_load_checkpoint. This is just for logging purposes.
         for attr in self.hc.ds.get_active_attributes():
             self.training_cells[attr] = 0
 
         for i in range(self.feature_args['first_batch'], self.feature_args['last_batch'] + 1):
             self.hc.repair_engine.feat_dataset.load_feat_skipping(0, batch_size, i)
             Y_pred = self.infer(skipping=True)
-            self.evaluate(Y_pred, 100, i, skipping=True)
+            self.evaluate(Y_pred, train_batch_number=train_batch, skipping_batch_number=i, skipping=True)
 
-    def run_skipping(self):
+    def run_skipping_predefined(self, corr_grouping_thresh=None):
+        from examples import statistics_calculations
+
+        # Creates a stats Executor using the same args
+        stats_executor = statistics_calculations.Executor(hc_args, feature_args)
+
+        # This function trains only at predefined batches and skips training for the other ones.
         batch_number = 1
         number_of_batches = len(self.feature_args['tuples_to_read_list'])
         self.hc_args['save_load_checkpoint'] = True
+
+        # It is possible to set the groups either manually (as follows), or automatically by setting the threshold.
+        # # Single model for all the attributes
+        # self.groups = {
+        #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'MeasureCode', 'MeasureName',
+        #                      'PhoneNumber', 'ProviderNumber', 'Sample', 'Stateavg', 'ZipCode', 'Condition',
+        #                      'State', 'HospitalType', 'HospitalOwner', 'Score', 'EmergencyService'],
+        # }
+
+        # # One model per attribute.
+        # self.groups = {
+        #     'Address1': ['Address1'], 'City': ['City'], 'CountyName': ['CountyName'],
+        #     'HospitalName': ['HospitalName'], 'PhoneNumber': ['PhoneNumber'], 'ProviderNumber': ['ProviderNumber'],
+        #     'Sample': ['Sample'], 'ZipCode': ['ZipCode'], 'Condition': ['Condition'], 'State': ['State'],
+        #     'MeasureCode': ['MeasureCode'], 'MeasureName': ['MeasureName'], 'Stateavg': ['Stateavg'],
+        #     'HospitalType': ['HospitalType'], 'HospitalOwner': ['HospitalOwner'], 'Score': ['Score'],
+        #     'EmergencyService': ['EmergencyService'],
+        # }
+
+        # # Manual setting of groups according to a previous run of stats_calc.run_get_attribute_groups (thresh=0.1)
+        # if batch_number == 1:
+        #     self.groups = {
+        #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'MeasureCode', 'MeasureName',
+        #                      'PhoneNumber', 'ProviderNumber', 'Sample', 'Stateavg', 'ZipCode'],
+        #         'Condition': ['Condition'],
+        #         'State': ['State'],
+        #         'HospitalType': ['HospitalType'],
+        #         'HospitalOwner': ['HospitalOwner'],
+        #         'Score': ['Score'],
+        #         'EmergencyService': ['EmergencyService'],
+        #     }
+        # else:
+        #     self.groups = {
+        #         'Address1': ['Address1', 'City', 'CountyName', 'HospitalName', 'PhoneNumber', 'ProviderNumber',
+        #                      'Sample', 'ZipCode'],
+        #         'Condition': ['Condition'],
+        #         'State': ['State'],
+        #         'MeasureCode': ['MeasureCode', 'MeasureName', 'Stateavg'],
+        #         'HospitalType': ['HospitalType'],
+        #         'HospitalOwner': ['HospitalOwner'],
+        #         'Score': ['Score'],
+        #         'EmergencyService': ['EmergencyService'],
+        #     }
 
         tic = time.time()
 
@@ -414,14 +409,18 @@ class Executor:
                 break
 
             if batch_number >= self.feature_args['first_batch']:
-                self.setup_hc_repair_engine(batch_number, batch_size)
+                # Trains only at predefined batches.
+                if batch_number in self.feature_args['train_batches']:
+                    if corr_grouping_thresh is not None:
+                        self.groups = stats_executor.get_attribute_groups(batch_number, thresh=corr_grouping_thresh)
+                    self.setup_hc_repair_engine(batch_number, batch_size)
+                    if self.groups is None:
+                        self.train()
+                    else:
+                        self.train_grouped()
 
-                # # Skip in predefined batches.
-                # if batch_number in self.feature_args['train_batches']:
-                #     self.train()
-
-                # Skip training based on train_batches.
-                self.train(batch_number)
+                else:
+                    self.setup_hc_repair_engine(batch_number, batch_size)
 
                 Y_pred = self.infer()
                 self.evaluate(Y_pred, batch_number, batch_number)
@@ -430,6 +429,86 @@ class Executor:
 
         toc = time.time()
         print('Elapsed time: ', toc - tic)
+
+    def run_skipping_KL(self, corr_grouping_thresh, kl_thresh):
+        from examples import statistics_calculations
+
+        # Creates a stats Executor using the same args
+        stats_executor = statistics_calculations.Executor(hc_args, feature_args)
+
+        # Pair stats PDF and attribute frequencies for the previous stats.
+        stats = None
+        sum_freq = {}
+
+        # List of groups that should be retrained.
+        retrain = None
+
+        batch_number = 1
+        number_of_batches = len(self.feature_args['tuples_to_read_list'])
+        self.hc_args['save_load_checkpoint'] = True
+
+        tic = time.time()
+
+        for batch_size in self.feature_args['tuples_to_read_list']:
+            if batch_number > self.feature_args['last_batch']:
+                break
+
+            # self.groups = {
+            #     'Address1': ['Address1'], 'City': ['City'], 'CountyName': ['CountyName'],
+            #     'HospitalName': ['HospitalName'], 'PhoneNumber': ['PhoneNumber'], 'ProviderNumber': ['ProviderNumber'],
+            #     'Sample': ['Sample'], 'ZipCode': ['ZipCode'], 'Condition': ['Condition'], 'State': ['State'],
+            #     'MeasureCode': ['MeasureCode'], 'MeasureName': ['MeasureName'], 'Stateavg': ['Stateavg'],
+            #     'HospitalType': ['HospitalType'], 'HospitalOwner': ['HospitalOwner'], 'Score': ['Score'],
+            #     'EmergencyService': ['EmergencyService'],
+            # }
+            self.groups = stats_executor.get_attribute_groups(batch_number, thresh=corr_grouping_thresh)
+
+            self.setup_hc_repair_engine(batch_number, batch_size)
+            stats_executor.setup_hc_repair_engine(batch_number, batch_size)
+
+            if batch_number == self.feature_args['first_batch']:
+                # Sets all the groups to be trained in the first batch.
+                retrain = [att_rep for att_rep in self.groups.keys()]
+
+                # Gets the stats for providing in upcoming KL-based skipping calls.
+                stats_full = {}
+                stats_full['total_tuples'], stats_full['single_attr_stats'], stats_full[
+                    'pair_attr_stats'] = stats_executor.load_stats(
+                    batch_number, batch_size)
+                stats = stats_full['pair_attr_stats']
+
+                for attr in stats.keys():
+                    sum_freq[attr] = sum(stats_full['single_attr_stats'][attr].values())
+
+                for attr1 in stats.keys():
+                    for attr2 in stats[attr1].keys():
+                        # Normalizes the frequencies in stats2 to get a valid data distribution.
+                        for val1 in stats[attr1][attr2].keys():
+                            for val2 in stats[attr1][attr2][val1].keys():
+                                stats[attr1][attr2][val1][val2] /= sum_freq[attr1]
+
+            else:
+                # Gets the output of KL for the next batches.
+                _, stats, sum_freq, retrain = stats_executor.compute_KL(batch_size=batch_size,
+                                                                        batch_number=batch_number, stats1=stats,
+                                                                        sum_freq1=sum_freq, thresh=kl_thresh,
+                                                                        groups=self.groups)
+
+            print('Batch: ' + str(batch_number))
+            print(self.groups)
+            print(retrain)
+
+            # Skip training based on the retrain list.
+            self.train_grouped(retrain=retrain)
+
+            Y_pred = self.infer()
+            self.evaluate(Y_pred, batch_number, batch_number)
+
+            batch_number += 1
+
+        toc = time.time()
+        print('Elapsed time: ', toc - tic)
+
 
 if __name__ == "__main__":
     # Default parameters for HoloClean.
@@ -493,32 +572,13 @@ if __name__ == "__main__":
         'detectors': ['NullDetector', 'ViolationDetector'],  # ['NullDetector', 'ViolationDetector', 'ErrorLoaderDetector'],
         'first_batch': int(sys.argv[5]),
         'last_batch': int(sys.argv[6]),
-        # 'train_batches': [1, 2, 4, 8, 16, 32, 64],
-        'train_batches': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        'train_batches': {  # KL thresh = 0.015
-            'Address1': [1, 2, 4, 6, 9, 16, 31, 76],
-            'City': [1, 2, 4, 6, 10, 18, 37],
-            'Condition': [1, 2, 7, 12, 25],
-            'CountyName': [1, 2, 4, 6, 9, 17, 36],
-            'EmergencyService': [1, 2, 5, 10, 87],
-            'HospitalName': [1, 2, 4, 6, 9, 16, 31, 75],
-            'HospitalOwner': [1, 2, 4, 6, 11, 30],
-            'HospitalType': [1, 2, 5, 11],
-            'MeasureCode': [1, 2, 3, 5, 7, 10, 15, 24, 40, 71],
-            'MeasureName': [1, 2, 3, 5, 7, 11, 17, 27, 45, 82],
-            'PhoneNumber': [1, 2, 4, 6, 9, 16, 31, 74],
-            'ProviderNumber': [1, 2, 4, 6, 9, 16, 31, 74],
-            'Sample': [1, 2, 3, 4, 6, 9, 13, 18, 25, 35, 51, 80],
-            'Score': [1, 2, 3, 5, 8, 11, 16, 25, 85],
-            'State': [1, 2, 5, 11, 44],
-            'Stateavg': [1, 2, 3, 5, 7, 11, 17, 27, 79],
-            'ZipCode': [1, 2, 3, 5, 8, 13, 24, 54]
-        }
+        'train_batches': [1, 2, 4, 8, 16, 32, 64],  # PG
+        # 'train_batches': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],  # PA
     }
 
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
-    executor.run(grouping=True)
+    # executor.run()
 
     # Runs the run_infer_all
     # 1) Set save_load_checkpoint=True
@@ -526,7 +586,10 @@ if __name__ == "__main__":
     # 3) Run for first_batch=100 and last_batch=100 to generate the checkpoint referring to the full dataset
     # 4) Back up the checkpoint to avoid being overwritten
     # 5) Run first_batch=1 and last_batch=100 after commenting executor.run() above and uncommenting the function below
-    # executor.run_infer_all()
+    # executor.run_infer_all(train_batch=100)
 
-    # Runs the run_skipping
-    # executor.run_skipping()
+    # Runs the option for skipping at predefined batches (train_batches), optionally setting groups manually.
+    # executor.run_skipping_predefined(corr_grouping_thresh=0.05)
+
+    # Runs the option for automatic grouping and KL-based skipping.
+    executor.run_skipping_KL(corr_grouping_thresh=0.05, kl_thresh=0.01)

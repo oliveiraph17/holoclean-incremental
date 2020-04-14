@@ -16,7 +16,7 @@ class RepairEngine:
         self.repair_model = {}
 
         # Groups: {attr_repr1: [attr1, attr2, ...], attr_repr2: [...], ...}
-        self.groups = {}
+        self.groups = None
 
     def setup_featurized_ds(self, featurizers):
         tic = time.clock()
@@ -29,16 +29,30 @@ class RepairEngine:
     def setup_repair_model(self):
         tic = time.clock()
         feat_info = self.feat_dataset.featurizer_info
-        for attr, attrs_in_group in self.groups.items():
-            output_dim = self.feat_dataset.classes[next(iter(attrs_in_group))]
-            self.repair_model[attr] = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch(),
-                                                  bias=self.env['bias'],
-                                                  layer_sizes=self.env['layer_sizes'])
-            if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
-                try:
-                    self.repair_model[attr].load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
-                except OSError:
-                    logging.info('No existing checkpoint could be loaded for %s.', attr)
+
+        if self.groups is None:
+            for attr in self.ds.get_active_attributes():
+                output_dim = self.feat_dataset.classes[attr]
+                self.repair_model[attr] = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch(),
+                                                      bias=self.env['bias'],
+                                                      layer_sizes=self.env['layer_sizes'])
+                if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
+                    try:
+                        self.repair_model[attr].load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
+                    except OSError:
+                        logging.info('No existing checkpoint could be loaded for %s.', attr)
+
+        else:
+            for attr, attrs_in_group in self.groups.items():
+                output_dim = self.feat_dataset.classes[next(iter(attrs_in_group))]
+                self.repair_model[attr] = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch(),
+                                                      bias=self.env['bias'],
+                                                      layer_sizes=self.env['layer_sizes'])
+                if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
+                    try:
+                        self.repair_model[attr].load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
+                    except OSError:
+                        logging.info('No existing checkpoint could be loaded for %s.', attr)
 
         toc = time.clock()
         status = "DONE setting up repair model."
@@ -49,35 +63,63 @@ class RepairEngine:
         tic = time.clock()
         total_training_cells = 0
         X_train, Y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
-        for attr, attrs_in_group in self.groups.items():
-            group_training_cells = sum([X_train[att].size(0) for att in attrs_in_group])
-            logging.info('Training model for %s with %d training examples (cells)', attr, group_training_cells)
-            tic_attr = time.clock()
 
-            if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
-                logging.debug("Checking if learning can be skipped for %s...", attr)
-                for att in attrs_in_group:
+        if self.groups is None:
+            for attr in self.ds.get_active_attributes():
+                logging.info('Training model for %s with %d training examples (cells)', attr, X_train[attr].size(0))
+                tic_attr = time.clock()
+
+                if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
                     tic_skip = time.clock()
-                    grdt = Y_train[att].numpy().flatten()
-                    Y_pred = self.repair_model[attr].infer_values(X_train[att], mask_train[att])
+                    logging.debug("Checking if learning can be skipped for %s...", attr)
+                    grdt = Y_train[attr].numpy().flatten()
+                    Y_pred = self.repair_model[attr].infer_values(X_train[attr], mask_train[attr])
                     Y_assign = Y_pred.data.numpy().argmax(axis=1)
                     accuracy = 100. * np.mean(Y_assign == grdt)
-                    logging.debug("Previous %s model accuracy: %.2f. Inference time: %.2f", att, accuracy,
+                    logging.debug("Previous model accuracy: %.2f. Inference time: %.2f", accuracy,
                                   time.clock() - tic_skip)
-                    # if accuracy >= self.env['skip_training_thresh']:
-                    #     logging.debug("Training skipped.")
-                    #     continue
+                    if accuracy >= self.env['skip_training_thresh']:
+                        logging.debug("Training skipped.")
+                        continue
 
-            self.repair_model[attr].fit_model(X_train, Y_train, mask_train, self.env['epochs'], attrs_in_group)
-            # self.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr], self.env['epochs'])
+                self.repair_model[attr].fit_model(X_train[attr], Y_train[attr], mask_train[attr], self.env['epochs'])
 
-            if self.env['save_load_checkpoint']:
-                tic_checkpoint = time.clock()
-                self.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
-                logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
+                if self.env['save_load_checkpoint']:
+                    tic_checkpoint = time.clock()
+                    self.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
+                    logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
 
-            logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
-            total_training_cells += group_training_cells
+                logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
+                total_training_cells += X_train[attr].size(0)
+
+        else:
+            for attr, attrs_in_group in self.groups.items():
+                group_training_cells = sum([X_train[att].size(0) for att in attrs_in_group])
+                logging.info('Training model for %s with %d training examples (cells)', attr, group_training_cells)
+                tic_attr = time.clock()
+
+                if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
+                    logging.debug("Checking if learning can be skipped for %s...", attr)
+                    for att in attrs_in_group:
+                        tic_skip = time.clock()
+                        grdt = Y_train[att].numpy().flatten()
+                        Y_pred = self.repair_model[attr].infer_values(X_train[att], mask_train[att])
+                        Y_assign = Y_pred.data.numpy().argmax(axis=1)
+                        accuracy = 100. * np.mean(Y_assign == grdt)
+                        logging.debug("Previous %s model accuracy: %.2f. Inference time: %.2f", att, accuracy,
+                                      time.clock() - tic_skip)
+                        # TODO: code for skipping after the inference.
+
+                self.repair_model[attr].fit_model(X_train, Y_train, mask_train, self.env['epochs'], attrs_in_group)
+
+                if self.env['save_load_checkpoint']:
+                    tic_checkpoint = time.clock()
+                    self.repair_model[attr].save_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
+                    logging.debug("Checkpointing time %.2f.", time.clock() - tic_checkpoint)
+
+                logging.info('Done. Elapsed time: %.2f', time.clock() - tic_attr)
+                total_training_cells += group_training_cells
+
         toc = time.clock()
 
         if self.env['ignore_previous_training_cells']:
@@ -138,7 +180,10 @@ class RepairEngine:
         for attr in self.ds.get_active_attributes():
             logging.debug('Inferring %d instances of attribute %s', X_pred[attr].size(0), attr)
             tic_attr = time.clock()
-            Y_pred[attr] = self.repair_model[self.get_attr_group(attr)].infer_values(X_pred[attr], mask_pred[attr])
+            if self.groups is None:
+                Y_pred[attr] = self.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
+            else:
+                Y_pred[attr] = self.repair_model[self.get_attr_group(attr)].infer_values(X_pred[attr], mask_pred[attr])
             logging.debug('Done. Elapsed time: %.2f', time.clock() - tic_attr)
 
         distr_df, infer_val_df = self.get_infer_dataframes(infer_idx, Y_pred)
@@ -221,5 +266,6 @@ class RepairEngine:
 
     def get_attr_group(self, attribute):
         for attr, attrs_in_group in self.groups.items():
+            print(attrs_in_group)
             if attribute in attrs_in_group:
                 return attr
