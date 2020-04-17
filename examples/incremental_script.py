@@ -58,7 +58,8 @@ hc_args = {
 inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
+    'log_dir': '/home/pholiveira/experimental_results/',
+    # 'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/'
     'dataset_name': None,
     'entity_col': None,
     'numerical_attrs': None,
@@ -67,15 +68,14 @@ inc_args = {
     'iterations': [0],
 }
 
-# datasets = [('Full', 'hospital_shuffled', '_tid_', [1000], 0.99, 0.6, 0.8),
-#             ('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 0.6, 0.8),
-#             ('Full', 'food5k_shuffled', '_tid_', [5000], 0.6, 0.2, 0.3),
-#             ('A', 'food5k_shuffled', '_tid_', [50] * 100, 0.6, 0.2, 0.3),
-#             ('Full', 'nypd6', None, [32399], 0.9, 0.05, 0.3),
-#             ('A', 'nypd6', None, [324] * 100, 0.9, 0.05, 0.3),
-#             ('A', 'soccer', None, [2000] * 100, 0.9, 0.05, 0.3)]
-
-datasets = [('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 0.6, 0.8)]
+datasets = [# ('Full', 'hospital_shuffled', '_tid_', [1000], 0.99, 1000000, 0.6, 0.8),
+            # ('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 1000000, 0.6, 0.8),
+            # ('Full', 'food5k_shuffled', '_tid_', [5000], 0.6, 500, 0.2, 0.3),
+            # ('A', 'food5k_shuffled', '_tid_', [50] * 100, 0.6, 500, 0.2, 0.3),
+            ('Full', 'nypd6', None, [32399], 0.9, 60, 0.05, 0.3),
+            ('A', 'nypd6', None, [324] * 100, 0.9, 60, 0.05, 0.3),
+            ('Full', 'soccer', None, [200000], 0.9, 40, 0.05, 0.3),
+            ('A', 'soccer', None, [2000] * 100, 0.9, 40, 0.05, 0.3)]
 
 avg_time_iterations = None
 
@@ -101,11 +101,12 @@ def run_executor():
 
 
 for (approach, dataset_name, entity_col, tuples_to_read_list,
-     weak_label_thresh, cor_strength, nb_cor_strength) in datasets:
+     weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
     inc_args['dataset_name'] = dataset_name
     inc_args['entity_col'] = entity_col
     inc_args['tuples_to_read_list'] = tuples_to_read_list
     hc_args['weak_label_thresh'] = weak_label_thresh
+    hc_args['max_domain'] = max_domain
     hc_args['cor_strength'] = cor_strength
     hc_args['nb_cor_strength'] = nb_cor_strength
 
