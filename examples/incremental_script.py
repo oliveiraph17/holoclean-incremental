@@ -2,6 +2,7 @@ from examples.holoclean_incremental_repair_example import Executor
 
 import os
 import resource
+import sys
 
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor
@@ -68,14 +69,19 @@ inc_args = {
     'iterations': [0],
 }
 
-datasets = [# ('Full', 'hospital_shuffled', '_tid_', [1000], 0.99, 1000000, 0.6, 0.8),
-            # ('A', 'hospital_shuffled', '_tid_', [10] * 100, 0.99, 1000000, 0.6, 0.8),
-            # ('Full', 'food5k_shuffled', '_tid_', [5000], 0.6, 500, 0.2, 0.3),
-            # ('A', 'food5k_shuffled', '_tid_', [50] * 100, 0.6, 500, 0.2, 0.3),
-            ('Full', 'nypd6', None, [32399], 0.9, 60, 0.05, 0.3),
-            ('A', 'nypd6', None, [324] * 100, 0.9, 60, 0.05, 0.3),
-            ('Full', 'soccer', None, [200000], 0.9, 40, 0.05, 0.3),
-            ('A', 'soccer', None, [2000] * 100, 0.9, 40, 0.05, 0.3)]
+params = {
+    'approach': str(sys.argv[1]),
+    'dataset_name': str(sys.argv[2]),
+    'entity_col': str(sys.argv[3]) if str(sys.argv[3]) != '_' else None,
+    'tuples_to_read_list': [int(sys.argv[4])] * int(sys.argv[5]) if int(sys.argv[5]) != 1 else [int(sys.argv[4])],
+    'weak_label_thresh': float(sys.argv[6]),
+    'max_domain': int(sys.argv[7]),
+    'cor_strenth': float(sys.argv[8]),
+    'nb_cor_strength': float(sys.argv[9])
+}
+
+datasets = [(params['approach'], params['dataset_name'], params['entity_col'], params['tuples_to_read_list'],
+             params['weak_label_thresh'], params['max_domain'], params['cor_strenth'], params['nb_cor_strength'])]
 
 avg_time_iterations = None
 
