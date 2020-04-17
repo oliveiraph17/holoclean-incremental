@@ -26,3 +26,7 @@ info/
 
 # Holoclean specific files
 debug/
+
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
