@@ -3,9 +3,9 @@ from examples.holoclean_incremental_repair_example import Executor
 import os
 
 hc_args = {
-    # 'detectors': [('nulldetector', 'NullDetector', False),
-    #               ('violationdetector', 'ViolationDetector', False)],
-    'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+    'detectors': [('nulldetector', 'NullDetector', False),
+                  ('violationdetector', 'ViolationDetector', False)],
+    # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
     'domain_thresh_2': 0,
@@ -68,31 +68,55 @@ def build_model_monitoring_input(total_tuples, percentage):
 datasets = [
     ('hospital', None, None, False,
      None,
-     [250] * 4, False, None, None, 'NaiveBayes',
+     [250] * 4, False, 1000, 0.25, 'NaiveBayes',
      0.99, 10000, 0.6, 0.8,
      'dk', False, False),
 
     # Example setup for model monitoring.
     # ('hospital', None, None, False,
     #  None,
-    #  [250] * 4, True, 1000, 0.1, 'NaiveBayes',
+    #  [250] * 4, True, 1000, 0.25, 'NaiveBayes',
     #  0.99, 10000, 0.6, 0.8,
     #  'dk', False, True),
 
     ('food5k_shuffled', '_tid_', None, False,
      None,
-     [1000] * 5, False, None, None, 'NaiveBayes',
+     [1000] * 5, False, 5000, 0.2, 'NaiveBayes',
      0.6, 1000, 0.2, 0.3,
      'dk', False, False),
 
     ('hospital_numerical', None, ['Score', 'Sample'], True,
      [(100, ['Score']), (150, ['Sample'])],
-     None, True, 1000, 0.02, 'NaiveBayes',
+     [250] * 4, False, 1000, 0.25, 'NaiveBayes',
      0.99, 10000, 0.6, 0.8,
-     'dk', False, False)
+     'dk', False, False),
+
+    ('nypd6', None, None, False,
+     None,
+     [324] * 100, False, 32400, 0.01, 'NaiveBayes',
+     0.9, 10000, 0.05, 0.3,
+     'dk', False, None),
+
+    ('soccer', None, None, False,
+     None,
+     [2000] * 100, False, 200000, 0.01, 'NaiveBayes',
+     0.9, 10000, 0.05, 0.3,
+     'dk', False, None),
+
+    # ('chicago_num_shuffled', '_tid_', ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
+    #                                    'Dropoff Centroid Latitude', 'Dropoff Centroid Longitude',
+    #                                    'Fare', 'Tips', 'Tolls', 'Extras',
+    #                                    'Trip Total', 'Trip Seconds', 'Trip Miles'], True,
+    #  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
+    #   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
+    #   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
+    #   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])],
+    #  [4000] * 100, False, 400000, 0.01, 'NaiveBayes',
+    #  0.9, 100, 0.05, 0.3,
+    #  'dk', False, None),
 ]
 
-approaches = ['C']
+approaches = ['A', 'B', 'C', 'B+', 'C+']
 avg_time_iterations = None
 # avg_time_iterations = [1, 2]
 

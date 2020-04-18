@@ -29,7 +29,7 @@ class LoadFeatFeaturizedDataset:
         logging.info('Loading features from: %s', path)
         self.feat = torch.load(path)
 
-        # Loads tensors of the last batch encompassed by the newly-loaded tensors.
+        # Loads tensors of the last batch within the newly-loaded tensors.
         path = path_prefix + '_last' + str(batch_size) + '.feat'
         logging.info('Loading features from: %s', path)
         self.feat_last = torch.load(path)
@@ -53,75 +53,6 @@ class LoadFeatFeaturizedDataset:
         path = path_prefix + '_last' + str(batch_size) + '.feat'
         logging.info('Loading features from: %s', path)
         self.feat_skipping = torch.load(path)
-
-    def load_global_feat(self, dataset_size, batch_size, starting_tuple, ending_tuple, skipping=False):
-        # Loads the tensors regarding global features.
-        if skipping:
-            # As we are skipping training, we only need to memoize `self.feat_skipping`.
-            current_batch_range = str(starting_tuple) + '-' + str(ending_tuple)
-            path = self.base_path + '1-' + str(dataset_size) + '_' + current_batch_range + '.feat'
-            logging.info('Loading features from: %s', path)
-            self.feat_skipping = torch.load(path)
-        else:
-            number_of_tensors = int((ending_tuple - starting_tuple + 1) / batch_size)
-            feat_list = []
-            current_starting_tuple = starting_tuple
-
-            for i in range(number_of_tensors):
-                current_batch_range = str(current_starting_tuple) + '-' + str(current_starting_tuple + batch_size - 1)
-                path = self.base_path + '1-' + str(dataset_size) + '_' + current_batch_range + '.feat'
-                logging.info('Loading features from: %s', path)
-                feat_list.append(torch.load(path))
-                current_starting_tuple += batch_size
-
-            if len(feat_list) > 1:
-                # Stitches the features into a single variable.
-                stitched_feat = {key: {} for key in feat_list[0].keys()}
-                stitched_feat['errors'] = {key: {} for key in feat_list[0]['errors'].keys()}
-                stitched_feat['labels'] = {key: {} for key in feat_list[0]['labels'].keys()}
-
-                for attr in self.ds.get_active_attributes():
-                    stitched_feat['tensors'][attr] = torch.cat(
-                        tuple([feat['tensors'][attr] for feat in feat_list])
-                    )
-                    for error_type in stitched_feat['errors'].keys():
-                        stitched_feat['errors'][error_type][attr] = torch.cat(
-                            tuple([feat['errors'][error_type][attr] for feat in feat_list])
-                        )
-                    for label_type in stitched_feat['labels'].keys():
-                        stitched_feat['labels'][label_type][attr] = torch.cat(
-                            tuple([feat['labels'][label_type][attr] for feat in feat_list])
-                        )
-                    stitched_feat['is_clean'][attr] = torch.cat(
-                        tuple([feat['is_clean'][attr] for feat in feat_list])
-                    )
-                    stitched_feat['class_masks'][attr] = torch.cat(
-                        tuple([feat['class_masks'][attr] for feat in feat_list])
-                    )
-                    stitched_feat['tids'][attr] = torch.cat(
-                        tuple([feat['tids'][attr] for feat in feat_list])
-                    )
-                    stitched_feat['fixed'][attr] = torch.cat(
-                        tuple([feat['fixed'][attr] for feat in feat_list])
-                    )
-
-                self.feat = stitched_feat
-                self.feat_last = feat_list[len(feat_list) - 1]
-            else:
-                self.feat = feat_list[0]
-                self.feat_last = feat_list[0]
-
-            # Sets feat_info to a single featurizer regardless of whether the features
-            # were generated using one or several featurizers.
-            self.featurizer_info = [FeatInfo('loadfeat',  # name
-                                             next(iter(self.feat['tensors'].values())).size(2),  # size
-                                             True,  # learnable
-                                             1.0,  # init_weight
-                                             [])]  # feature_names
-
-            # Sets the number of classes per attribute from the tensors.
-            for attr in self.ds.get_active_attributes():
-                self.classes[attr] = self.feat['tensors'][attr].size(1)
 
     # noinspection PyPep8Naming
     def get_training_data(self, detectors, label_type='weak'):
@@ -214,7 +145,7 @@ class LoadFeatFeaturizedDataset:
 
         return X_infer, mask_infer, Y_ground_truth
 
-    def get_evaluation_metrics(self, Y_pred, skipping=False):
+    def get_evaluation_metrics(self, Y_pred, skipping=False, grouping=False):
         feat = self.feat_skipping if skipping else self.feat_last
 
         eval_metrics = {'dk_cells': {}, 'training_cells': {}, 'precision': {}, 'recall': {}, 'repairing_recall': {},
