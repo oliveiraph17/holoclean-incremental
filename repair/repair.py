@@ -266,6 +266,5 @@ class RepairEngine:
 
     def get_attr_group(self, attribute):
         for attr, attrs_in_group in self.groups.items():
-            print(attrs_in_group)
             if attribute in attrs_in_group:
                 return attr
