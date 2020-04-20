@@ -48,20 +48,19 @@ class DomainEngine:
         'cell_domain', 'pos_values').
         """
         tic = time.time()
+        self.setup_attributes()
         if found_errors:
-            self.setup_attributes()
             self.domain_df = self.generate_domain()
             self.store_domains(self.domain_df)
-            status = "DONE with domain preparation."
-            domain_time = time.time() - tic
         else:
             if self.incremental and not self.recompute_from_scratch:
-                self.ds.save_stats()
-                status = "DONE no domain to generate, just saved stats."
-            else:
-                status = "DONE no domain to generate."
-            domain_time = time.time() - tic
-        return status, domain_time
+                tic_inc = time.clock()
+                self.save_stats()
+                save_stats_time = time.clock() - tic_inc
+                logging.debug('DONE no domain to generate, just saved statistics in the database in %.2f secs.', save_stats_time)
+        status = "DONE with domain preparation."
+        toc = time.time()
+        return status, toc - tic
 
     def store_domains(self, domain):
         """
@@ -202,14 +201,13 @@ class DomainEngine:
         cells = []
         vid = 0
 
-        raw_df = self.ds.get_quantized_data() if self.do_quantization else self.ds.get_raw_data()
-        if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
-            # TODO(kaster): adjust here to properly handle quantized_data for previous dirty rows
-            records = pd.concat([self.ds.get_previous_dirty_rows(), raw_df]).to_records(index=False)
-        else:
-            records = raw_df.to_records()
+        records = self.ds.get_prepared_raw_data().to_records(index=False)
 
-        dk_lookup = {(val[0], val[1]) for val in self.ds.aux_table[AuxTables.dk_cells].df[['_tid_', 'attribute']].values}
+        if not self.ds.aux_table[AuxTables.dk_cells].df.empty:
+            dk_lookup = {(val[0], val[1])
+                         for val in self.ds.aux_table[AuxTables.dk_cells].df[['_tid_', 'attribute']].values}
+        else:
+            dk_lookup = None
 
         for row in tqdm(list(records)):
             tid = row['_tid_']
@@ -264,7 +262,7 @@ class DomainEngine:
                               "weak_label": init_value,
                               "weak_label_idx": init_value_idx,
                               "fixed": cell_status,
-                              "is_dk": (tid, attr) in dk_lookup,
+                              "is_dk": (tid, attr) in dk_lookup if dk_lookup is not None else False,
                               })
                 vid += 1
         domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
@@ -389,7 +387,7 @@ class DomainEngine:
             self.setup_attributes()
 
         logging.debug('generating initial set of un-pruned domain values...')
-        records = self.ds.get_raw_data().to_records()
+        records = self.ds.get_prepared_raw_data().to_records(index=False)
         vid = 0
         domain_df = None
 

@@ -307,6 +307,12 @@ arguments = [
       'default': False,
       'type': bool,
       'help': 'Sets if the repaired table should be appended to an existing one.'}),
+    (('-tab', '--train-using-all-batches'),
+     {'metavar': 'TRAIN_USING_ALL_BATCHES',
+      'dest': 'train_using_all_batches',
+      'default': False,
+      'type': bool,
+      'help': 'Indicates if all data loaded so far should be used for training, including from the current batch.'}),
 ]
 
 # Flags for Holoclean mode
@@ -461,7 +467,7 @@ class Session:
                 self.experiment_time_logger.info(time_header)
 
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
-                  exclude_attr_cols=None, numerical_attrs=None):
+                  exclude_attr_cols=None, numerical_attrs=None, drop_null_columns=True):
         """
         load_data takes the filepath to a CSV file to load as the initial dataset.
 
@@ -477,6 +483,7 @@ class Session:
             entity.
         :param exclude_attr_cols: (str list)
         :param numerical_attrs: (str list)
+        :param drop_null_columns: (bool) Whether to drop columns with only nulls or not
         """
         status, load_time = self.ds.load_data(name,
                                               fpath,
@@ -484,7 +491,8 @@ class Session:
                                               entity_col=entity_col,
                                               src_col=src_col,
                                               exclude_attr_cols=exclude_attr_cols,
-                                              numerical_attrs=numerical_attrs)
+                                              numerical_attrs=numerical_attrs,
+                                              drop_null_columns=drop_null_columns)
         logging.info(status)
         logging.debug('Time to load dataset: %.2f secs', load_time)
         if self.env['log_execution_times']:
@@ -533,18 +541,22 @@ class Session:
         self.ds.do_quantization = True
         self.domain_engine.do_quantization = True
 
-        status, quantize_time, quantized_data = \
-            quantize_km(self.env, self.ds.get_raw_data(), num_attr_groups_bins)
+        if self.env['incremental'] and not self.ds.is_first_batch():
+            df_raw_previously_repaired = self.ds.get_raw_data_previously_repaired()
+        else:
+            df_raw_previously_repaired = None
+
+        status, quantize_time, quantized_data, quantized_data_previously_repaired = \
+            quantize_km(self.env, self.ds.get_raw_data(), num_attr_groups_bins, df_raw_previously_repaired)
 
         logging.info(status)
         logging.debug('Time to quantize the dataset: %.2f secs' % quantize_time)
 
-        self.load_quantized_data(quantized_data)
+        self.load_quantized_data(quantized_data, quantized_data_previously_repaired)
 
+        return quantized_data, quantized_data_previously_repaired
 
-        return quantized_data
-
-    def load_quantized_data(self, df):
+    def load_quantized_data(self, df, df_previously_repaired=None):
         tic = time.time()
         name = self.ds.raw_data.name + '_quantized'
         self.ds.quantized_data = Table(name, Source.DF, df=df)
@@ -561,7 +573,15 @@ class Session:
             self.ds.quantized_data.create_db_index(self.ds.engine, [attr])
         logging.debug('Time to load quantized dataset: %.2f secs' % (time.time() - tic))
 
+        if df_previously_repaired is not None:
+            # It is not needed to re-store the repaired table since it was set to store numerical values as floats in a
+            # previous batch.
+            name = self.ds.raw_data.name + '_quantized_previously_repaired'
+            self.ds.quantized_data_previously_repaired = Table(name, Source.DF, df=df_previously_repaired)
 
+            if self.env['incremental'] and self.env['repair_previous_errors']:
+                df_previous_errors = df_previously_repaired[df_previously_repaired['_tid_'].isin(self.ds.get_previous_dirty_rows()['_tid_'])]
+                self.ds.quantized_previous_dirty_rows = Table(name, Source.DF, df=df_previous_errors)
 
     def generate_domain(self, found_errors=True):
         status, domain_time = self.domain_engine.setup(found_errors)
@@ -574,6 +594,10 @@ class Session:
         """
         Uses estimator to weak label and prune domain.
         """
+        if self.env['skip_training']:
+            logging.debug('Skipping estimator as the training phase is going to be skipped...')
+            return
+
         self.domain_engine.run_estimator()
 
     def repair_errors(self, featurizers, found_errors=True):

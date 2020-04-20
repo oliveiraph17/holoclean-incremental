@@ -31,7 +31,11 @@ class RepairEngine:
                                         bias=self.env['bias'],
                                         layer_sizes=self.env['layer_sizes'])
         if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
-            self.repair_model.load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name)
+            try:
+                self.repair_model.load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name)
+            except OSError:
+                logging.info('No existing checkpoint could be loaded for %s.', attr)
+
         toc = time.clock()
         status = "DONE setting up repair model."
         setup_time = toc - tic
@@ -98,7 +102,7 @@ class RepairEngine:
 
         status = "DONE training repair model."
         train_time = toc - tic
-        return status, train_time
+        return status, train_time, X_train.shape[0]
 
     def _save_training_cells(self, train_cid):
         # Generates table 'training_cells'.

@@ -33,7 +33,7 @@ hc_args = {
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
     'weak_label_thresh': 0.99,
-    'max_domain': 1000000,
+    'max_domain': 10000,
     'cor_strength': 0.6,
     'nb_cor_strength': 0.8,
     'epochs': 20,
@@ -43,6 +43,7 @@ hc_args = {
     'estimator_type': 'NaiveBayes',
     'current_iteration': None,
     'current_batch_number': None,
+    'skip_training_thresh': 101,
     'log_repairing_quality': True,
     'log_execution_times': True,
     'incremental': None,
@@ -53,14 +54,15 @@ hc_args = {
     'skip_training': False,
     'ignore_previous_training_cells': False,
     'save_load_checkpoint': False,
-    'append': True
+    'append': True,
+    'infer_mode': 'dk',
+    'train_using_all_batches': None,
 }
 
 inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
-    'log_dir': '/home/pholiveira/experimental_results/',
-    # 'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/'
+    'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
     'dataset_name': None,
     'entity_col': None,
     'numerical_attrs': None,
@@ -122,6 +124,7 @@ for (approach, dataset_name, entity_col, tuples_to_read_list,
         hc_args['incremental'] = False
         hc_args['repair_previous_errors'] = False
         hc_args['recompute_from_scratch'] = False
+        hc_args['train_using_all_batches'] = False
         inc_args['approach'] = 'co_a'
 
         # A - Quality
@@ -143,6 +146,7 @@ for (approach, dataset_name, entity_col, tuples_to_read_list,
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = True
         hc_args['recompute_from_scratch'] = True
+        hc_args['train_using_all_batches'] = True
         inc_args['approach'] = 'co_b'
 
         # B - Quality
@@ -164,6 +168,7 @@ for (approach, dataset_name, entity_col, tuples_to_read_list,
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = False
         hc_args['recompute_from_scratch'] = False
+        hc_args['train_using_all_batches'] = True
         inc_args['approach'] = 'co_c'
 
         # C - Quality

@@ -52,16 +52,15 @@ class DetectEngine:
             if not self.ds.is_first_batch() and self.env['repair_previous_errors']:
                 self.set_previous_dirty_rows()
 
-            status = "DONE with error detection."
-            toc_total = time.clock()
-            detect_time = toc_total - tic_total
-        else:
-            status = "DONE no errors detected."
-            detect_time = 0.0
+        status = "DONE with error detection."
+        toc_total = time.clock()
+        detect_time = toc_total - tic_total
 
         return status, detect_time, self.errors_df.shape[0], found_errors
 
     def store_detected_errors(self, errors_df):
+        if errors_df.empty:
+            logging.info("Detected errors dataframe is empty.")
         self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
         self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])
         self.ds._active_attributes = sorted(errors_df['attribute'].unique())
@@ -72,6 +71,10 @@ class DetectEngine:
                                                            AuxTables.dk_cells.name)
 
         results = self.ds.engine.execute_query(query)
-        df = pd.DataFrame(results, columns=results[0].keys())
+
+        if results:
+            df = pd.DataFrame(results, columns=results[0].keys())
+        else:
+            df = pd.DataFrame(results, columns=self.ds.raw_data.get_attributes())
 
         self.ds.set_previous_dirty_rows(df)

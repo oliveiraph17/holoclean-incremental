@@ -73,9 +73,8 @@ class FeaturizedDataset:
         # labelled. Do not train on cells with NULL weak labels (i.e.
         # NULL init values that were not weak labelled).
         query = """
-        SELECT _vid_, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_
-        FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
-        WHERE weak_label != '{null_repr}' AND (t2._cid_ is NULL OR t1.fixed != {cell_status});
+        SELECT _vid_, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1._tid_
+        FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_;
         """.format(cell_domain=AuxTables.cell_domain.name,
                    dk_cells=AuxTables.dk_cells.name,
                    null_repr=NULL_REPR,
@@ -86,14 +85,48 @@ class FeaturizedDataset:
         labels = -1 * torch.ones(self.total_vars, 1).type(torch.LongTensor)
         is_clean = torch.zeros(self.total_vars, 1).type(torch.LongTensor)
         current_training_cells = []
+
+        tids_from_previous_batches = None
+        if not self.ds.is_first_batch():
+            if self.env['train_using_all_batches']:
+                tids_from_previous_batches = self.ds.get_raw_data_previously_repaired()['_tid_'].tolist()
+            elif self.env['repair_previous_errors']:
+                previous_dirty_rows_df = self.ds.get_previous_dirty_rows()
+                if not previous_dirty_rows_df.empty:
+                    tids_from_previous_batches = previous_dirty_rows_df['_tid_'].tolist()
+
         for tuple in tqdm(res):
             vid = int(tuple[0])
             label = int(tuple[1])
             fixed = int(tuple[2])
             clean = int(tuple[3])
             cid = int(tuple[4])
-            labels[vid] = label
-            is_clean[vid] = clean
+            tid = int(tuple[5])
+            if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
+                # Considers only not null and clean or fixed cells as weak labels.
+                labels[vid] = label
+
+            # Sets is_clean according to the parameter infer_mode ('dk' or 'all').
+            # All cells are initially set as not clean (torch.zeros).
+            if self.env['train_using_all_batches']:
+                if self.env['repair_previous_errors']:
+                    if self.env['infer_mode'] == 'dk':
+                        # Sets clean cells accordingly.
+                        is_clean[vid] = clean
+                else:
+                    # Checks if the vid is from current batch
+                    if tids_from_previous_batches is None or tid not in tids_from_previous_batches:
+                        if self.env['infer_mode'] == 'dk':
+                            # Sets clean cells accordingly.
+                            is_clean[vid] = clean
+                    else:
+                        # Marks cells from previous batches as clean.
+                        is_clean[vid] = 1
+            else:
+                if self.env['infer_mode'] == 'dk':
+                    # Sets clean cells accordingly.
+                    is_clean[vid] = clean
+
             current_training_cells.append(cid)
         return labels, is_clean, current_training_cells
 
@@ -216,11 +249,7 @@ class FeaturizedDataset:
         """
         Retrieves the samples to be inferred i.e. DK cells.
         """
-        if self.env['infer_mode'] == 'dk':
-            infer_idx = (self.is_clean == 0).nonzero()[:, 0]
-        elif self.env['infer_mode'] == 'all':
-            infer_idx = torch.arange(0, self.tensor.size(0))
-
+        infer_idx = (self.is_clean == 0).nonzero()[:, 0]
         X_infer = self.tensor.index_select(0, infer_idx)
         mask_infer = self.var_class_mask.index_select(0, infer_idx)
         return X_infer, mask_infer, infer_idx

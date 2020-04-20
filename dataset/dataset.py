@@ -42,8 +42,10 @@ class Dataset:
         self.env = env
         self.id = name
         self.raw_data = None
-        # DataFrame with the incoming data appended to previous repaired data.
-        self.raw_data_with_previous_repaired_data_df = None
+        # DataFrame with prepared data (i.e., quantized and/or combined according to the input flags)
+        self.prepared_raw_data_df = None
+        # Table with the incoming data appended to previous repaired data.
+        self.raw_data_previously_repaired = None
         self.repaired_data = None
         # DataFrame with the rows from the previous dataset that are involved in violations.
         self.previous_dirty_rows_df = None
@@ -86,6 +88,8 @@ class Dataset:
         self.categorical_attrs = None
 
         self.quantized_data = None
+        self.quantized_data_previously_repaired = None
+        self.quantized_previous_dirty_rows = None
         self.do_quantization = False
 
         # Conditional entropy of each pair of attributes using the log base 2.
@@ -107,7 +111,7 @@ class Dataset:
 
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
-                  exclude_attr_cols=None, numerical_attrs=None, store_to_db=True):
+                  exclude_attr_cols=None, numerical_attrs=None, store_to_db=True, drop_null_columns=True):
         """
         load_data takes a CSV file of the initial data, adds tuple IDs (_tid_)
         to each row to uniquely identify an 'entity', and generates unique
@@ -127,6 +131,8 @@ class Dataset:
             entity.
         :param exclude_attr_cols:
         :param numerical_attrs:
+        :param store_to_db:
+        :param drop_null_columns: (bool) Whether to drop columns with only nulls or not
         """
         tic = time.clock()
 
@@ -143,7 +149,7 @@ class Dataset:
 
             # Load raw CSV file/data into a Postgres table 'name' (param).
             self.raw_data = Table(name, Source.FILE, na_values=na_values,
-                                  exclude_attr_cols=exclude_attr_cols, fpath=fpath)
+                                  exclude_attr_cols=exclude_attr_cols, fpath=fpath, drop_null_columns=drop_null_columns)
 
             df = self.raw_data.df
             # Add _tid_ column to dataset that uniquely identifies an entity.
@@ -162,18 +168,21 @@ class Dataset:
             self.categorical_attrs = [attr for attr in all_attrs if attr not in self.numerical_attrs]
 
             if store_to_db:
-                # Now df is all in str type, make a copy of df and then
-                # 1. replace the null values in categorical data
-                # 2. make the numerical attrs as float
-                # 3. store the correct type into db (categorical->str, numerical->float)
-                df_correct_type = df.copy()
+                # # Now df is all in str type, make a copy of df and then
+                # # 1. replace the null values in categorical data
+                # # 2. make the numerical attrs as float
+                # # 3. store the correct type into db (categorical->str, numerical->float)
+                # df_correct_type = df.copy()
                 for attr in self.categorical_attrs:
-                    df_correct_type.loc[df_correct_type[attr].isnull(), attr] = NULL_REPR
-                for attr in self.numerical_attrs:
-                    df_correct_type[attr] =  df_correct_type[attr].astype(float)
+                    df.loc[df[attr].isnull(), attr] = NULL_REPR
+                # for attr in self.numerical_attrs:
+                #     df_correct_type[attr] =  df_correct_type[attr].astype(float)
+                #
+                # df_correct_type.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False,
+                #                        index_label=None)
 
-                df_correct_type.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False,
-                                       index_label=None)
+                # (kaster): The code above was commented because it was not being used and it raised errors for incremental execution
+                df.to_sql(self.raw_data.name, self.engine.engine, if_exists='replace', index=False, index_label=None)
 
             # for df, which is all str
             # Use NULL_REPR to represent NULL values
@@ -260,14 +269,45 @@ class Dataset:
             raise Exception('ERROR No dataset loaded')
         return self.raw_data.df
 
-    def get_quantized_data(self):
+    def get_prepared_raw_data(self):
         """
-        get_quantized_data returns a pandas.DataFrame containing the data after quantization
-        :return: the data after quantization in pandas.DataFrame
+        get_prepared_raw_data returns a pandas.DataFrame containing the raw data
+        after being prepared according to the input flags.
         """
-        if self.quantized_data is None:
-            raise Exception('ERROR No dataset quantized')
-        return self.quantized_data.df
+
+        if self.prepared_raw_data_df is None:
+            if not self.do_quantization:
+                if not self.is_first_batch() and self.env['train_using_all_batches']:
+                    # Notice that we can both train_using_all_batches and repair_previous_errors. In this case, we
+                    # use the previously repaired dataset for domain generation and featurization but infer on
+                    # dk_cells, which, in this case, contains dirty cells from the current and previous batches.
+                    self.prepared_raw_data_df = pd.concat([self.get_raw_data_previously_repaired(),
+                                                           self.get_raw_data()]).reset_index(drop=True)
+                elif not self.is_first_batch() and self.env['repair_previous_errors']:
+                    # Adds only rows that have dirty cells detected.
+                    self.prepared_raw_data_df = pd.concat([self.get_previous_dirty_rows(),
+                                                           self.get_raw_data()]).reset_index(drop=True)
+                else:
+                    # Isolated batch execution; considers only the current batch.
+                    self.prepared_raw_data_df = self.get_raw_data()
+            else:
+                if self.quantized_data is None:
+                    raise Exception('ERROR No dataset quantized')
+
+                if not self.is_first_batch() and self.env['train_using_all_batches']:
+                    if self.quantized_data_previously_repaired is None:
+                        raise Exception('ERROR No previously repaired dataset quantized')
+                    self.prepared_raw_data_df = pd.concat([self.quantized_data_previously_repaired.df,
+                                                           self.quantized_data.df]).reset_index(drop=True)
+                elif not self.is_first_batch() and self.env['repair_previous_errors']:
+                    if self.quantized_previous_dirty_rows is None:
+                        raise Exception('ERROR No previous dirty rows quantized')
+                    self.prepared_raw_data_df = pd.concat([self.quantized_previous_dirty_rows.df,
+                                                           self.quantized_data.df]).reset_index(drop=True)
+                else:
+                    self.prepared_raw_data_df = self.quantized_data.df
+
+        return self.prepared_raw_data_df
 
     def get_attributes(self):
         """
@@ -359,9 +399,15 @@ class Dataset:
         if not self.incremental and self.recompute_from_scratch:
             raise Exception('Inconsistent parameters: incremental=%r, recompute_from_scratch=%r.' %
                             (self.incremental, self.recompute_from_scratch))
+        if not self.incremental and self.env['train_using_all_batches']:
+            raise Exception('Inconsistent parameters: incremental=%r, train_using_all_batches=%r.' %
+                            (self.incremental, self.env['train_using_all_batches']))
         elif self.incremental_entropy and self.recompute_from_scratch:
             raise Exception('Inconsistent parameters: incremental_entropy=%r, recompute_from_scratch=%r.' %
                             (self.incremental_entropy, self.recompute_from_scratch))
+        elif self.do_quantization and self.incremental and not self.recompute_from_scratch:
+            raise Exception('Inconsistent parameters: incremental=%r, do_quantization=%r, recompute_from_scratch=%r.' %
+                            (self.incremental, self.do_quantization, self.recompute_from_scratch))
 
         total_tuples_loaded = None
         single_attr_stats_loaded = None
@@ -378,24 +424,38 @@ class Dataset:
 
         if not self.is_first_batch() and self.recompute_from_scratch:
             # We get the statistics both from previous and incoming data.
-            self.load_previous_repaired_data()
-            data_df = self.raw_data_with_previous_repaired_data_df
+            if self.do_quantization:
+                # TODO(kaster): Quantization cannot be computed incrementally yet, so it implies recompute_from_scratch.
+                if self.quantized_data is None or self.quantized_data_previously_repaired is None:
+                    raise Exception('ERROR No current/previous dataset quantized for collecting statistics.')
+
+                data_df = pd.concat([self.quantized_data.df,
+                                     self.quantized_data_previously_repaired.df]).reset_index(drop=True)
+            else:
+                data_df = pd.concat([self.raw_data.df,
+                                     self.get_raw_data_previously_repaired()]).reset_index(drop=True)
         else:
             # We get the statistics from the incoming data.
-            data_df = self.raw_data.df
+            if self.do_quantization:
+                if self.quantized_data is None:
+                    raise Exception('ERROR No dataset quantized for collecting statistics.')
+
+                data_df = self.quantized_data.df
+            else:
+                data_df = self.raw_data.df
 
         # Total number of tuples.
         self.total_tuples = len(data_df.index)
 
         # Single statistics.
         for attr in self.get_attributes():
-            self.single_attr_stats[attr] = self.get_stats_single(attr)
+            self.single_attr_stats[attr] = self.get_stats_single(attr, data_df)
         # Compute co-occurrence frequencies.
         for cond_attr in self.get_attributes():
             self.pair_attr_stats[cond_attr] = {}
             for trg_attr in self.get_attributes():
                 if trg_attr != cond_attr:
-                    self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr, trg_attr)
+                    self.pair_attr_stats[cond_attr][trg_attr] = self.get_stats_pair(cond_attr, trg_attr, data_df)
 
         Stats = recordtype('Stats', 'total_tuples single_attr_stats pair_attr_stats')
         stats1 = Stats(total_tuples_loaded, single_attr_stats_loaded, pair_attr_stats_loaded)
@@ -403,11 +463,8 @@ class Dataset:
 
         entropy_tic = time.clock()
 
-        # TODO(kaster): adjust the correlation computation to use correctly the quantized_data as indicated below.
-        # data_df = self.ds.get_quantized_data() if self.do_quantization \
-        #    else self.ds.get_raw_data()
         if not self.incremental or self.is_first_batch():
-            correlations = self.compute_norm_cond_entropy_corr()
+            correlations = self.compute_norm_cond_entropy_corr(data_df)
         else:
             if self.incremental_entropy:
                 # The incremental entropy calculation requires separate statistics.
@@ -432,7 +489,7 @@ class Dataset:
                     self.single_attr_stats = stats1.single_attr_stats
                     self.pair_attr_stats = stats1.pair_attr_stats
 
-                correlations = self.compute_norm_cond_entropy_corr()
+                correlations = self.compute_norm_cond_entropy_corr(data_df)
 
         if self.env['debug_mode']:
             corrs_df = pd.DataFrame.from_dict(correlations, orient='columns')
@@ -454,30 +511,22 @@ class Dataset:
 
         return corr_dict
 
-    def get_stats_single(self, attr):
+    def get_stats_single(self, attr, data_df):
         """
         Returns a dictionary where the keys are domain values for :param attr: and
         the values contain the frequency count of that value for this attribute.
         """
         # need to decode values into unicode strings since we do lookups via
         # unicode strings from Postgres
-        if not self.is_first_batch() and self.recompute_from_scratch:
-            data_df = self.raw_data_with_previous_repaired_data_df
-        else:
-            data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
         return data_df[[attr]].groupby([attr]).size().to_dict()
 
-    def get_stats_pair(self, first_attr, second_attr):
+    def get_stats_pair(self, first_attr, second_attr, data_df):
         """
         Returns a dictionary {first_val -> {second_val -> count } } where:
             <first_val>: all possible values for first_attr
             <second_val>: all values for second_attr that appear at least once with <first_val>
             <count>: frequency (# of entities) where first_attr=<first_val> AND second_attr=<second_val>
         """
-        if not self.is_first_batch() and self.recompute_from_scratch:
-            data_df = self.raw_data_with_previous_repaired_data_df
-        else:
-            data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
         tmp_df = data_df[[first_attr, second_attr]]\
             .groupby([first_attr, second_attr])\
             .size()\
@@ -570,8 +619,8 @@ class Dataset:
                 init_records[idx][attr] = repaired_vals[tid][attr]
         repaired_df = pd.DataFrame.from_records(init_records)
 
-        for attr in self.numerical_attrs:
-            repaired_df[attr] = repaired_df[attr].astype(float)
+        # for attr in self.numerical_attrs:
+        #     repaired_df[attr] = repaired_df[attr].astype(float)
 
         name = self.raw_data.name+'_repaired'
         self.repaired_data = Table(name, Source.DF, df=repaired_df)
@@ -587,7 +636,10 @@ class Dataset:
     def get_repaired_dataset_incremental(self):
         tic = time.clock()
 
-        if not self.is_first_batch() and self.repair_previous_errors:
+        if not self.is_first_batch() and self.env['train_using_all_batches']:
+            # Gets all rows from previous batches and rows from the current batch for repairing.
+            df_by_tid = pd.concat([self.raw_data_previously_repaired.df, self.raw_data.df]).sort_values(['_tid_'])
+        elif not self.is_first_batch() and self.repair_previous_errors:
             # Gets dirty rows from previous batches and rows from the current batch for repairing.
             df_by_tid = pd.concat([self.previous_dirty_rows_df, self.raw_data.df]).sort_values(['_tid_'])
         else:
@@ -612,16 +664,20 @@ class Dataset:
 
         # Dictionary to keep track of previous dirty values that had their values changed after inference.
         updated_previous_values = {}
-        max_previous_tid = 0
-
-        if not self.is_first_batch() and self.repair_previous_errors:
-            max_previous_tid = self.previous_dirty_rows_df['_tid_'].max(axis=0)
 
         for tid in inferred_values:
             idx = tid_to_idx['index'][tid]
             is_previous = False
             if not self.is_first_batch() and self.repair_previous_errors:
-                is_previous = self.previous_dirty_rows_df.loc[self.previous_dirty_rows_df['_tid_'] == tid].size > 0
+                if self.env['train_using_all_batches']:
+                    is_previous = self.raw_data_previously_repaired.df.loc[
+                                      self.raw_data_previously_repaired.df['_tid_'] == tid].size > 0
+                else:
+                    if self.previous_dirty_rows_df.empty:
+                        is_previous = False
+                    else:
+                        is_previous = self.previous_dirty_rows_df\
+                                          .loc[self.previous_dirty_rows_df['_tid_'] == tid].size > 0
                 if is_previous:
                     updated_previous_values[tid] = []
 
@@ -646,8 +702,8 @@ class Dataset:
         repaired_df = pd.DataFrame.from_records(init_records)
         repaired_table_name = self.raw_data.name + '_repaired'
 
-        for attr in self.numerical_attrs:
-            repaired_df[attr] = repaired_df[attr].astype(float)
+        # for attr in self.numerical_attrs:
+        #     repaired_df[attr] = repaired_df[attr].astype(float)
 
         # Keeps track of the time spent to generate a copy of the current repaired table, if needed.
         repaired_table_copy_time = 0
@@ -663,9 +719,22 @@ class Dataset:
                 self.persist_repaired_previous_rows(updated_previous_values, repaired_table_name)
 
                 # Picks only tuples from the current batch (i.e., not (~) isin previous).
-                repaired_incoming_rows_df = repaired_df[~repaired_df['_tid_'].isin(self.previous_dirty_rows_df['_tid_'])]
+                if self.env['train_using_all_batches']:
+                    repaired_incoming_rows_df = repaired_df[
+                        ~repaired_df['_tid_'].isin(self.raw_data_previously_repaired.df['_tid_'])]
+                else:
+                    if self.previous_dirty_rows_df.empty:
+                        repaired_incoming_rows_df = repaired_df
+                    else:
+                        repaired_incoming_rows_df = repaired_df[~repaired_df['_tid_'].isin(
+                            self.previous_dirty_rows_df['_tid_'])]
             else:
-                repaired_incoming_rows_df = repaired_df
+                if self.env['train_using_all_batches']:
+                    # Picks only tuples from the current batch (i.e., not (~) isin previous).
+                    repaired_incoming_rows_df = repaired_df[
+                        ~repaired_df['_tid_'].isin(self.raw_data_previously_repaired.df['_tid_'])]
+                else:
+                    repaired_incoming_rows_df = repaired_df
 
             self.repaired_data = Table(repaired_table_name, Source.DF, df=repaired_incoming_rows_df)
             self.repaired_data.store_to_db(self.engine.engine, if_exists='append')
@@ -802,7 +871,7 @@ class Dataset:
                         # Increments the frequency.
                         self.pair_attr_stats[other_attr][attr][other_attr_val][new_attr_val] += 1
 
-    def compute_norm_cond_entropy_corr(self):
+    def compute_norm_cond_entropy_corr(self, data_df=None):
         """
         Computes the correlations between attributes by calculating the normalized conditional entropy between them.
         The conditional entropy is asymmetric, therefore we need pairwise computations.
@@ -842,8 +911,8 @@ class Dataset:
                 # If H(x|y) = 0, then y determines x, i.e. y -> x.
                 if self.default_entropy:
                     # Uses the implementation of pyitlib.
-                    corr[x][y] = 1.0 - drv.entropy_conditional(self.raw_data.df[x],
-                                                               self.raw_data.df[y],
+                    corr[x][y] = 1.0 - drv.entropy_conditional(data_df[x],
+                                                               data_df[y],
                                                                base=x_domain_size).item()
                 else:
                     # Uses our implementation.
@@ -1015,40 +1084,49 @@ class Dataset:
 
         return first_tid
 
-    def load_previous_repaired_data(self):
+    def get_raw_data_previously_repaired(self):
+        if self.raw_data_previously_repaired is None:
+            try:
+                self.raw_data_previously_repaired = Table(self.raw_data.name + '_repaired',
+                                               Source.DB,
+                                               db_engine=self.engine)
+
+            except ValueError:
+                raise Exception('ERROR while trying to load previous repaired data from the database.')
+
+        return self.raw_data_previously_repaired.df
+
+    def load_stats(self, base_path='/tmp/', batch_id=''):
         try:
-            previous_repaired_data = Table(self.raw_data.name + '_repaired',
-                                           Source.DB,
-                                           db_engine=self.engine)
-
-            incoming_data_df = self.get_quantized_data() if self.do_quantization else self.get_raw_data()
-
-            self.raw_data_with_previous_repaired_data_df = pd.concat([previous_repaired_data.df,
-                                                                      incoming_data_df])
-        except ValueError:
-            raise Exception('ERROR while trying to load previous repaired data from the database.')
-
-    def load_stats(self):
-        try:
-            with open('/tmp/single_attr_stats.ujson', encoding='utf-8') as f:
+            with open(base_path + self.raw_data.name + batch_id + '_single_attr_stats.ujson',
+                      encoding='utf-8') as f:
                 single_attr_stats = ujson.load(f)
-            with open('/tmp/pair_attr_stats.ujson', encoding='utf-8') as f:
+            with open(base_path + self.raw_data.name + batch_id + '_pair_attr_stats.ujson',
+                      encoding='utf-8') as f:
                 pair_attr_stats = ujson.load(f)
+            with open(base_path + self.raw_data.name + batch_id + '_num_tuples.txt',
+                      encoding='utf-8') as f:
+                num_tuples = int(f.readline())
 
-            table_repaired_name = self.raw_data.name + '_repaired'
-            query = 'SELECT COUNT(*) FROM "{}"'.format(table_repaired_name)
-            result = self.engine.execute_query(query)
-            num_tuples = result[0][0]
+            # table_repaired_name = self.raw_data.name + '_repaired'
+            # query = 'SELECT COUNT(*) FROM "{}"'.format(table_repaired_name)
+            # result = self.engine.execute_query(query)
+            # num_tuples = result[0][0]
 
             return num_tuples, single_attr_stats, pair_attr_stats
         except ValueError:
             raise Exception('ERROR while trying to load statistics.')
 
-    def save_stats(self):
-        with open('/tmp/single_attr_stats.ujson', 'w', encoding='utf-8') as f:
+    def save_stats(self, base_path='/tmp/'):
+        with open(base_path + self.raw_data.name + '_single_attr_stats.ujson', 'w',
+                  encoding='utf-8') as f:
             ujson.dump(self.single_attr_stats, f, ensure_ascii=False)
-        with open('/tmp/pair_attr_stats.ujson', 'w', encoding='utf-8') as f:
+        with open(base_path + self.raw_data.name + '_pair_attr_stats.ujson', 'w',
+                  encoding='utf-8') as f:
             ujson.dump(self.pair_attr_stats, f, ensure_ascii=False)
+        with open(base_path + self.raw_data.name + '_num_tuples.txt', 'w',
+                  encoding='utf-8') as f:
+            f.write(str(self.total_tuples) + '\n')
 
     def is_first_batch(self):
         # self.first_tid is set to 0 in 'load_data()' method if this is the first batch of data.

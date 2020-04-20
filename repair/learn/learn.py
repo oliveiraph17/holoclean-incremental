@@ -176,9 +176,6 @@ class RepairModel:
                         accuracy_count = 0
                         last_accuracy = accuracy
 
-        if self.env['save_load_checkpoint']:
-            self.save_checkpoint()
-
     def infer_values(self, X_pred, mask_pred):
         logging.info('inferring on %d examples (cells)', X_pred.shape[0])
         output = self.__predict__(X_pred, mask_pred)
@@ -262,10 +259,7 @@ class RepairModel:
         }, file_path)
 
     def load_checkpoint(self, file_path='/tmp/checkpoint.tar'):
-        try:
-            checkpoint = torch.load(file_path)
+        checkpoint = torch.load(file_path)
 
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        except OSError:
-            raise Exception('No existing checkpoint could be loaded.')
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
