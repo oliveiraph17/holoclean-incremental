@@ -86,6 +86,9 @@ class Executor:
                             detectors.append(getattr(modules['detect'][detector_file], detector_class)())
                     found_errors = hc.detect_errors(detectors)
 
+                    if self.inc_args['do_quantization']:
+                        hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
+
                     # Repairs errors based on the defined features.
                     hc.generate_domain(found_errors)
                     if found_errors:
@@ -112,9 +115,9 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        # 'detectors': [('nulldetector', 'NullDetector', False),
-        #               ('violationdetector', 'ViolationDetector', False)],
-        'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+        'detectors': [('nulldetector', 'NullDetector', False),
+                      ('violationdetector', 'ViolationDetector', False)],
+        # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
         'weak_label_thresh': 0.99,
@@ -153,6 +156,8 @@ if __name__ == "__main__":
         'dataset_name': 'hospital',
         'entity_col': None,
         'numerical_attrs': None,
+        'do_quantization': False,
+        'num_attr_groups_bins': None,
         'approach': 'one',
         'tuples_to_read_list': [1000],
         'iterations': [0],

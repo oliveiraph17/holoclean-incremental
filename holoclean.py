@@ -604,8 +604,8 @@ class Session:
         return self._repair_errors(featurizers, found_errors=found_errors)
 
     def repair_validate_errors(self, featurizers, fpath, tid_col, attr_col,
-            val_col, validate_period, na_values=None):
-        return self._repair_errors(featurizers, fpath, tid_col, attr_col,
+            val_col, validate_period, na_values=None, found_errors=True):
+        return self._repair_errors(featurizers, found_errors, fpath, tid_col, attr_col,
                 val_col, na_values, validate_period)
 
     def _repair_errors(self, featurizers, found_errors=True, fpath=None,
@@ -729,9 +729,8 @@ class Session:
             status, time = self.repair_engine.get_featurizer_weights()
             logging.info(status)
             logging.debug('Time to store featurizer weights: %.2f secs', time)
-            return status, inference_occurred
 
-        return inference_occurred
+        return status, inference_occurred
 
     def evaluate(self, fpath, tid_col, attr_col, val_col, na_values=None, inference_occurred=True):
         """
