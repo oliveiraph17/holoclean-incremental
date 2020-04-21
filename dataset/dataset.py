@@ -113,7 +113,7 @@ class Dataset:
 
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
-                  exclude_attr_cols=None, numerical_attrs=None, store_to_db=True):
+                  exclude_attr_cols=None, numerical_attrs=None, store_to_db=True, drop_null_columns=True):
         """
         load_data takes a CSV file of the initial data, adds tuple IDs (_tid_)
         to each row to uniquely identify an 'entity', and generates unique
@@ -134,6 +134,7 @@ class Dataset:
         :param exclude_attr_cols:
         :param numerical_attrs:
         :param store_to_db:
+        :param drop_null_columns: (bool) Whether to drop columns with only nulls or not
         """
         tic = time.clock()
 
@@ -150,7 +151,7 @@ class Dataset:
 
             # Load raw CSV file/data into a Postgres table 'name' (param).
             self.raw_data = Table(name, Source.FILE, na_values=na_values,
-                                  exclude_attr_cols=exclude_attr_cols, fpath=fpath)
+                                  exclude_attr_cols=exclude_attr_cols, fpath=fpath, drop_null_columns=drop_null_columns)
 
             df = self.raw_data.df
             # Add _tid_ column to dataset that uniquely identifies an entity.

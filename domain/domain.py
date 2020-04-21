@@ -29,6 +29,8 @@ class DomainEngine:
         self.max_domain = env["max_domain"]
         self.cor_strength = env["cor_strength"]
         self.estimator_type = env["estimator_type"]
+        self.incremental = env["incremental"]
+        self.recompute_from_scratch = env["recompute_from_scratch"]
 
         self.setup_complete = False
         self.domain = None
@@ -40,15 +42,22 @@ class DomainEngine:
         self.single_stats = {}
         self.pair_stats = {}
 
-    def setup(self):
+    def setup(self, found_errors=True):
         """
         setup initializes the in-memory and Postgres auxiliary tables (e.g.
         'cell_domain', 'pos_values').
         """
         tic = time.time()
         self.setup_attributes()
-        self.domain_df = self.generate_domain()
-        self.store_domains(self.domain_df)
+        if found_errors:
+            self.domain_df = self.generate_domain()
+            self.store_domains(self.domain_df)
+        else:
+            if self.incremental and not self.recompute_from_scratch:
+                tic_inc = time.clock()
+                self.save_stats()
+                save_stats_time = time.clock() - tic_inc
+                logging.debug('DONE no domain to generate, just saved statistics in the database in %.2f secs.', save_stats_time)
         status = "DONE with domain preparation."
         toc = time.time()
         return status, toc - tic
@@ -256,7 +265,12 @@ class DomainEngine:
                               "is_dk": (tid, attr) in dk_lookup if dk_lookup is not None else False,
                               })
                 vid += 1
+
         domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
+
+        # Updates the active attributes to eliminate those that do not have domain.
+        self.ds._active_attributes = domain_df['attribute'].unique()
+
         logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
         logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
         logging.debug('DONE generating initial set of domain values in %.2fs', time.clock() - tic)

@@ -146,8 +146,6 @@ class RepairModel:
         Y_train: (batch, 1)
         mask_train: (batch, # of classes)
         """
-        # last_prec = 0
-        # count_prec = 0
         batch_size = self.env['batch_size']
         accuracy_count = 0
         last_accuracy = 0
@@ -185,8 +183,6 @@ class RepairModel:
         Y_train: (batch, 1)
         mask_train: (batch, # of classes)
         """
-        # last_prec = 0
-        # count_prec = 0
         batch_size = self.env['batch_size']
         accuracy_count = 0
         last_accuracy = 0

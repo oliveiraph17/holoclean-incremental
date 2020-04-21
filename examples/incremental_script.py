@@ -79,29 +79,29 @@ datasets = [
     #  0.99, 10000, 0.6, 0.8,
     #  'dk', False, True),
 
-    ('food5k_shuffled', '_tid_', None, False,
-     None,
-     [1000] * 5, False, 5000, 0.2, 'NaiveBayes',
-     0.6, 1000, 0.2, 0.3,
-     'dk', False, False),
+    # ('food5k_shuffled', '_tid_', None, False,
+    #  None,
+    #  [1000] * 5, False, 5000, 0.2, 'NaiveBayes',
+    #  0.6, 1000, 0.2, 0.3,
+    #  'dk', False, False),
 
-    ('hospital_numerical', None, ['Score', 'Sample'], True,
-     [(100, ['Score']), (150, ['Sample'])],
-     [250] * 4, False, 1000, 0.25, 'NaiveBayes',
-     0.99, 10000, 0.6, 0.8,
-     'dk', False, False),
+    # ('hospital_numerical', None, ['Score', 'Sample'], True,
+    #  [(100, ['Score']), (150, ['Sample'])],
+    #  [250] * 4, False, 1000, 0.25, 'NaiveBayes',
+    #  0.99, 10000, 0.6, 0.8,
+    #  'dk', False, False),
 
-    ('nypd6', None, None, False,
-     None,
-     [324] * 100, False, 32400, 0.01, 'NaiveBayes',
-     0.9, 10000, 0.05, 0.3,
-     'dk', False, None),
+    # ('nypd6', None, None, False,
+    #  None,
+    #  [324] * 100, False, 32400, 0.01, 'NaiveBayes',
+    #  0.9, 10000, 0.05, 0.3,
+    #  'dk', False, None),
 
-    ('soccer', None, None, False,
-     None,
-     [2000] * 100, False, 200000, 0.01, 'NaiveBayes',
-     0.9, 10000, 0.05, 0.3,
-     'dk', False, None),
+    # ('soccer', None, None, False,
+    #  None,
+    #  [2000] * 100, False, 200000, 0.01, 'NaiveBayes',
+    #  0.9, 10000, 0.05, 0.3,
+    #  'dk', False, None),
 
     # ('chicago_num_shuffled', '_tid_', ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
     #                                    'Dropoff Centroid Latitude', 'Dropoff Centroid Longitude',
@@ -116,7 +116,7 @@ datasets = [
     #  'dk', False, None),
 ]
 
-approaches = ['A', 'B', 'C', 'B+', 'C+']
+approaches = ['A', 'B', 'C', 'B+', 'C+', 'Full']
 avg_time_iterations = None
 # avg_time_iterations = [1, 2]
 

@@ -90,7 +90,8 @@ class Executor:
                     hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
                                  '/tmp/current_batch.csv',
                                  entity_col=self.inc_args['entity_col'],
-                                 numerical_attrs=self.inc_args['numerical_attrs'])
+                                 numerical_attrs=self.inc_args['numerical_attrs'],
+                                 drop_null_columns=False)
 
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
@@ -106,7 +107,7 @@ class Executor:
                                 detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
                             else:
                                 detectors.append(getattr(modules['detect'][detector_file], detector_class)())
-                        hc.detect_errors(detectors)
+                        found_errors = hc.detect_errors(detectors)
                     elif self.hc_args['infer_mode'] == 'all':
                         # Skips error detection, creating an empty dk_cells table.
                         empty_dk_cells_df = pd.DataFrame(columns=['_tid_', 'attribute', '_cid_'])
@@ -115,6 +116,7 @@ class Executor:
                         empty_dk_cells_df['_cid_'] = empty_dk_cells_df['_cid_'].astype(int)
 
                         hc.ds.generate_aux_table(AuxTables.dk_cells, empty_dk_cells_df, store=True)
+                        found_errors = True
 
                         if self.hc_args['log_repairing_quality']:
                             hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number']))
@@ -126,21 +128,23 @@ class Executor:
                         hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
 
                     # Repairs errors based on the defined features.
-                    hc.generate_domain()
-                    hc.run_estimator()
+                    hc.generate_domain(found_errors)
+                    if found_errors:
+                        hc.run_estimator()
 
                     featurizers = [
                         getattr(modules['featurize'][featurizer_file], featurizer_class)()
                         for featurizer_file, featurizer_class in self.hc_args['featurizers'].items()
                     ]
-                    hc.repair_errors(featurizers)
+                    inference_occurred = hc.repair_errors(featurizers, found_errors=found_errors)
 
                     # Evaluates the correctness of the results.
                     hc.evaluate(fpath=(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                        self.inc_args['dataset_name'] + '_clean.csv'),
                                 tid_col='tid',
                                 attr_col='attribute',
-                                val_col='correct_val')
+                                val_col='correct_val',
+                                inference_occurred=inference_occurred)
 
                     logging.info('Batch %s finished.', self.hc_args['current_batch_number'])
 
@@ -151,9 +155,9 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        # 'detectors': [('nulldetector', 'NullDetector', False),
-        #               ('violationdetector', 'ViolationDetector', False)],
-        'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+        'detectors': [('nulldetector', 'NullDetector', False),
+                      ('violationdetector', 'ViolationDetector', False)],
+        # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
         'domain_thresh_2': 0,
