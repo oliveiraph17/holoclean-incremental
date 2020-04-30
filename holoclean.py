@@ -14,6 +14,8 @@ from detect import DetectEngine
 from repair import RepairEngine
 from evaluate import EvalEngine
 from dataset.quantization import quantize_km
+from repair.utils.skip_train import TrainSkipper
+from repair.utils.group_models import ModelGroupGenerator
 from utils import NULL_REPR
 
 
@@ -282,6 +284,31 @@ arguments = [
       'default': 99.0,
       'type': float,
       'help': 'Skips training if the accuracy of the previous trained model is equal or above this threshold.'}),
+    (('-gm', '--group-models'),
+     {'metavar': 'GROUP_MODELS',
+      'dest': 'group_models',
+      'default': None,
+      'type': str,
+      'help': 'Defines the strategy to group attributes in the same model, which is one of {pair_corr, corr_sim}.'}),
+    (('-gt', '--group-models-thresh'),
+     {'metavar': 'GROUP_MODELS_THRESH',
+      'dest': 'group_models_thresh',
+      'default': None,
+      'type': float,
+      'help': 'Threshold to guide the strategy to group attributes in the same model.'}),
+    (('-skl', '--skip-training-kl'),
+     {'metavar': 'SKIP_TRAINING_KL',
+      'dest': 'skip_training_kl',
+      'default': None,
+      'type': str,
+      'help': 'Skips the training phase based on the difference between pairwise distributions using the provided '
+              'strategy, which is one of {weighted_kl, individual_kl}.'}),
+    (('-st', '--skip-training-kl-thresh'),
+     {'metavar': 'SKIP_TRAINING_KL_THRESH',
+      'dest': 'skip_training_kl_thresh',
+      'default': None,
+      'type': float,
+      'help': 'Skips training if the value of the skip_training_kl strategy is equal or below this threshold.'}),
     (('-iptc', '--ignore-previous-training-cells'),
      {'metavar': 'IGNORE_PREVIOUS_TRAINING_CELLS',
       'dest': 'ignore_previous_training_cells',
@@ -457,6 +484,9 @@ class Session:
         self.repair_engine = RepairEngine(env, self.ds)
         self.eval_engine = EvalEngine(env, self.ds)
 
+        self.found_errors = None
+        self.inference_occurred = None
+
     def setup_experiment_loggers(self, quality_log_fpath, time_log_fpath, weight_log_path):
         if (not self.env['log_repairing_quality']
                 and not self.env['log_execution_times']
@@ -585,7 +615,7 @@ class Session:
         return self.dc_parser.get_dcs()
 
     def detect_errors(self, detect_list):
-        status, detect_time, dk_cells_count, found_errors = self.detect_engine.detect_errors(detect_list)
+        status, detect_time, dk_cells_count, self.found_errors = self.detect_engine.detect_errors(detect_list)
         logging.info(status)
         logging.debug('Time to detect errors: %.2f secs', detect_time)
         if self.env['log_repairing_quality']:
@@ -593,7 +623,6 @@ class Session:
             self.repairing_quality_metrics.append(str(dk_cells_count))
         if self.env['log_execution_times']:
             self.execution_times.append(str(detect_time))
-        return found_errors
 
     def disable_quantize(self):
         self.do_quantization = False
@@ -652,8 +681,66 @@ class Session:
                 df_previous_errors = df_previously_repaired[df_previously_repaired['_tid_'].isin(self.ds.get_previous_dirty_rows()['_tid_'])]
                 self.ds.quantized_previous_dirty_rows = Table(name, Source.DF, df=df_previous_errors)
 
-    def generate_domain(self, found_errors=True):
-        status, domain_time = self.domain_engine.setup(found_errors)
+    def set_models_to_train(self):
+        if self.found_errors:
+            models_to_train = None
+            if self.env['group_models'] is not None:
+                tic = time.clock()
+                group_generator = ModelGroupGenerator(self.env, self.ds)
+                if not self.ds.is_first_batch():
+                    try:
+                        group_generator.load_groups()
+                    except (FileNotFoundError, ValueError) as e:
+                        logging.debug('No previously generated model groups to load.')
+
+                if self.env['group_models'] == 'pair_corr':
+                    self.ds.model_groups, models_to_train = group_generator.pair_correlation_grouping(
+                        thresh=self.env['group_models_thresh'])
+                elif self.env['group_models'] == 'corr_sim':
+                    self.ds.model_groups, models_to_train = group_generator.corr_similarity_grouping(
+                        thresh=self.env['group_models_thresh'])
+                else:
+                    raise ValueError('Unknown model grouping strategy: %s', self.env['group_models'])
+
+                self.repair_engine.groups = self.ds.get_model_groups()
+                group_generator.save_groups()
+
+                logging.info('DONE getting groups for building grouped models in %.2f secs.', time.clock() - tic)
+                logging.debug('Grouped models: %s', str(self.ds.get_model_groups()))
+                logging.debug('New/changed grouped models that require training: %s', str(models_to_train))
+
+            if self.env['skip_training_kl'] is not None:
+                tic = time.clock()
+                skipper = TrainSkipper(self.env, self.ds)
+                if not self.ds.is_first_batch():
+                    try:
+                        skipper.load_last_training_stats()
+                    except (FileNotFoundError, ValueError) as e:
+                        logging.debug('No previously saved stats to load.')
+
+                if self.env['skip_training_kl'] == 'individual_kl':
+                    models_to_train = skipper.get_models_to_train_individual_kl(
+                        thresh=self.env['skip_training_kl_thresh'], models_set_to_train=models_to_train)
+                elif self.env['skip_training_kl'] == 'weighted_kl':
+                    models_to_train = skipper.get_models_to_train_weighted_kl(
+                        thresh=self.env['skip_training_kl_thresh'], models_set_to_train=models_to_train)
+                else:
+                    raise ValueError('Unknown model grouping strategy: %s', self.env['group_models'])
+
+                if models_to_train:
+                    skipper.save_last_training_stats()
+                logging.info('DONE setting models to train in %.2f secs.', time.clock() - tic)
+                logging.debug('Models to train: %s', str(models_to_train))
+
+            if models_to_train is not None:
+                self.ds.set_models_to_train(models_to_train)
+
+    def generate_domain(self):
+        if self.found_errors:
+            status, domain_time = self.domain_engine.setup()
+        else:
+            status = 'DONE Domain generation skipped.'
+            domain_time = 0.0
         logging.info(status)
         logging.debug('Time to generate the domain: %.2f secs', domain_time)
         if self.env['log_execution_times']:
@@ -663,21 +750,21 @@ class Session:
         """
         Uses estimator to weak label and prune domain.
         """
-        if self.env['skip_training']:
+        if not self.found_errors or self.env['skip_training']:
             logging.debug('Skipping estimator as the training phase is going to be skipped...')
             return
 
         self.domain_engine.run_estimator()
 
-    def repair_errors(self, featurizers, found_errors=True):
-        return self._repair_errors(featurizers, found_errors=found_errors)
+    def repair_errors(self, featurizers):
+        return self._repair_errors(featurizers)
 
     def repair_validate_errors(self, featurizers, fpath, tid_col, attr_col,
-            val_col, validate_period, na_values=None, found_errors=True):
-        return self._repair_errors(featurizers, found_errors, fpath, tid_col, attr_col,
+            val_col, validate_period, na_values=None):
+        return self._repair_errors(featurizers, fpath, tid_col, attr_col,
                 val_col, na_values, validate_period)
 
-    def _repair_errors(self, featurizers, found_errors=True, fpath=None,
+    def _repair_errors(self, featurizers, fpath=None,
             tid_col=None, attr_col=None, val_col=None, na_values=None,
             validate_period=None):
         """
@@ -693,7 +780,7 @@ class Session:
         :param na_values: (Any) how na_values are represented in the data.
         :param validate_period: (int) perform validation every nth epoch.
         """
-        if found_errors:
+        if self.found_errors:
             status, feat_time = self.repair_engine.setup_featurized_ds(featurizers)
         else:
             status = "DONE featurizers were not set up."
@@ -703,7 +790,7 @@ class Session:
         if self.env['log_execution_times']:
             self.execution_times.append(str(feat_time))
 
-        if found_errors:
+        if self.found_errors:
             status, setup_time = self.repair_engine.setup_repair_model()
         else:
             status = "DONE repair model was not set up."
@@ -722,7 +809,7 @@ class Session:
         else:
             # If validation fpath provided, fit and validate
             if fpath is None:
-                if found_errors:
+                if self.found_errors:
                     status, fit_time, training_cells_count = self.repair_engine.fit_repair_model()
                 else:
                     status = "DONE repair model was not fit."
@@ -736,7 +823,7 @@ class Session:
                 logging.info(status)
                 logging.debug('Time to evaluate repairs: %.2f secs', load_time)
 
-                if found_errors:
+                if self.found_errors:
                     status, fit_time, training_cells_count = self.repair_engine.fit_validate_repair_model(
                         self.eval_engine,
                         validate_period
@@ -753,18 +840,18 @@ class Session:
             if self.env['log_execution_times']:
                 self.execution_times.append(str(fit_time))
 
-        if found_errors:
-            status, infer_time, inference_occurred = self.repair_engine.infer_repairs()
+        if self.found_errors:
+            status, infer_time, self.inference_occurred = self.repair_engine.infer_repairs()
         else:
             status = "DONE no errors found, thus no cells to infer."
             infer_time = 0.0
-            inference_occurred = False
+            self.inference_occurred = False
         logging.info(status)
         logging.debug('Time to infer correct cell values: %.2f secs', infer_time)
         if self.env['log_execution_times']:
             self.execution_times.append(str(infer_time))
 
-        if inference_occurred:
+        if self.inference_occurred:
             status, get_inferred_values_time = self.ds.get_inferred_values()
         else:
             status = "DONE no inferred values to get."
@@ -774,38 +861,44 @@ class Session:
         if self.env['log_execution_times']:
             self.execution_times.append(str(get_inferred_values_time))
 
-        repaired_table_copy_time = 0.0
-        save_stats_time = 0.0
-        if inference_occurred:
+        if self.inference_occurred:
             if self.env['incremental']:
-                status, time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
+                status, repair_time, repaired_table_copy_time, save_stats_time = self.ds.get_repaired_dataset_incremental()
             else:
-                status, time, save_stats_time = self.ds.get_repaired_dataset()
+                status, repair_time, save_stats_time = self.ds.get_repaired_dataset()
+                repaired_table_copy_time = 0.0
         else:
             status = "DONE no repaired dataset to generate."
-            time = 0.0
+            repair_time = 0.0
+            repaired_table_copy_time = 0.0
+            if self.env['incremental'] and not self.env['recompute_from_scratch']:
+                tic_inc = time.clock()
+                self.ds.save_stats()
+                save_stats_time = time.clock() - tic_inc
+            else:
+                save_stats_time = 0.0
         logging.info(status)
-        logging.debug('Time to store repaired dataset: %.2f secs', time)
+        logging.debug('Time to store repaired dataset: %.2f secs', repair_time)
         if self.env['log_execution_times']:
-            self.execution_times.append(str(time))
+            self.execution_times.append(str(repair_time))
             self.execution_times.append(str(repaired_table_copy_time))
             self.execution_times.append(str(save_stats_time))
 
         if self.env['log_execution_times']:
             self.experiment_time_logger.info(';'.join(self.execution_times))
 
-        if found_errors and self.env['log_feature_weights'] and not self.env['skip_training']:
-            status, time, complete_df = self.repair_engine.get_featurizer_weights()
+        if self.found_errors and self.env['log_feature_weights'] and not self.env['skip_training']:
+            status, repair_time, complete_df = self.repair_engine.get_featurizer_weights()
             if self.env['print_fw']:
                 logging.info(status)
             with open(self.weight_log_path, 'a') as f:
                 complete_df.to_csv(path_or_buf=f, mode='a',
                                    index=False, header=f.tell() == 0, sep=';', line_terminator='')
-            logging.debug('Time to store featurizer weights: %.2f secs', time)
+            logging.debug('Time to store featurizer weights: %.2f secs', repair_time)
 
-        return status, inference_occurred
+        return status
 
-    def evaluate(self, fpath, tid_col, attr_col, val_col, na_values=None, inference_occurred=True):
+    def evaluate(self, fpath, tid_col, attr_col, val_col, na_values=None):
         """
         evaluate generates an evaluation report with metrics (e.g. precision,
         recall) given a test set.
@@ -827,7 +920,7 @@ class Session:
         logging.info(status)
         logging.debug('Time to generate report: %.2f secs', report_time)
         if self.env['log_repairing_quality']:
-            if inference_occurred:
+            if self.inference_occurred:
                 self.repairing_quality_metrics.append(str(getattr(eval_report, 'precision')))
                 self.repairing_quality_metrics.append(str(getattr(eval_report, 'recall')))
                 self.repairing_quality_metrics.append(str(getattr(eval_report, 'repair_recall')))

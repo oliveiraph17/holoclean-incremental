@@ -15,7 +15,6 @@ class RepairEngine:
         self.env = env
         self.repair_model = {}
 
-        # Groups: {attr_repr1: [attr1, attr2, ...], attr_repr2: [...], ...}
         self.groups = None
 
     def setup_featurized_ds(self, featurizers):
@@ -43,16 +42,25 @@ class RepairEngine:
                         logging.info('No existing checkpoint could be loaded for %s.', attr)
 
         else:
-            for attr, attrs_in_group in self.groups.items():
-                output_dim = self.feat_dataset.classes[next(iter(attrs_in_group))]
-                self.repair_model[attr] = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch(),
-                                                      bias=self.env['bias'],
-                                                      layer_sizes=self.env['layer_sizes'])
-                if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
-                    try:
-                        self.repair_model[attr].load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
-                    except OSError:
-                        logging.info('No existing checkpoint could be loaded for %s.', attr)
+            for attr in self.ds.get_active_model_groups():
+                attrs_in_group = self.groups[attr]
+                group_active = False
+                for at in attrs_in_group:
+                    if at in self.feat_dataset.classes.keys():
+                        group_active = True
+                        output_dim = self.feat_dataset.classes[at]
+                        break
+                if group_active:
+                    self.repair_model[attr] = RepairModel(self.env, feat_info, output_dim, self.ds.is_first_batch(),
+                                                          bias=self.env['bias'],
+                                                          layer_sizes=self.env['layer_sizes'])
+                    # NB: If the group has changed, loading the checkpoint makes the initialization of the new model
+                    # biased towards the checkpointed model. Is this better than a random initialization?
+                    if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
+                        try:
+                            self.repair_model[attr].load_checkpoint('/tmp/checkpoint-' + self.ds.raw_data.name + '-' + attr)
+                        except OSError:
+                            logging.info('No existing checkpoint could be loaded for %s.', attr)
 
         toc = time.clock()
         status = "DONE setting up repair model."
@@ -65,7 +73,7 @@ class RepairEngine:
         X_train, Y_train, mask_train, train_cid = self.feat_dataset.get_training_data()
 
         if self.groups is None:
-            for attr in self.ds.get_active_attributes():
+            for attr in self.ds.get_models_to_train():
                 logging.info('Training model for %s with %d training examples (cells)', attr, X_train[attr].size(0))
                 tic_attr = time.clock()
 
@@ -93,24 +101,27 @@ class RepairEngine:
                 total_training_cells += X_train[attr].size(0)
 
         else:
-            for attr, attrs_in_group in self.groups.items():
-                group_training_cells = sum([X_train[att].size(0) for att in attrs_in_group])
+            for attr in self.ds.get_models_to_train():
+                attrs_in_group = self.groups[attr]
+                group_training_cells = sum([X_train[att].size(0) for att in attrs_in_group if att in X_train])
                 logging.info('Training model for %s with %d training examples (cells)', attr, group_training_cells)
                 tic_attr = time.clock()
 
                 if self.env['save_load_checkpoint'] and not self.ds.is_first_batch():
                     logging.debug("Checking if learning can be skipped for %s...", attr)
                     for att in attrs_in_group:
-                        tic_skip = time.clock()
-                        grdt = Y_train[att].numpy().flatten()
-                        Y_pred = self.repair_model[attr].infer_values(X_train[att], mask_train[att])
-                        Y_assign = Y_pred.data.numpy().argmax(axis=1)
-                        accuracy = 100. * np.mean(Y_assign == grdt)
-                        logging.debug("Previous %s model accuracy: %.2f. Inference time: %.2f", att, accuracy,
-                                      time.clock() - tic_skip)
-                        # TODO: code for skipping after the inference.
+                        if att in X_train:
+                            tic_skip = time.clock()
+                            grdt = Y_train[att].numpy().flatten()
+                            Y_pred = self.repair_model[attr].infer_values(X_train[att], mask_train[att])
+                            Y_assign = Y_pred.data.numpy().argmax(axis=1)
+                            accuracy = 100. * np.mean(Y_assign == grdt)
+                            logging.debug("Previous %s model accuracy: %.2f. Inference time: %.2f", att, accuracy,
+                                          time.clock() - tic_skip)
+                            # TODO: code for skipping after the inference.
 
-                self.repair_model[attr].fit_model(X_train, Y_train, mask_train, self.env['epochs'], attrs_in_group)
+                self.repair_model[attr].fit_model_grouped(X_train, Y_train, mask_train, self.env['epochs'],
+                                                         attrs_in_group)
 
                 if self.env['save_load_checkpoint']:
                     tic_checkpoint = time.clock()
@@ -183,7 +194,8 @@ class RepairEngine:
             if self.groups is None:
                 Y_pred[attr] = self.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
             else:
-                Y_pred[attr] = self.repair_model[self.get_attr_group(attr)].infer_values(X_pred[attr], mask_pred[attr])
+                Y_pred[attr] = self.repair_model[self.ds.get_attr_group(attr)].infer_values(
+                    X_pred[attr], mask_pred[attr])
             logging.debug('Done. Elapsed time: %.2f', time.clock() - tic_attr)
 
         distr_df, infer_val_df = self.get_infer_dataframes(infer_idx, Y_pred)
@@ -247,8 +259,12 @@ class RepairEngine:
         report = {}
         df_per_attr = []
         for attr in self.ds.get_active_attributes():
-            report[attr], df_list = self.repair_model[attr]\
-                .get_featurizer_weights(self.feat_dataset.featurizer_info)
+            if self.groups is None:
+                report[attr], df_list = self.repair_model[attr].get_featurizer_weights(
+                    self.feat_dataset.featurizer_info)
+            else:
+                report[attr], df_list = self.repair_model[self.ds.get_attr_group(attr)].get_featurizer_weights(
+                    self.feat_dataset.featurizer_info)
             # One df per featurizer in df_list.
             df = pd.concat(df_list)
             df.insert(loc=1, column='attribute',
@@ -268,8 +284,3 @@ class RepairEngine:
         toc = time.clock()
         report_time = toc - tic
         return report, report_time, complete_df
-
-    def get_attr_group(self, attribute):
-        for attr, attrs_in_group in self.groups.items():
-            if attribute in attrs_in_group:
-                return attr

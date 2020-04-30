@@ -18,7 +18,7 @@ hc_args = {
     'verbose': True,
     'timeout': 3 * 60000,
     'estimator_type': 'NaiveBayes',
-    'epochs_convergence': 3,
+    'epochs_convergence': 0,
     'convergence_thresh': 0.01,
     'skip_training_thresh': 101,
     'log_repairing_quality': True,
@@ -119,6 +119,10 @@ datasets = [
 approaches = ['A', 'B', 'C', 'B+', 'C+', 'Full']
 avg_time_iterations = None
 # avg_time_iterations = [1, 2]
+group_models = 'pair_corr'  # {None, 'pair_corr', 'corr_sim'}
+group_models_thresh = 0.95
+skip_training_kl = 'weighted_kl'  # {None, individual_kl, weighted_kl}
+skip_training_kl_thresh = 0.2
 
 for (dataset_name, entity_col, numerical_attrs, do_quantization,
      num_attr_groups_bins,
@@ -153,6 +157,9 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         hc_args['append'] = True
         inc_args['approach'] = 'co_a'
 
+        hc_args['group_models'] = None
+        hc_args['skip_training_kl'] = None
+
         # A - Quality
         hc_args['log_repairing_quality'] = True
         hc_args['log_execution_times'] = True
@@ -174,9 +181,13 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = True
         hc_args['recompute_from_scratch'] = True
+        hc_args['train_using_all_batches'] = True
         hc_args['save_load_checkpoint'] = False
         hc_args['append'] = False
         inc_args['approach'] = 'co_b'
+
+        hc_args['group_models'] = None
+        hc_args['skip_training_kl'] = None
 
         # B - Quality
         hc_args['log_repairing_quality'] = True
@@ -198,13 +209,18 @@ for (dataset_name, entity_col, numerical_attrs, do_quantization,
     if 'C' in approaches:
         hc_args['incremental'] = True
         hc_args['repair_previous_errors'] = False
+        hc_args['train_using_all_batches'] = True
+        hc_args['save_load_checkpoint'] = True
 
         if inc_args['model_monitoring']:
             hc_args['recompute_from_scratch'] = True
-            hc_args['save_load_checkpoint'] = True
         else:
             hc_args['recompute_from_scratch'] = False
-            hc_args['save_load_checkpoint'] = False
+
+        hc_args['group_models'] = group_models
+        hc_args['group_models_thresh'] = group_models_thresh
+        hc_args['skip_training_kl'] = skip_training_kl
+        hc_args['skip_training_kl_thresh'] = skip_training_kl_thresh
 
         hc_args['append'] = False
         inc_args['approach'] = 'co_c'
