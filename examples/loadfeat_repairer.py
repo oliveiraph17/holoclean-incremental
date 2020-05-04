@@ -171,7 +171,7 @@ class Executor:
                 Y_pred[attr] = self.hc.repair_engine.repair_model[attr].infer_values(X_pred[attr], mask_pred[attr])
             else:
                 Y_pred[attr] = self.hc.repair_engine.repair_model[
-                    self.hc.repair_engine.get_attr_group(attr)].infer_values(X_pred[attr], mask_pred[attr])
+                    self.hc.ds.get_attr_group(attr)].infer_values(X_pred[attr], mask_pred[attr])
             grdt = Y_truth[attr].numpy().flatten()
             Y_assign = Y_pred[attr].data.numpy().argmax(axis=1)
             accuracy = 100. * np.mean(Y_assign == grdt)
@@ -201,8 +201,8 @@ class Executor:
             if self.groups is None:
                 eval_metrics['training_cells'][attr] = self.training_cells[attr]
             else:
-                eval_metrics['training_cells'][self.hc.repair_engine.get_attr_group(attr)] = self.training_cells[
-                    self.hc.repair_engine.get_attr_group(attr)]
+                eval_metrics['training_cells'][self.hc.ds.get_attr_group(attr)] = self.training_cells[
+                    self.hc.ds.get_attr_group(attr)]
 
             # Outputs the attribute's metrics and adds them to the aggregated metrics.
             for metric, value in eval_metrics.items():
@@ -260,7 +260,7 @@ class Executor:
                         weights = self.hc.repair_engine.repair_model[attr].model.first_layer_weights[0].squeeze().tolist()
                     else:
                         weights = self.hc.repair_engine.repair_model[
-                            self.hc.repair_engine.get_attr_group(attr)].model.first_layer_weights[0].squeeze().tolist()
+                            self.hc.ds.get_attr_group(attr)].model.first_layer_weights[0].squeeze().tolist()
                     f.write(str(train_batch_number) + ';' + ';'.join(str(w) for w in weights) + '\n')
 
         # Overwrites the aggregated metrics than are not only sums.
@@ -285,7 +285,7 @@ class Executor:
 
         # Outputs the aggregated metrics.
         # for metric, agg_value in agg_metrics.items():
-        #     logging.debug('[Aggregated] ' + metric + ' = %2f', agg_value)
+        #     logging.debug('[Aggregated] ' + metric + ' = %.2f', agg_value)
 
         # Saves the aggregated metrics.
         if self.hc_args['log_repairing_quality']:

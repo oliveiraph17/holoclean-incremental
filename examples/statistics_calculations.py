@@ -257,10 +257,8 @@ class Executor:
 
         return ret
 
-    def run_get_attribute_groups(self):
+    def run_get_attribute_groups(self, thresh):
         batch_number = self.feature_args['first_batch']
-
-        thresh = 0.15
 
         for batch_size in self.feature_args['tuples_to_read_list']:
             if batch_number > self.feature_args['last_batch']:
@@ -418,7 +416,7 @@ class Executor:
 
     def run_compute_KL(self, verbose=False):
         # This function compares current batch with the last training batch to try to skip training.
-        thresh = 0.01
+        thresh = 0.005
 
         batch_number = self.feature_args['first_batch']
         batch_size = self.feature_args['tuples_to_read_list'][batch_number - 1]
@@ -514,5 +512,5 @@ if __name__ == "__main__":
     # Runs the default example.
     executor = Executor(hc_args, feature_args)
     # executor.generate_attr_corr_and_weight_dist()
-    # executor.run_get_attribute_groups()
-    executor.run_compute_KL(verbose=True)
+    executor.run_get_attribute_groups(thresh=0.04)
+    # executor.run_compute_KL(verbose=True)

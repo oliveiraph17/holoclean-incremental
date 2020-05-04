@@ -133,22 +133,19 @@ class FeaturizedDataset:
             # All cells are initially set as not clean (torch.zeros).
             if self.env['train_using_all_batches']:
                 if self.env['repair_previous_errors']:
-                    if self.env['infer_mode'] == 'dk':
-                        # Sets clean cells accordingly.
-                        is_clean[attr][count[attr]] = clean
+                    # Sets clean cells accordingly.
+                    is_clean[attr][count[attr]] = clean
                 else:
                     # Checks if the vid is from current batch
                     if tids_from_previous_batches is None or tid not in tids_from_previous_batches:
-                        if self.env['infer_mode'] == 'dk':
-                            # Sets clean cells accordingly.
-                            is_clean[attr][count[attr]] = clean
+                        # Sets clean cells accordingly.
+                        is_clean[attr][count[attr]] = clean
                     else:
-                        # Marks cells from previous batches as clean.
-                        is_clean[attr][count[attr]] = 1
+                        # Marks cells from previous batches.
+                        is_clean[attr][count[attr]] = 2
             else:
-                if self.env['infer_mode'] == 'dk':
-                    # Sets clean cells accordingly.
-                    is_clean[attr][count[attr]] = clean
+                # Sets clean cells accordingly.
+                is_clean[attr][count[attr]] = clean
 
             self.tids[attr][count[attr]] = tid
             if init_idx != NULL_REPR:
@@ -293,7 +290,12 @@ class FeaturizedDataset:
         X_infer = {}
         mask_infer = {}
         for attr in self.ds.get_active_attributes():
-            infer_idx[attr] = (self.is_clean[attr] == 0).nonzero()[:, 0]
+            if self.env['infer_mode'] == 'dk':
+                infer_idx[attr] = (self.is_clean[attr] == 0).nonzero()[:, 0]
+            elif self.env['infer_mode'] == 'all':
+                infer_idx[attr] = (self.is_clean[attr] != 2).nonzero()[:, 0]
+            else:
+                raise ValueError('Unknown infer_mode: {}'.format(self.env['infer_mode']))
             X_infer[attr] = self.tensor[attr].index_select(0, infer_idx[attr])
             mask_infer[attr] = self.var_class_mask[attr].index_select(0, infer_idx[attr])
         return X_infer, mask_infer, infer_idx

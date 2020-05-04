@@ -111,9 +111,14 @@ class Dataset:
         # Boolean flag for loading statistics pre-computed using the whole dataset to generate global features.
         self.global_features = env['global_features']
 
+        # List of the models grouping related attributes: {attr_repr1: [attr1, attr2, ...], attr_repr2: [...], ...}.
+        self.model_groups = None
+        # List of the models scheduled to be trained
+        self.models_to_train = None
+
     # TODO(richardwu): load more than just CSV files
     def load_data(self, name, fpath, na_values=None, entity_col=None, src_col=None,
-                  exclude_attr_cols=None, numerical_attrs=None, store_to_db=True):
+                  exclude_attr_cols=None, numerical_attrs=None, store_to_db=True, drop_null_columns=True):
         """
         load_data takes a CSV file of the initial data, adds tuple IDs (_tid_)
         to each row to uniquely identify an 'entity', and generates unique
@@ -134,6 +139,7 @@ class Dataset:
         :param exclude_attr_cols:
         :param numerical_attrs:
         :param store_to_db:
+        :param drop_null_columns: (bool) Whether to drop columns with only nulls or not
         """
         tic = time.clock()
 
@@ -150,7 +156,7 @@ class Dataset:
 
             # Load raw CSV file/data into a Postgres table 'name' (param).
             self.raw_data = Table(name, Source.FILE, na_values=na_values,
-                                  exclude_attr_cols=exclude_attr_cols, fpath=fpath)
+                                  exclude_attr_cols=exclude_attr_cols, fpath=fpath, drop_null_columns=drop_null_columns)
 
             df = self.raw_data.df
             # Add _tid_ column to dataset that uniquely identifies an entity.
@@ -341,6 +347,38 @@ class Dataset:
             raise Exception('infer mode must be one of {dk, all}')
 
         return sorted([attr for attr in attrs if attr in self.train_attrs])
+
+    def get_model_groups(self):
+        # Default initialization it model_groups was not set previously.
+        if self.model_groups is None:
+            self.model_groups = {attr: [attr] for attr in self.get_active_attributes()}
+
+        return self.model_groups
+
+    def get_active_model_groups(self):
+        return list(set([self.get_attr_group(attr) for attr in self.get_active_attributes()]))
+
+    def get_attr_group(self, attribute, group=None):
+        if group is None:
+            group = self.get_model_groups()
+        for attr, attrs_in_group in group.items():
+            if attribute in attrs_in_group:
+                return attr
+
+    def set_models_to_train(self, models_to_train):
+        self.models_to_train = models_to_train
+        # Updates the active attributes to add the attributes that do not have errors detected in the batch, but
+        # are required for training a group model that contains at least one other attribute with errors.
+        models = self.get_model_groups()
+        for attr_rep in self.models_to_train:
+            attr_list = models[attr_rep]
+            for attr in attr_list:
+                if attr not in self._active_attributes:
+                    self._active_attributes.append(attr)
+
+    def get_models_to_train(self):
+        return self.models_to_train if self.models_to_train is not None else [
+            attr for attr in self.get_model_groups().keys()]
 
     def get_cell_id(self, tuple_id, attr_name):
         """

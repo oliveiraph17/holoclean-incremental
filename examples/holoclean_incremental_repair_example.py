@@ -2,9 +2,6 @@ import holoclean
 import importlib
 import logging
 import os
-import pandas as pd
-
-from dataset import AuxTables
 
 
 class Executor:
@@ -90,42 +87,29 @@ class Executor:
                     hc.load_data(self.inc_args['dataset_name'] + '_' + self.inc_args['approach'],
                                  '/tmp/current_batch.csv',
                                  entity_col=self.inc_args['entity_col'],
-                                 numerical_attrs=self.inc_args['numerical_attrs'])
+                                 numerical_attrs=self.inc_args['numerical_attrs'],
+                                 drop_null_columns=False)
 
                     hc.load_dcs(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                 self.inc_args['dataset_name'] + '_constraints.txt')
                     hc.ds.set_constraints(hc.get_dcs())
 
-                    if self.hc_args['infer_mode'] == 'dk':
-                        # Detects erroneous cells.
-                        detectors = []
-                        for detector_file, detector_class, detector_has_params in self.hc_args['detectors']:
-                            if detector_has_params:
-                                params = {'fpath': (self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
-                                                    self.inc_args['dataset_name'] + '_errors.csv')}
-                                detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
-                            else:
-                                detectors.append(getattr(modules['detect'][detector_file], detector_class)())
-                        hc.detect_errors(detectors)
-                    elif self.hc_args['infer_mode'] == 'all':
-                        # Skips error detection, creating an empty dk_cells table.
-                        empty_dk_cells_df = pd.DataFrame(columns=['_tid_', 'attribute', '_cid_'])
-                        empty_dk_cells_df['_tid_'] = empty_dk_cells_df['_tid_'].astype(int)
-                        empty_dk_cells_df['attribute'] = empty_dk_cells_df['attribute'].astype(str)
-                        empty_dk_cells_df['_cid_'] = empty_dk_cells_df['_cid_'].astype(int)
-
-                        hc.ds.generate_aux_table(AuxTables.dk_cells, empty_dk_cells_df, store=True)
-
-                        if self.hc_args['log_repairing_quality']:
-                            hc.repairing_quality_metrics.append(str(self.hc_args['current_batch_number']))
-                            hc.repairing_quality_metrics.append(str(0))
-                        if self.hc_args['log_execution_times']:
-                            hc.execution_times.append(str(0))
+                    # Detects erroneous cells.
+                    detectors = []
+                    for detector_file, detector_class, detector_has_params in self.hc_args['detectors']:
+                        if detector_has_params:
+                            params = {'fpath': (self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
+                                                self.inc_args['dataset_name'] + '_errors.csv')}
+                            detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
+                        else:
+                            detectors.append(getattr(modules['detect'][detector_file], detector_class)())
+                    hc.detect_errors(detectors)
 
                     if self.inc_args['do_quantization']:
                         hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
 
                     # Repairs errors based on the defined features.
+                    hc.set_models_to_train()
                     hc.generate_domain()
                     hc.run_estimator()
 
@@ -151,9 +135,9 @@ class Executor:
 if __name__ == "__main__":
     # Default parameters for HoloClean.
     hc_args = {
-        # 'detectors': [('nulldetector', 'NullDetector', False),
-        #               ('violationdetector', 'ViolationDetector', False)],
-        'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
+        'detectors': [('nulldetector', 'NullDetector', False),
+                      ('violationdetector', 'ViolationDetector', False)],
+        # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
         'domain_thresh_2': 0,
@@ -180,7 +164,11 @@ if __name__ == "__main__":
         'global_features': False,
         'train_using_all_batches': False,
         'is_first_batch': True,
-        'skip_training_starting_batch': -1
+        'skip_training_starting_batch': -1,
+        'group_models': None,  # {None, 'pair_corr', 'corr_sim'}
+        'group_models_thresh': None,  # {None, 0.95, 0.005}
+        'skip_training_kl': None,  # {None, individual_kl, weighted_kl}
+        'skip_training_kl_thresh': None,  # {None, 0.3, 0.15}
     }
 
     # Default parameters for Executor.
