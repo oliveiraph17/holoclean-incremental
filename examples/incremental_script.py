@@ -78,7 +78,7 @@ inc_args = {
 def get_approach_string():
     approach_string = 'co_' + approach.lower() + '_' + hc_args['infer_mode']
     if approach != 'Full':
-        approach_string += '_' + str(num_batches) + 'batches'
+        approach_string += '_' + str(num_batches) + 'b'
     if hc_args['group_models']:
         approach_string += '_' + hc_args['group_models'] + str(hc_args['group_models_thresh']).replace('.', '')
     if hc_args['skip_training_kl']:
