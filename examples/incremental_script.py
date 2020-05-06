@@ -76,13 +76,15 @@ inc_args = {
 
 
 def get_approach_string():
-    approach_string = 'co_' + approach.lower() + '_' + hc_args['infer_mode']
+    approach_string = approach.lower() + '_' + hc_args['infer_mode']
     if approach != 'Full':
         approach_string += '_' + str(num_batches) + 'b'
     if hc_args['group_models']:
-        approach_string += '_' + hc_args['group_models'] + str(hc_args['group_models_thresh']).replace('.', '')
+        strategy = 'pc' if hc_args['group_models'] == 'pair_corr' else 'sc'  # sim_corr
+        approach_string += '_' + strategy + str(hc_args['group_models_thresh']).replace('.', '')
     if hc_args['skip_training_kl']:
-        approach_string += '_' + hc_args['skip_training_kl'] + str(hc_args['skip_training_kl_thresh']).replace('.', '')
+        strategy = 'ikl' if hc_args['skip_training_kl'] == 'individual_kl' else 'wkl'  # weighted_kl
+        approach_string += '_' + strategy + str(hc_args['skip_training_kl_thresh']).replace('.', '')
 
     return approach_string
 
