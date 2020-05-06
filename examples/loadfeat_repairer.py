@@ -206,7 +206,7 @@ class Executor:
 
             # Outputs the attribute's metrics and adds them to the aggregated metrics.
             for metric, value in eval_metrics.items():
-                # logging.debug('[' + attr + '] ' + metric + ' = %2f', value[attr])
+                # logging.debug('[' + attr + '] ' + metric + ' = %2.f', value[attr])
 
                 # Sums for all aggregated metrics even though this is meaningless for some metrics because it is faster
                 # than testing if they should be summed up or not.

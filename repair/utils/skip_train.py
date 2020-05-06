@@ -5,7 +5,7 @@ import numpy as np
 from scipy.stats import entropy
 
 
-class TrainSkipper:
+class TrainingSkipper:
 
     def __init__(self, env, dataset, smoothing_value=0.0001):
         self.env = env
@@ -34,11 +34,19 @@ class TrainSkipper:
                     smoothing_count += 1
                 pair_stats_list2.append(freq2)
 
+        if not (pair_stats_list1 and pair_stats_list2):
+            return None, None
+
         # Normalizes the frequencies to get a valid data distribution (smoothed for stats1).
         pdf_pair_stats1 = np.array(pair_stats_list1)
         pdf_pair_stats2 = np.array(pair_stats_list2)
         sum_freq1 = pdf_pair_stats1.sum()
         sum_freq2 = pdf_pair_stats2.sum()
+
+        # Avoids division by zero.
+        if (pdf_pair_stats1.size - smoothing_count == 0) or sum_freq1 == 0 or sum_freq2 == 0:
+            return None, None
+
         smoothing_correction = (self.smoothing_value * smoothing_count) / (pdf_pair_stats1.size - smoothing_count)
         pdf_pair_stats1 = np.where(pdf_pair_stats1 != 0,
                                    (pdf_pair_stats1 / sum_freq1) - smoothing_correction,
@@ -86,6 +94,9 @@ class TrainSkipper:
                 # Get distributions from the pair stats.
                 past_pdf_attr1, curr_pdf_attr1 = self._attr_pair_stats_to_pdf(self.pair_stats[attr1][attr2],
                                                                               curr_pair_stats[attr1][attr2])
+
+                if past_pdf_attr1 is None or curr_pdf_attr1 is None:
+                    continue
 
                 # Computes the K-L divergence.
                 kl_attr1 = entropy(past_pdf_attr1, curr_pdf_attr1)
@@ -156,6 +167,9 @@ class TrainSkipper:
                 # Get distributions from the pair stats.
                 past_pdf_attr1, curr_pdf_attr1 = self._attr_pair_stats_to_pdf(self.pair_stats[attr1][attr2],
                                                                               curr_pair_stats[attr1][attr2])
+
+                if past_pdf_attr1 is None or curr_pdf_attr1 is None:
+                    continue
 
                 # Computes the K-L divergence.
                 kl_attr1[attr2] = entropy(past_pdf_attr1, curr_pdf_attr1)

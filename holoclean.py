@@ -14,7 +14,7 @@ from detect import DetectEngine
 from repair import RepairEngine
 from evaluate import EvalEngine
 from dataset.quantization import quantize_km
-from repair.utils.skip_train import TrainSkipper
+from repair.utils.skip_train import TrainingSkipper
 from repair.utils.group_models import ModelGroupGenerator
 from utils import NULL_REPR
 
@@ -281,7 +281,7 @@ arguments = [
     (('-st', '--skip-training-thresh'),
      {'metavar': 'SKIP_TRAINING_THRESH',
       'dest': 'skip_training_thresh',
-      'default': 99.0,
+      'default': 101.0,
       'type': float,
       'help': 'Skips training if the accuracy of the previous trained model is equal or above this threshold.'}),
     (('-gm', '--group-models'),
@@ -706,12 +706,12 @@ class Session:
                 group_generator.save_groups()
 
                 logging.info('DONE getting groups for building grouped models in %.2f secs.', time.clock() - tic)
-                logging.debug('Grouped models: %s', str(self.ds.get_model_groups()))
+                logging.info('Grouped models: %s', str(self.ds.get_model_groups()))
                 logging.debug('New/changed grouped models that require training: %s', str(models_to_train))
 
             if self.env['skip_training_kl'] is not None:
                 tic = time.clock()
-                skipper = TrainSkipper(self.env, self.ds)
+                skipper = TrainingSkipper(self.env, self.ds)
                 if not self.ds.is_first_batch():
                     try:
                         skipper.load_last_training_stats()
@@ -730,7 +730,7 @@ class Session:
                 if models_to_train:
                     skipper.save_last_training_stats()
                 logging.info('DONE setting models to train in %.2f secs.', time.clock() - tic)
-                logging.debug('Models to train: %s', str(models_to_train))
+                logging.info('Models to train: %s', str(models_to_train))
 
             if models_to_train is not None:
                 self.ds.set_models_to_train(models_to_train)
