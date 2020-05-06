@@ -276,6 +276,8 @@ class DomainEngine:
 
         # Updates the active attributes to eliminate those that do not have domain.
         self.ds._active_attributes = domain_df['attribute'].unique()
+        self.ds.models_to_train = [attr_rep for attr_rep in self.ds.models_to_train
+                                   if attr_rep in self.ds._active_attributes]
 
         logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
         logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
