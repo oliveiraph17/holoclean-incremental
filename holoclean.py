@@ -738,6 +738,8 @@ class Session:
     def generate_domain(self):
         if self.found_errors:
             status, domain_time = self.domain_engine.setup()
+            if self.ds.aux_table[AuxTables.cell_domain].df.empty:
+                self.found_errors = False
         else:
             status = 'DONE Domain generation skipped.'
             domain_time = 0.0
