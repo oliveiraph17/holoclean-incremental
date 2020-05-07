@@ -273,17 +273,22 @@ class DomainEngine:
                               })
                 vid += 1
 
-        domain_df = pd.DataFrame(data=cells)
-        if not domain_df.empty:
-            domain_df = domain_df.sort_values('_vid_')
+        if cells:
+            domain_df = pd.DataFrame(data=cells)
+        else:
+            domain_df = pd.DataFrame(data=[], columns=["_tid_", "attribute", "_cid_", "_vid_", "domain", "domain_size",
+                                                       "init_value", "init_index", "weak_label", "weak_label_idx",
+                                                       "fixed", "is_dk"])
+            domain_df = domain_df.astype({'_tid_': 'int32', '_cid_': 'int32'})
+        domain_df = domain_df.sort_values('_vid_')
 
-            # Updates the active attributes to eliminate those that do not have domain.
-            self.ds._active_attributes = domain_df['attribute'].unique()
-            self.ds.models_to_train = [attr_rep for attr_rep in self.ds.get_models_to_train()
-                                       if attr_rep in self.ds.get_active_attributes()]
+        # Updates the active attributes to eliminate those that do not have domain.
+        self.ds._active_attributes = domain_df['attribute'].unique()
+        self.ds.models_to_train = [attr_rep for attr_rep in self.ds.get_models_to_train()
+                                   if attr_rep in self.ds.get_active_attributes()]
 
-            logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
-            logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
+        logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
+        logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
         logging.debug('DONE generating initial set of domain values in %.2fs', time.clock() - tic)
 
         return domain_df
