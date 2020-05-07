@@ -67,9 +67,10 @@ class DomainEngine:
             _cid_: cell ID
             _vid_: random variable ID (all cells with more than 1 domain value)
         """
-        if domain.empty:
-            raise Exception("ERROR: Generated domain is empty.")
         self.ds.generate_aux_table(AuxTables.cell_domain, domain, store=True)
+        if domain.empty:
+            logging.warning("ERROR: Generated domain is empty.")
+            return
         self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_vid_'])
         self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_tid_'])
         self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_cid_'])
@@ -272,15 +273,17 @@ class DomainEngine:
                               })
                 vid += 1
 
-        domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
+        domain_df = pd.DataFrame(data=cells)
+        if not domain_df.empty:
+            domain_df = domain_df.sort_values('_vid_')
 
-        # Updates the active attributes to eliminate those that do not have domain.
-        self.ds._active_attributes = domain_df['attribute'].unique()
-        self.ds.models_to_train = [attr_rep for attr_rep in self.ds.get_models_to_train()
-                                   if attr_rep in self.ds.get_active_attributes()]
+            # Updates the active attributes to eliminate those that do not have domain.
+            self.ds._active_attributes = domain_df['attribute'].unique()
+            self.ds.models_to_train = [attr_rep for attr_rep in self.ds.get_models_to_train()
+                                       if attr_rep in self.ds.get_active_attributes()]
 
-        logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
-        logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
+            logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
+            logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
         logging.debug('DONE generating initial set of domain values in %.2fs', time.clock() - tic)
 
         return domain_df
