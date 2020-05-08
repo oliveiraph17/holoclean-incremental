@@ -741,6 +741,8 @@ class Session:
             if self.ds.aux_table[AuxTables.cell_domain].df.empty:
                 self.found_errors = False
         else:
+            # Ensures that the statistics are gathered.
+            self.ds.get_statistics()
             status = 'DONE Domain generation skipped.'
             domain_time = 0.0
         logging.info(status)
