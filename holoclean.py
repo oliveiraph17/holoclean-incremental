@@ -727,13 +727,12 @@ class Session:
                 else:
                     raise ValueError('Unknown model grouping strategy: %s', self.env['group_models'])
 
+                self.ds.set_models_to_train(models_to_train)
                 if models_to_train:
                     skipper.save_last_training_stats()
-                logging.info('DONE setting models to train in %.2f secs.', time.clock() - tic)
-                logging.info('Models to train: %s', str(models_to_train))
 
-            if models_to_train is not None:
-                self.ds.set_models_to_train(models_to_train)
+            logging.info('DONE setting models to train in %.2f secs.', time.clock() - tic)
+            logging.info('Models to train: %s', str(self.ds.get_models_to_train()))
 
     def generate_domain(self):
         if self.found_errors:
