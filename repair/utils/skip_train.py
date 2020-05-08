@@ -104,7 +104,8 @@ class TrainingSkipper:
                 # We retrain if the KL indicates that any attribute in the group changed more than the threshold.
                 if kl_attr1 > thresh:
                     group_attr = self.ds.get_attr_group(attr1)
-                    models_to_train.append(group_attr)
+                    if group_attr not in models_to_train:
+                        models_to_train.append(group_attr)
                     for att in groups[group_attr]:
                         # Sets the stats for attr1 to be the stats of the dataset used for retraining.
                         self.pair_stats[att] = curr_pair_stats[att]
@@ -184,7 +185,8 @@ class TrainingSkipper:
             # We retrain if the "aggregated" KL weighted by the attribute correlations is larger than the threshold
             # multiplied by the number of attributes (to keep the threshold value "proportional" to a single attribute).
             if sum([weighted_kl[att] for att in attrs_in_group]) > thresh * len(attrs_in_group):
-                models_to_train.append(group_attr)
+                if group_attr not in models_to_train:
+                    models_to_train.append(group_attr)
                 for att in attrs_in_group:
                     # Sets stats1 for attr1 to be the stats of the dataset used for retraining.
                     self.pair_stats[att] = curr_pair_stats[att]
