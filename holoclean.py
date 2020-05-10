@@ -684,8 +684,8 @@ class Session:
     def set_models_to_train(self):
         if self.found_errors:
             models_to_train = None
+            tic = time.clock()
             if self.env['group_models'] is not None:
-                tic = time.clock()
                 group_generator = ModelGroupGenerator(self.env, self.ds)
                 if not self.ds.is_first_batch():
                     try:
