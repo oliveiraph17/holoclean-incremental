@@ -84,29 +84,27 @@ class Executor:
                             detectors.append(getattr(modules['detect'][detector_file], detector_class)(**params))
                         else:
                             detectors.append(getattr(modules['detect'][detector_file], detector_class)())
-                    found_errors = hc.detect_errors(detectors)
+                    hc.detect_errors(detectors)
 
                     if self.inc_args['do_quantization']:
                         hc.quantize_numericals(self.inc_args['num_attr_groups_bins'])
 
                     # Repairs errors based on the defined features.
-                    hc.generate_domain(found_errors)
-                    if found_errors:
-                        hc.run_estimator()
+                    hc.generate_domain()
+                    hc.run_estimator()
 
                     featurizers = [
                         getattr(modules['featurize'][featurizer_file], featurizer_class)()
                         for featurizer_file, featurizer_class in self.hc_args['featurizers'].items()
                     ]
-                    inference_occurred = hc.repair_errors(featurizers, found_errors=found_errors)
+                    hc.repair_errors(featurizers)
 
                     # Evaluates the correctness of the results.
                     hc.evaluate(fpath=(self.inc_args['dataset_dir'] + self.inc_args['dataset_name'] + '/' +
                                        self.inc_args['dataset_name'] + '_clean.csv'),
                                 tid_col='tid',
                                 attr_col='attribute',
-                                val_col='correct_val',
-                                inference_occurred=inference_occurred)
+                                val_col='correct_val')
 
                     logging.info('Batch %s finished.', self.hc_args['current_batch_number'] + 1)
                     self.hc_args['current_batch_number'] += 1
@@ -120,6 +118,7 @@ if __name__ == "__main__":
         # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
         'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
         'domain_thresh_1': 0,
+        'domain_thresh_2': 0,
         'weak_label_thresh': 0.99,
         'max_domain': 10000,
         'cor_strength': 0.6,
@@ -127,19 +126,20 @@ if __name__ == "__main__":
         'epochs': 20,
         'threads': 1,
         'verbose': True,
+        'print_fw': True,
         'timeout': 3 * 60000,
         'estimator_type': 'NaiveBayes',
-        'epochs_convergence': 3,
+        'epochs_convergence': 0,
         'convergence_thresh': 0.01,
         'current_iteration': None,
         'current_batch_number': None,
         'log_repairing_quality': True,
         'log_execution_times': True,
-        'incremental': False,
+        'incremental': True,
         'incremental_entropy': False,
         'default_entropy': False,
         'repair_previous_errors': False,
-        'recompute_from_scratch': False,
+        'recompute_from_scratch': True,
         'skip_training': False,
         'ignore_previous_training_cells': False,
         'save_load_checkpoint': False,

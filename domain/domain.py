@@ -23,6 +23,7 @@ class DomainEngine:
         """
         self.env = env
         self.ds = dataset
+        self.domain_df = None
         self.domain_thresh_1 = env["domain_thresh_1"]
         self.weak_label_thresh = env["weak_label_thresh"]
         self.domain_thresh_2 = env["domain_thresh_2"]
@@ -42,22 +43,15 @@ class DomainEngine:
         self.single_stats = {}
         self.pair_stats = {}
 
-    def setup(self, found_errors=True):
+    def setup(self):
         """
         setup initializes the in-memory and Postgres auxiliary tables (e.g.
         'cell_domain', 'pos_values').
         """
         tic = time.time()
         self.setup_attributes()
-        if found_errors:
-            self.domain_df = self.generate_domain()
-            self.store_domains(self.domain_df)
-        else:
-            if self.incremental and not self.recompute_from_scratch:
-                tic_inc = time.clock()
-                self.save_stats()
-                save_stats_time = time.clock() - tic_inc
-                logging.debug('DONE no domain to generate, just saved statistics in the database in %.2f secs.', save_stats_time)
+        self.domain_df = self.generate_domain()
+        self.store_domains(self.domain_df)
         status = "DONE with domain preparation."
         toc = time.time()
         return status, toc - tic
@@ -73,9 +67,10 @@ class DomainEngine:
             _cid_: cell ID
             _vid_: random variable ID (all cells with more than 1 domain value)
         """
-        if domain.empty:
-            raise Exception("ERROR: Generated domain is empty.")
         self.ds.generate_aux_table(AuxTables.cell_domain, domain, store=True)
+        if domain.empty:
+            logging.warning("ERROR: Generated domain is empty.")
+            return
         self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_vid_'])
         self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_tid_'])
         self.ds.aux_table[AuxTables.cell_domain].create_db_index(self.ds.engine, ['_cid_'])
@@ -117,8 +112,9 @@ class DomainEngine:
                     # tau becomes a threshhold on co-occurrence frequency
                     # based on the co-occurrence probability threshold
                     # domain_thresh_1.
-                    tau = float(self.domain_thresh_1*denominator)
-                    top_cands = [(val2, count/denominator) for (val2, count) in pair_stats[attr1][attr2][val1].items() if count > tau]
+                    tau = float(self.domain_thresh_1 * denominator)
+                    top_cands = [(val2, count / denominator) for (val2, count) in pair_stats[attr1][attr2][val1].items()
+                                 if count > tau]
                     out[attr1][attr2][val1] = top_cands
         return out
 
@@ -163,8 +159,8 @@ class DomainEngine:
             if attr in current_attr_tuple:
                 attr_correlations_tuple = current_attr_tuple[1]
                 return sorted([attr_correlations[0]
-                              for attr_correlations in attr_correlations_tuple
-                              if attr_correlations[0] != attr and attr_correlations[1] >= thres])
+                               for attr_correlations in attr_correlations_tuple
+                               if attr_correlations[0] != attr and attr_correlations[1] >= thres])
         return []
 
     def generate_domain(self):
@@ -265,7 +261,19 @@ class DomainEngine:
                               "is_dk": (tid, attr) in dk_lookup if dk_lookup is not None else False,
                               })
                 vid += 1
-        domain_df = pd.DataFrame(data=cells).sort_values('_vid_')
+
+        if cells:
+            domain_df = pd.DataFrame(data=cells)
+        else:
+            domain_df = pd.DataFrame(data=[], columns=["_tid_", "attribute", "_cid_", "_vid_", "domain", "domain_size",
+                                                       "init_value", "init_index", "weak_label", "weak_label_idx",
+                                                       "fixed", "is_dk"])
+            domain_df = domain_df.astype({'_tid_': 'int32', '_cid_': 'int32'})
+        domain_df = domain_df.sort_values('_vid_')
+
+        # Updates the active attributes to eliminate those that do not have domain.
+        self.ds._active_attributes = domain_df['attribute'].unique()
+
         logging.debug('domain size stats: %s', domain_df['domain_size'].describe())
         logging.debug('domain count by attr: %s', domain_df['attribute'].value_counts())
         logging.debug('DONE generating initial set of domain values in %.2fs', time.clock() - tic)
@@ -304,7 +312,9 @@ class DomainEngine:
             if cond_attr == attr or cond_attr == '_tid_':
                 continue
             if not self.pair_stats[cond_attr][attr]:
-                logging.warning("domain generation could not find pair_statistics between attributes: {}, {}".format(cond_attr, attr))
+                logging.warning(
+                    "domain generation could not find pair_statistics between attributes: {}, {}".format(cond_attr,
+                                                                                                         attr))
                 continue
             cond_val = row[cond_attr]
             # ignore co-occurrence with a null cond init value since we do not
@@ -326,7 +336,7 @@ class DomainEngine:
         # We should not have any NULLs since we do not store co-occurring NULL
         # values.
         if NULL_REPR in domain:
-            del domain[NULL_REPR] # (kaster) Added because incremental statistics store NULLs
+            del domain[NULL_REPR]  # (kaster) Added because incremental statistics store NULLs
         assert NULL_REPR not in domain
 
         # Add the initial value to the domain if it is not NULL.
@@ -354,7 +364,7 @@ class DomainEngine:
         domain_pool = set(self.single_stats[attr].keys())
         # We should not have any NULLs since we do not keep track of their
         # counts.
-        domain_pool.discard(NULL_REPR) # (kaster) Added because incremental statistics store NULLs
+        domain_pool.discard(NULL_REPR)  # (kaster) Added because incremental statistics store NULLs
         assert NULL_REPR not in domain_pool
         domain_pool = domain_pool.difference(cur_dom)
         domain_pool = sorted(list(domain_pool))
@@ -429,7 +439,7 @@ class DomainEngine:
         # pruning based on estimator's posterior probabilities.
         if self.env['estimator_type'] is None \
                 or (self.env['weak_label_thresh'] == 1 \
-                and self.env['domain_thresh_2'] == 0):
+                    and self.env['domain_thresh_2'] == 0):
             return self.domain_df
 
         domain_df = self.domain_df.sort_values('_vid_')
@@ -478,7 +488,8 @@ class DomainEngine:
             preds = [[val, proba] for val, proba in preds if proba >= self.domain_thresh_2] or preds
 
             # cap the maximum # of domain values to self.max_domain based on probabilities.
-            domain_values = [val for val, proba in sorted(preds, key=lambda pred: pred[1], reverse=True)[:self.max_domain]]
+            domain_values = [val for val, proba in
+                             sorted(preds, key=lambda pred: pred[1], reverse=True)[:self.max_domain]]
 
             # ensure the initial value is included even if its probability is low.
             init_val = row['init_value']
@@ -511,8 +522,8 @@ class DomainEngine:
 
         # update our cell domain df with our new updated domain
         domain_df = pd.DataFrame.from_records(updated_domain_df,
-                columns=updated_domain_df[0].dtype.names)\
-                        .drop('index', axis=1).sort_values('_vid_')
+                                              columns=updated_domain_df[0].dtype.names) \
+            .drop('index', axis=1).sort_values('_vid_')
         logging.debug('DONE assembling cell domain table in %.2fs', time.clock() - tic)
 
         logging.info('number of (additional) weak labels assigned from estimator: %d', num_weak_labels)

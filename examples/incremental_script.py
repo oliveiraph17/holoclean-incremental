@@ -32,61 +32,49 @@ hc_args = {
     # 'detectors': [('errorloaderdetector', 'ErrorsLoaderDetector', True)],
     'featurizers': {'occurattrfeat': 'OccurAttrFeaturizer'},
     'domain_thresh_1': 0,
-    'weak_label_thresh': 0.99,
-    'max_domain': 10000,
-    'cor_strength': 0.6,
-    'nb_cor_strength': 0.8,
+    'domain_thresh_2': 0,
+    'weak_label_thresh': float(sys.argv[6]),
+    'max_domain': int(sys.argv[7]),
+    'cor_strength': float(sys.argv[8]),
+    'nb_cor_strength': float(sys.argv[9]),
     'epochs': 20,
     'threads': 1,
     'verbose': False,
-    'timeout': 3*60000,
+    'timeout': 3 * 60000,
     'estimator_type': 'NaiveBayes',
     'current_iteration': None,
     'current_batch_number': None,
     'skip_training_thresh': 101,
     'log_repairing_quality': True,
     'log_execution_times': True,
-    'incremental': None,
-    'incremental_entropy': False,
-    'default_entropy': False,
-    'repair_previous_errors': None,
-    'recompute_from_scratch': None,
-    'skip_training': False,
-    'ignore_previous_training_cells': False,
-    'save_load_checkpoint': False,
-    'append': True,
-    'infer_mode': 'dk',
-    'train_using_all_batches': None,
+    'print_fw': True,
+    'infer_mode': sys.argv[10],
 }
+
+approach = str(sys.argv[1])
+avg_time_iterations = None
+batch_size = int(sys.argv[4])
+num_batches = int(sys.argv[5])
 
 inc_args = {
     'project_root': os.environ['HOLOCLEANHOME'],
     'dataset_dir': os.environ['HOLOCLEANHOME'] + '/testdata/',
     'log_dir': os.environ['HOLOCLEANHOME'] + '/experimental_results/',
-    'dataset_name': None,
-    'entity_col': None,
-    'numerical_attrs': None,
-    'do_quantization': False,
-    'approach': 'co_a',
-    'tuples_to_read_list': [250] * 4,
-    'iterations': [0],
-}
-
-params = {
-    'approach': str(sys.argv[1]),
     'dataset_name': str(sys.argv[2]),
     'entity_col': str(sys.argv[3]) if str(sys.argv[3]) != '_' else None,
-    'tuples_to_read_list': [int(sys.argv[4])] * int(sys.argv[5]) if int(sys.argv[5]) != 1 else [int(sys.argv[4])],
-    'weak_label_thresh': float(sys.argv[6]),
-    'max_domain': int(sys.argv[7]),
-    'cor_strenth': float(sys.argv[8]),
-    'nb_cor_strength': float(sys.argv[9])
+    'numerical_attrs': None,
+    'tuples_to_read_list': [batch_size] * num_batches,
+    'iterations': [0],
+    'do_quantization': False,
 }
 
-datasets = [(params['approach'], params['dataset_name'], params['entity_col'], params['tuples_to_read_list'],
-             params['weak_label_thresh'], params['max_domain'], params['cor_strenth'], params['nb_cor_strength'])]
 
-avg_time_iterations = None
+def get_approach_string():
+    approach_string = approach.lower() + '_' + hc_args['infer_mode']
+    if approach != 'Full':
+        approach_string += '_' + str(num_batches) + 'b'
+
+    return approach_string
 
 
 def run_executor():
@@ -108,145 +96,78 @@ def run_executor():
                       inc_args['approach'] + '_memory_log.csv', 'a') as f:
                 f.writelines([str(max_usage_gb) + ' GB\n'])
 
+######################################################################
 
-for (approach, dataset_name, entity_col, tuples_to_read_list,
-     weak_label_thresh, max_domain, cor_strength, nb_cor_strength) in datasets:
-    inc_args['dataset_name'] = dataset_name
-    inc_args['entity_col'] = entity_col
-    inc_args['tuples_to_read_list'] = tuples_to_read_list
-    hc_args['weak_label_thresh'] = weak_label_thresh
-    hc_args['max_domain'] = max_domain
-    hc_args['cor_strength'] = cor_strength
-    hc_args['nb_cor_strength'] = nb_cor_strength
 
-    ######################################################################
+inc_args['approach'] = get_approach_string()
 
-    if approach == 'A':
-        hc_args['incremental'] = False
-        hc_args['repair_previous_errors'] = False
-        hc_args['recompute_from_scratch'] = False
-        hc_args['train_using_all_batches'] = False
-        inc_args['approach'] = 'co_a'
+if approach == 'A':
+    hc_args['append'] = True
+elif approach == 'B':
+    hc_args['incremental'] = True
+    hc_args['repair_previous_errors'] = True
+    hc_args['recompute_from_scratch'] = True
+    hc_args['train_using_all_batches'] = True
+elif approach == 'C':
+    hc_args['incremental'] = True
+    hc_args['train_using_all_batches'] = True
+    hc_args['save_load_checkpoint'] = True
+elif approach == 'B+':
+    hc_args['incremental'] = True
+    hc_args['repair_previous_errors'] = True
+    hc_args['save_load_checkpoint'] = True
+elif approach == 'C+':
+    hc_args['incremental'] = True
+    hc_args['save_load_checkpoint'] = True
+else:
+    # 'Full': uses only default parameters
+    pass
 
-        # A - Quality
-        hc_args['log_repairing_quality'] = True
-        hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
-        run_executor()
+# Quality
+run_executor()
 
-        if avg_time_iterations:
-            # A - Time
-            hc_args['log_repairing_quality'] = False
-            hc_args['log_execution_times'] = True
-            inc_args['iterations'] = avg_time_iterations
-            run_executor()
+if avg_time_iterations:
+    # Time
+    hc_args['log_repairing_quality'] = False
+    inc_args['iterations'] = avg_time_iterations
+    run_executor()
 
-    ######################################################################
 
-    if approach == 'B':
-        hc_args['incremental'] = True
-        hc_args['repair_previous_errors'] = True
-        hc_args['recompute_from_scratch'] = True
-        hc_args['train_using_all_batches'] = True
-        inc_args['approach'] = 'co_b'
+# Sample of execution parameters
+# C hospital _ 250 4 0.99 10000 0.6 0.8 dk pair_corr 0.95 weighted_kl 0.01
 
-        # B - Quality
-        hc_args['log_repairing_quality'] = True
-        hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
-        run_executor()
+# ('food5k_shuffled', '_tid_', None, False,
+#  None,
+#  [1000] * 5, False, 5000, 0.2, 'NaiveBayes',
+#  0.6, 1000, 0.2, 0.3,
+#  'dk', False, False),
 
-        if avg_time_iterations:
-            # B - Time
-            hc_args['log_repairing_quality'] = False
-            hc_args['log_execution_times'] = True
-            inc_args['iterations'] = avg_time_iterations
-            run_executor()
+# ('hospital_numerical', None, ['Score', 'Sample'], True,
+#  [(100, ['Score']), (150, ['Sample'])],
+#  [250] * 4, False, 1000, 0.25, 'NaiveBayes',
+#  0.99, 10000, 0.6, 0.8,
+#  'dk', False, False),
 
-    ######################################################################
+# ('nypd6', None, None, False,
+#  None,
+#  [324] * 100, False, 32400, 0.01, 'NaiveBayes',
+#  0.9, 10000, 0.05, 0.3,
+#  'dk', False, None),
 
-    if approach == 'C':
-        hc_args['incremental'] = True
-        hc_args['repair_previous_errors'] = False
-        hc_args['recompute_from_scratch'] = False
-        hc_args['train_using_all_batches'] = True
-        inc_args['approach'] = 'co_c'
+# ('soccer', None, None, False,
+#  None,
+#  [2000] * 100, False, 200000, 0.01, 'NaiveBayes',
+#  0.9, 10000, 0.05, 0.3,
+#  'dk', False, None),
 
-        # C - Quality
-        hc_args['log_repairing_quality'] = True
-        hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
-        run_executor()
-
-        if avg_time_iterations:
-            # C - Time
-            hc_args['log_repairing_quality'] = False
-            hc_args['log_execution_times'] = True
-            inc_args['iterations'] = avg_time_iterations
-            run_executor()
-
-    ######################################################################
-
-    if approach == 'B+':
-        hc_args['incremental'] = True
-        hc_args['repair_previous_errors'] = True
-        hc_args['recompute_from_scratch'] = True
-        hc_args['save_load_checkpoint'] = True
-        inc_args['approach'] = 'co_bplus'
-
-        # B+ - Quality
-        hc_args['log_repairing_quality'] = True
-        hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
-        run_executor()
-
-        if avg_time_iterations:
-            # B+ - Time
-            hc_args['log_repairing_quality'] = False
-            hc_args['log_execution_times'] = True
-            inc_args['iterations'] = avg_time_iterations
-            run_executor()
-
-    ######################################################################
-
-    if approach == 'C+':
-        hc_args['incremental'] = True
-        hc_args['repair_previous_errors'] = False
-        hc_args['recompute_from_scratch'] = False
-        hc_args['save_load_checkpoint'] = True
-        inc_args['approach'] = 'co_cplus'
-
-        # C+ - Quality
-        hc_args['log_repairing_quality'] = True
-        hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
-        run_executor()
-
-        if avg_time_iterations:
-            # C+ - Time
-            hc_args['log_repairing_quality'] = False
-            hc_args['log_execution_times'] = True
-            inc_args['iterations'] = avg_time_iterations
-            run_executor()
-
-    ######################################################################
-
-    if approach == 'Full':
-        hc_args['incremental'] = False
-        hc_args['repair_previous_errors'] = False
-        hc_args['recompute_from_scratch'] = False
-        hc_args['save_load_checkpoint'] = False
-        inc_args['approach'] = 'co_full'
-
-        # Full - Quality
-        hc_args['log_repairing_quality'] = True
-        hc_args['log_execution_times'] = True
-        inc_args['iterations'] = [0]
-        run_executor()
-
-        if avg_time_iterations:
-            # Full - Time
-            hc_args['log_repairing_quality'] = False
-            hc_args['log_execution_times'] = True
-            inc_args['iterations'] = avg_time_iterations
-            run_executor()
+# ('chicago_num_shuffled', '_tid_', ['Pickup Centroid Latitude', 'Pickup Centroid Longitude',
+#                                    'Dropoff Centroid Latitude', 'Dropoff Centroid Longitude',
+#                                    'Fare', 'Tips', 'Tolls', 'Extras',
+#                                    'Trip Total', 'Trip Seconds', 'Trip Miles'], True,
+#  [(100, ['Pickup Centroid Latitude', 'Pickup Centroid Longitude']),
+#   (100, ['Dropoff Centroid Latitude', 'Dropoff Centroid Longitude']),
+#   (100, ['Fare']), (100, ['Tips']), (100, ['Tolls']), (100, ['Extras']),
+#   (100, ['Trip Total']), (100, ['Trip Seconds']), (100, ['Trip Miles'])],
+#  [4000] * 100, False, 400000, 0.01, 'NaiveBayes',
+#  0.9, 100, 0.05, 0.3,
+#  'dk', False, None),
