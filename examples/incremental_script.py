@@ -124,9 +124,10 @@ elif approach == 'C':
     hc_args['incremental'] = True
     hc_args['train_using_all_batches'] = True
     hc_args['save_load_checkpoint'] = True
-elif approach == 'B+':
+elif approach == 'CB':
     hc_args['incremental'] = True
     hc_args['repair_previous_errors'] = True
+    hc_args['train_using_all_batches'] = True
     hc_args['save_load_checkpoint'] = True
 elif approach == 'C+':
     hc_args['incremental'] = True
