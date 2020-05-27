@@ -1,5 +1,4 @@
-t1&t2&EQ(t1.dbaname,t2.dbaname)&EQ(t1.latitude,t2.latitude)&EQ(t1.longitude,t2.longitude)&IQ(t1.facilitytype,t2.facilitytype)
-t1&t2&EQ(t1.dbaname,t2.dbaname)&EQ(t1.latitude,t2.latitude)&EQ(t1.longitude,t2.longitude)&IQ(t1.address,t2.address)
+t1&t2&EQ(t1.dbaname,t2.dbaname)&EQ(t1.address,t2.address)&IQ(t1.facilitytype,t2.facilitytype)
 t1&t2&EQ(t1.zip,t2.zip)&IQ(t1.city,t2.city)
 t1&EQ(t1.facilitytype,'empty')
 t1&EQ(t1.city,'empty')
