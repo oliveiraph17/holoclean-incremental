@@ -54,7 +54,7 @@ def get_cumulative_quality_df(df, approach):
     cum_df = df.copy()
     metrics = ['dk_cells', 'training_cells', 'correct_repairs', 'total_repairs_grdt',
                'repairs_on_correct_cells']
-    if approach != 'B' and approach != 'CB':
+    if not approach.startswith('B') and not approach.startswith('CB'):
         metrics += ['total_errors', 'remaining_errors']
     for metric in metrics:
         # Gets the accumulated values.
@@ -81,7 +81,11 @@ def plot_quality_charts(infer_mode, approaches, plot_config):
             df = get_cumulative_quality_df(df, approach['label'])
 
         for measure in plot_config['measures']:
-            plt.plot(df[measure].values.tolist(), label=approach['label'] + '|' + measure)
+            if approach['log_path'].startswith('full') or approach['log_path'].startswith('co_full'):
+                list_values = [df[measure].values.tolist()] * 100
+            else:
+                list_values = df[measure].values.tolist()
+            plt.plot(list_values, label=approach['label'] + '|' + measure)
 
     if 'title' in plot_config:
         plt.title(plot_config['title'])
@@ -141,19 +145,94 @@ def plot_time_charts(infer_mode, approaches, plot_config):
     plt.show()
 
 
+def plot_total_time_charts(infer_mode, approaches, plot_config):
+    legend_labels = None
+
+    for idx, approach in enumerate(approaches):
+        df = load_time_log_df(approach['log_path'], infer_mode)
+        if plot_config['cumulative']:
+            df = get_cumulative_time_df(df)
+
+        # Reduces the number of bars.
+        # batches = list(range(9, int(df.index.max()), 10))
+        # if max_idx < 100 and max_idx not in batches:
+        #     batches.append(max_idx - 1)
+        # df_filtered = df.iloc[batches]
+
+        df = df.tail(1)
+        if idx == 0:
+            legend_labels = df.columns
+            df_all = df.copy()
+        else:
+            df_all = pd.concat([df_all, df])
+
+    approach_labels = [approach['label'] for approach in approaches]
+
+    if 'yscale' in plot_config and plot_config['yscale'] == 'log':
+        plt.bar(approach_labels, df_all.sum(axis=1))
+        plt.yscale(plot_config['yscale'])
+    else:
+        sum_bottom = [0] * len(approach_labels)
+        for measure in legend_labels:
+            curr_list = df_all[measure].values.tolist()
+            plt.bar(approach_labels, curr_list, bottom=sum_bottom)
+            sum_bottom = [old + curr for (old, curr) in zip(sum_bottom, curr_list)]
+
+    if 'title' in plot_config:
+        plt.title(plot_config['title'])
+    if 'xlabel' in plot_config:
+        plt.xlabel(plot_config['xlabel'])
+    if 'ylabel' in plot_config:
+        plt.ylabel(plot_config['ylabel'])
+    if 'ylim' in plot_config:
+        plt.ylim(**plot_config['ylim'])
+    plt.plot()
+
+    if 'legend' in plot_config:
+        plt.legend(legend_labels, **plot_config['legend'])
+
+    plt.show()
+
+
+def plot_memory_chart(approaches, plot_config):
+    total_time = []
+    approach_labels = [approach['label'] for approach in approaches]
+    for approach in approaches:
+        df = pd.read_csv(log_dir + approach['log_path'] + '_memory_log.csv', names=['time', 'garbage'], sep='\s+')
+        total_time.append(df['time'].mean())
+
+    plt.bar(approach_labels, total_time)
+
+    if 'title' in plot_config:
+        plt.title(plot_config['title'])
+    if 'xlabel' in plot_config:
+        plt.xlabel(plot_config['xlabel'])
+    if 'ylabel' in plot_config:
+        plt.ylabel(plot_config['ylabel'])
+    if 'ylim' in plot_config:
+        plt.ylim(**plot_config['ylim'])
+
+    plt.show()
+
+
 dataset_name = 'hospital_shuffled'
 log_dir = os.environ['HOLOCLEANHOME'] + '/experimental_results_husky/' + dataset_name + '/'
 infer_mode = 'dk'
 approaches = [
+    # {'log_path': 'co_full',
+    #  'label': 'co_Full'},
+    {'log_path': 'full_dk',
+     'label': 'Full'},
     # {'log_path': 'co_a_no_pruning',
-    #  'label': 'A no pruning'},
-    {'log_path': 'co_a',
+    #  'label': 'co_A no pruning'},
+    # {'log_path': 'co_a',
+    #  'label': 'co_A'},
+    {'log_path': 'a_dk_100b',
      'label': 'A'},
-    {'log_path': 'b_dk_100b',
-     'label': 'B'},
-    # C approach repairing previous errors.
-    # {'log_path': 'cb_dk_100b_wkl005',
-    #  'label': 'CB'},
+    # {'log_path': 'b_dk_100b',
+    #  'label': 'B'},
+    # {'log_path': 'b_num_dk_100b',
+    #  'label': 'B_num'},
     # no grouping
     # {'log_path': 'c_dk_100b_ikl001',
     #  'label': 'C iKL0.01'},
@@ -199,6 +278,37 @@ approaches = [
     #  'label': 'C sc0.005 wKL0.05'},
     # {'log_path': 'c_dk_100b_sc0005_wkl01',
     #  'label': 'C sc0.005 wKL0.1'},
+    # C approach repairing previous errors.
+    # {'log_path': 'cb_dk_100b_ikl001',
+    #  'label': 'CB ikl0.01'},
+    # {'log_path': 'cb_dk_100b_ikl005',
+    #  'label': 'CB ikl0.05'},
+    # {'log_path': 'cb_dk_100b',
+    #  'label': 'CB'},
+    # {'log_path': 'cb_dk_100b_wkl001',
+    #  'label': 'CB wkl0.01'},
+    # {'log_path': 'cb_dk_100b_wkl005',
+    #  'label': 'CB wkl0.05'},
+    # {'log_path': 'cb_dk_100b_pc097_ikl001',
+    #  'label': 'CB pc0.97 ikl0.01'},
+    # {'log_path': 'cb_dk_100b_pc097_ikl005',
+    #  'label': 'CB pc0.97 ikl0.05'},
+    # {'log_path': 'cb_dk_100b_pc097',
+    #  'label': 'CB pc0.97'},
+    # {'log_path': 'cb_dk_100b_pc097_wkl001',
+    #  'label': 'CB pc0.97 wkl0.01'},
+    # {'log_path': 'cb_dk_100b_pc097_wkl005',
+    #  'label': 'CB pc0.97 wkl0.05'},
+    # {'log_path': 'cb_dk_100b_sc0005_ikl001',
+    #  'label': 'CB sc0.005 iKL0.01'},
+    # {'log_path': 'cb_dk_100b_sc0005_ikl005',
+    #  'label': 'CB sc0.005 iKL0.05'},
+    # {'log_path': 'cb_dk_100b_sc0005',
+    #  'label': 'CB sc0.005'},
+    # {'log_path': 'cb_dk_100b_sc0005_wkl001',
+    #  'label': 'CB sc0.005 wKL0.01'},
+    # {'log_path': 'cb_dk_100b_sc0005_wkl005',
+    #  'label': 'CB sc0.005 wKL0.05'},
 ]
 
 plot_config_PxR = {
@@ -241,6 +351,27 @@ plot_config_time = {
     'ylabel': 'Total Time',
     'legend': {'loc': 'best'},
 }
+plot_config_total_time = {
+    'cumulative': True,
+    'title': dataset_name,
+    'xlabel': 'Approach',
+    'ylabel': 'Total Time',
+    'legend': {'loc': 'best'},
+}
+plot_config_total_time_log = {
+    'cumulative': True,
+    'title': dataset_name,
+    'xlabel': 'Approach',
+    'ylabel': 'Total Time',
+    'yscale': 'log',
+    'ylim': {'bottom': 1},
+}
+plot_config_memory = {
+    'title': dataset_name,
+    'xlabel': 'Approach',
+    'ylabel': 'Memory Consumption (GB)',
+    'legend': {'loc': 'best'},
+}
 
 charts_setup()
 plot_quality_charts(infer_mode, approaches, plot_config_F1)
@@ -248,3 +379,6 @@ plot_quality_charts(infer_mode, approaches, plot_config_PxR)
 plot_quality_charts(infer_mode, approaches, plot_config_remaining_errors)
 plot_quality_charts(infer_mode, approaches, plot_config_training_cells)
 plot_time_charts(infer_mode, approaches, plot_config_time)
+plot_total_time_charts(infer_mode, approaches, plot_config_total_time)
+plot_total_time_charts(infer_mode, approaches, plot_config_total_time_log)
+plot_memory_chart(approaches, plot_config_memory)
