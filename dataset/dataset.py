@@ -27,7 +27,7 @@ class AuxTables(Enum):
     inf_values_dom = 7
     training_cells = 8
     repaired_table_copy = 9
-
+    dk_cells_all_batches = 10
 
 class CellStatus(Enum):
     NOT_SET        = 0

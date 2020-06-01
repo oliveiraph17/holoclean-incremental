@@ -76,12 +76,27 @@ class FeaturizedDataset:
         # Generate weak labels for clean cells AND cells that have been weak
         # labelled. Do not train on cells with NULL weak labels (i.e.
         # NULL init values that were not weak labelled).
-        query = """
-        SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1._tid_, t1.init_index
-        FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
-        ORDER BY _vid_;
-        """.format(cell_domain=AuxTables.cell_domain.name,
-                   dk_cells=AuxTables.dk_cells.name)
+
+        # We do not include in the training set dirty cells from previous batches for the parameter combination below.
+        if not self.ds.is_first_batch() and self.env['train_using_all_batches']\
+                and not self.env['repair_previous_errors']:
+            query = """
+            SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1._tid_, t1.init_index,
+                (t3._cid_ IS NULL) AS clean_all_batches
+            FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_ LEFT JOIN {dk_cells_all_batches}
+                AS t3 ON t1._cid_ = t3._cid_
+            ORDER BY _vid_;
+            """.format(cell_domain=AuxTables.cell_domain.name,
+                       dk_cells=AuxTables.dk_cells.name,
+                       dk_cells_all_batches=AuxTables.dk_cells_all_batches.name)
+        else:
+            query = """
+            SELECT t1.attribute, weak_label_idx, fixed, (t2._cid_ IS NULL) AS clean, t1._cid_, t1._tid_, t1.init_index
+            FROM {cell_domain} AS t1 LEFT JOIN {dk_cells} AS t2 ON t1._cid_ = t2._cid_
+            ORDER BY _vid_;
+            """.format(cell_domain=AuxTables.cell_domain.name,
+                       dk_cells=AuxTables.dk_cells.name)
+
         res = self.ds.engine.execute_query(query)
         if len(res) == 0:
             logging.warning("No weak labels available. Reduce pruning threshold.")
@@ -125,9 +140,17 @@ class FeaturizedDataset:
                     labels[attr][count[attr]] = label
                 self.fixed[attr][count[attr]] = fixed
             else:
-                if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
-                    # Considers only not null and clean or fixed cells as weak labels.
-                    labels[attr][count[attr]] = label
+                if not self.ds.is_first_batch() and self.env['train_using_all_batches']\
+                        and not self.env['repair_previous_errors']:
+                    clean_all_batches = int(tuple[7])
+                    if label != NULL_REPR and (clean_all_batches or fixed != CellStatus.NOT_SET.value):
+                        # Considers only not null and clean or fixed cells as weak labels.
+                        labels[attr][count[attr]] = label
+
+                else:
+                    if label != NULL_REPR and (clean or fixed != CellStatus.NOT_SET.value):
+                        # Considers only not null and clean or fixed cells as weak labels.
+                        labels[attr][count[attr]] = label
 
             # Sets is_clean according to the parameter infer_mode ('dk' or 'all').
             # All cells are initially set as not clean (torch.zeros).
