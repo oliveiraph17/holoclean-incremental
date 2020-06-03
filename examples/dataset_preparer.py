@@ -44,7 +44,8 @@ class DatasetPreparer:
             self.raw_data.df.rename({entity_col: '_tid_'}, axis='columns', inplace=True)
         self.suffix = 'wtids'
 
-    def sort(self, sort_by, ascending=True):
+    def sort(self, sort_by, dtype, ascending=True):
+        self.raw_data.df = self.raw_data.df.astype(dtype)
         self.raw_data.df.sort_values(inplace=True, by=sort_by, ascending=ascending)
         self.suffix = 'sorted'
         for attr in sort_by:
@@ -102,7 +103,7 @@ gen.load_data('hospital', '../testdata/hospital/hospital')
 # gen.shuffle()
 
 # Sorts the rows according to the provided list and direction (ascending/descending) keeping the tids.
-# gen.sort(sort_by=['MeasureName', 'Condition'], ascending=True)
+# gen.sort(sort_by=['MeasureName', '_tid_'], {'MeasureName': str, '_tid_': int}, ascending=True)
 
 # Saves the file, including the _tid_ column, to CSV and/or to the DB (used for the methods above).
 gen.save()
