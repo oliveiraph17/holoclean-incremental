@@ -78,9 +78,9 @@ class Table:
             db_engine.create_db_table_from_query(self.name, table_query)
             self.df = pd.read_sql_table(name, db_engine.conn)
 
-    def store_to_db(self, db_conn, if_exists='replace', index=False, index_label=None):
+    def store_to_db(self, db_conn, if_exists='replace', index=False, index_label=None, dtype=None):
         # TODO: This version supports single session, single worker.
-        self.df.to_sql(self.name, db_conn, if_exists=if_exists, index=index, index_label=index_label)
+        self.df.to_sql(self.name, db_conn, if_exists=if_exists, index=index, index_label=index_label, dtype=dtype)
 
     def get_attributes(self):
         """

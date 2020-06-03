@@ -222,7 +222,7 @@ class Dataset:
     def set_constraints(self, constraints):
         self.constraints = constraints
 
-    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False, append=False):
+    def generate_aux_table(self, aux_table, df, store=False, index_attrs=False, append=False, dtype=None):
         """
         generate_aux_table writes/overwrites the auxiliary table specified by
         'aux_table'.
@@ -243,9 +243,9 @@ class Dataset:
             self.aux_table[aux_table] = Table(aux_table.name, Source.DF, df=df)
             if store:
                 if append:
-                    self.aux_table[aux_table].store_to_db(self.engine.engine, if_exists='append')
+                    self.aux_table[aux_table].store_to_db(self.engine.engine, dtype=dtype, if_exists='append')
                 else:
-                    self.aux_table[aux_table].store_to_db(self.engine.engine)
+                    self.aux_table[aux_table].store_to_db(self.engine.engine, dtype=dtype)
             if index_attrs:
                 self.aux_table[aux_table].create_df_index(index_attrs)
             if store and index_attrs:

@@ -3,6 +3,7 @@ import time
 
 import pandas as pd
 
+from sqlalchemy.types import BigInteger, Text
 from dataset import AuxTables
 
 
@@ -58,6 +59,8 @@ class DetectEngine:
             self.errors_df['_cid_'] = self.errors_df.apply(lambda x: self.ds.get_cell_id(x['_tid_'], x['attribute']),
                                                            axis=1)
         else:
+            if '_cid_' not in self.errors_df.columns:
+                self.errors_df['_cid_'] = None
             found_errors = False
         logging.info("detected %d potentially erroneous cells", self.errors_df.shape[0])
 
@@ -83,16 +86,20 @@ class DetectEngine:
         return status, detect_time, self.errors_df.shape[0], found_errors
 
     def store_detected_errors(self, errors_df):
+        dtype = None
         if errors_df.empty:
             logging.info("Detected errors dataframe is empty.")
-        self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True)
+            dtype = {'_tid_': BigInteger, 'attribute': Text, '_cid_': BigInteger}
+        self.ds.generate_aux_table(AuxTables.dk_cells, errors_df, store=True, dtype=dtype)
         self.ds.aux_table[AuxTables.dk_cells].create_db_index(self.ds.engine, ['_cid_'])
         self.ds._active_attributes = sorted(errors_df['attribute'].unique())
 
     def store_detected_errors_all_batches(self, errors_all_batches_df):
+        dtype = None
         if errors_all_batches_df.empty:
             logging.info("Detected errors all batches dataframe is empty.")
-        self.ds.generate_aux_table(AuxTables.dk_cells_all_batches, errors_all_batches_df, store=True)
+            dtype = {'_tid_': BigInteger, 'attribute': Text, '_cid_': BigInteger}
+        self.ds.generate_aux_table(AuxTables.dk_cells_all_batches, errors_all_batches_df, store=True, dtype=dtype)
         self.ds.aux_table[AuxTables.dk_cells_all_batches].create_db_index(self.ds.engine, ['_cid_'])
 
     def set_previous_dirty_rows(self):
