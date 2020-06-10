@@ -77,6 +77,9 @@ class DetectEngine:
             if errors_all_batches_df.shape[0]:
                 errors_all_batches_df['_cid_'] = errors_all_batches_df.apply(
                     lambda x: self.ds.get_cell_id(x['_tid_'], x['attribute']), axis=1)
+            else:
+                if '_cid_' not in errors_all_batches_df.columns:
+                    errors_all_batches_df['_cid_'] = None
             self.store_detected_errors_all_batches(errors_all_batches_df)
 
         status = "DONE with error detection."
