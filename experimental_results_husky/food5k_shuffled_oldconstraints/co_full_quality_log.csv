@@ -1,0 +1,4 @@
+batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;repairs_on_correct_cells;repairs_on_incorrect_cells;rmse
+1;2023;43791;0.6925925925925925;0.6382252559726962;0.6404109589041096;0.6642984014209591;0.6654804270462633;292.0;293.0;187.0;435;270.0;3.0;267.0;0.0
+batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;repairs_on_correct_cells;repairs_on_incorrect_cells;rmse
+1;2023;43791;0.6925925925925925;0.6382252559726962;0.6404109589041096;0.6642984014209591;0.6654804270462633;292.0;293.0;187.0;435;270.0;3.0;267.0;0.0

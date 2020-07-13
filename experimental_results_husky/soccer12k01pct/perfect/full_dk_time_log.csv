@@ -1,0 +1,2 @@
+iteration;batch;load_data;load_dcs;detect_errors;setup_domain;featurize_data;setup_model;fit_model;infer_repairs;get_inferred_values;generate_repaired_dataset;repaired_table_copy_time;save_stats_time
+1;1;1.6366290000000001;0.002758000000000038;0.05210500000000007;65.6766107082367;414.895278;0.001468000000045322;1228.444596;7.34005900000011;0.0326270000000477;1.761019000000033;0.0;0.0

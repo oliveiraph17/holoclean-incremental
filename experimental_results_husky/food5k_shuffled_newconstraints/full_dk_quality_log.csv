@@ -1,0 +1,2 @@
+batch;dk_cells;training_cells;precision;recall;repairing_recall;f1;repairing_f1;detected_errors;total_errors;correct_repairs;total_repairs;total_repairs_grdt;repairs_on_correct_cells;repairs_on_incorrect_cells;rmse
+1;1601;34135;0.6563876651982379;0.5085324232081911;0.5601503759398496;0.573076923076923;0.6044624746450304;266.0;293.0;149.0;360;227.0;0;227.0;0.0
